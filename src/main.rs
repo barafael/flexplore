@@ -65,10 +65,20 @@ impl ValCfg {
     }
 }
 
-// ─── Per-item config ──────────────────────────────────────────────────────────
+// ─── Node config (recursive tree) ────────────────────────────────────────────
 
 #[derive(Clone)]
-struct ItemCfg {
+struct NodeCfg {
+    label: String,
+    // flex container props (how children are arranged)
+    flex_direction: FlexDirection,
+    flex_wrap: FlexWrap,
+    justify_content: JustifyContent,
+    align_items: AlignItems,
+    align_content: AlignContent,
+    row_gap: ValCfg,
+    column_gap: ValCfg,
+    // flex item + sizing props (how this node fits in its parent)
     flex_grow: f32,
     flex_shrink: f32,
     flex_basis: ValCfg,
@@ -81,11 +91,21 @@ struct ItemCfg {
     max_height: ValCfg,
     padding: ValCfg,
     margin: ValCfg,
+    // children
+    children: Vec<NodeCfg>,
 }
 
-impl ItemCfg {
-    fn new(w: f32, h: f32) -> Self {
+impl NodeCfg {
+    fn new_leaf(label: impl Into<String>, w: f32, h: f32) -> Self {
         Self {
+            label: label.into(),
+            flex_direction: FlexDirection::Row,
+            flex_wrap: FlexWrap::Wrap,
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            align_content: AlignContent::FlexStart,
+            row_gap: ValCfg::Px(4.0),
+            column_gap: ValCfg::Px(4.0),
             flex_grow: 0.0,
             flex_shrink: 1.0,
             flex_basis: ValCfg::Auto,
@@ -98,8 +118,53 @@ impl ItemCfg {
             max_height: ValCfg::Auto,
             padding: ValCfg::Px(8.0),
             margin: ValCfg::Px(0.0),
+            children: vec![],
         }
     }
+
+    fn new_container(label: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            flex_direction: FlexDirection::Row,
+            flex_wrap: FlexWrap::Wrap,
+            justify_content: JustifyContent::FlexStart,
+            align_items: AlignItems::FlexStart,
+            align_content: AlignContent::FlexStart,
+            row_gap: ValCfg::Px(8.0),
+            column_gap: ValCfg::Px(8.0),
+            flex_grow: 1.0,
+            flex_shrink: 1.0,
+            flex_basis: ValCfg::Auto,
+            align_self: AlignSelf::Auto,
+            width: ValCfg::Percent(100.0),
+            height: ValCfg::Auto,
+            min_width: ValCfg::Auto,
+            min_height: ValCfg::Px(0.0),
+            max_width: ValCfg::Auto,
+            max_height: ValCfg::Auto,
+            padding: ValCfg::Px(12.0),
+            margin: ValCfg::Px(0.0),
+            children: vec![],
+        }
+    }
+}
+
+fn get_node<'a>(root: &'a NodeCfg, path: &[usize]) -> &'a NodeCfg {
+    if path.is_empty() { root } else { get_node(&root.children[path[0]], &path[1..]) }
+}
+
+fn get_node_mut<'a>(root: &'a mut NodeCfg, path: &[usize]) -> &'a mut NodeCfg {
+    if path.is_empty() { root } else { get_node_mut(&mut root.children[path[0]], &path[1..]) }
+}
+
+fn path_valid(root: &NodeCfg, path: &[usize]) -> bool {
+    if path.is_empty() { return true; }
+    if path[0] >= root.children.len() { return false; }
+    path_valid(&root.children[path[0]], &path[1..])
+}
+
+fn count_leaves(node: &NodeCfg) -> usize {
+    if node.children.is_empty() { 1 } else { node.children.iter().map(count_leaves).sum() }
 }
 
 // ─── Background mode + art style ─────────────────────────────────────────────
@@ -133,19 +198,8 @@ impl ArtStyle {
 
 #[derive(Resource, Clone)]
 struct FlexCfg {
-    flex_direction: FlexDirection,
-    flex_wrap: FlexWrap,
-    justify_content: JustifyContent,
-    align_items: AlignItems,
-    align_content: AlignContent,
-    row_gap: ValCfg,
-    column_gap: ValCfg,
-    padding: ValCfg,
-    container_width: ValCfg,
-    container_height: ValCfg,
-    container_min_height: ValCfg,
-    items: Vec<ItemCfg>,
-    selected: usize,
+    root: NodeCfg,
+    selected: Vec<usize>, // path to selected node; empty = root
     bg_mode: BgMode,
     art_style: ArtStyle,
     art_seed: u64,
@@ -156,25 +210,17 @@ struct FlexCfg {
 
 impl Default for FlexCfg {
     fn default() -> Self {
+        let mut root = NodeCfg::new_container("root");
+        root.min_height = ValCfg::Px(200.0);
+        root.children = vec![
+            NodeCfg::new_leaf("A", 80.0, 80.0),
+            NodeCfg::new_leaf("B", 120.0, 100.0),
+            NodeCfg::new_leaf("C", 60.0, 60.0),
+            NodeCfg::new_leaf("D", 100.0, 80.0),
+        ];
         Self {
-            flex_direction: FlexDirection::Row,
-            flex_wrap: FlexWrap::Wrap,
-            justify_content: JustifyContent::FlexStart,
-            align_items: AlignItems::FlexStart,
-            align_content: AlignContent::FlexStart,
-            row_gap: ValCfg::Px(8.0),
-            column_gap: ValCfg::Px(8.0),
-            padding: ValCfg::Px(12.0),
-            container_width: ValCfg::Percent(100.0),
-            container_height: ValCfg::Auto,
-            container_min_height: ValCfg::Px(200.0),
-            items: vec![
-                ItemCfg::new(80.0, 80.0),
-                ItemCfg::new(120.0, 100.0),
-                ItemCfg::new(60.0, 60.0),
-                ItemCfg::new(100.0, 80.0),
-            ],
-            selected: 0,
+            root,
+            selected: vec![],
             bg_mode: BgMode::Pastel,
             art_style: ArtStyle::ExprTree,
             art_seed: 137,
@@ -185,7 +231,7 @@ impl Default for FlexCfg {
     }
 }
 
-// ─── RandomFart expression tree (from ../tessel/randomfart) ──────────────────
+// ─── RandomFart expression tree ───────────────────────────────────────────────
 
 #[derive(Clone)]
 enum Expr {
@@ -238,21 +284,11 @@ impl Expr {
         if depth == 0 || roll < ends[0] {
             return Self::terminal(rng);
         }
-        if roll < ends[1] {
-            return Expr::Add(b(rng, depth - 1), b(rng, depth - 1));
-        }
-        if roll < ends[2] {
-            return Expr::Mult(b(rng, depth - 1), b(rng, depth - 1));
-        }
-        if roll < ends[3] {
-            return Expr::Sqrt(Box::new(Expr::Abs(b(rng, depth - 1))));
-        }
-        if roll < ends[4] {
-            return Expr::Sin(b(rng, depth - 1));
-        }
-        if roll < ends[5] {
-            return Expr::Mod(b(rng, depth - 1), b(rng, depth - 1));
-        }
+        if roll < ends[1] { return Expr::Add(b(rng, depth - 1), b(rng, depth - 1)); }
+        if roll < ends[2] { return Expr::Mult(b(rng, depth - 1), b(rng, depth - 1)); }
+        if roll < ends[3] { return Expr::Sqrt(Box::new(Expr::Abs(b(rng, depth - 1)))); }
+        if roll < ends[4] { return Expr::Sin(b(rng, depth - 1)); }
+        if roll < ends[5] { return Expr::Mod(b(rng, depth - 1), b(rng, depth - 1)); }
         Expr::Mix(b(rng, depth - 1), b(rng, depth - 1), b(rng, depth - 1))
     }
     fn terminal(rng: &mut StdRng) -> Self {
@@ -275,11 +311,7 @@ fn art_ch(v: f32) -> u8 {
     (((v + 1.0) * 0.5).clamp(0.0, 1.0) * 255.0) as u8
 }
 
-struct ArtExprs {
-    r: Expr,
-    g: Expr,
-    b: Expr,
-}
+struct ArtExprs { r: Expr, g: Expr, b: Expr }
 impl ArtExprs {
     fn generate(seed: u64, depth: u32) -> Self {
         let mut rng = StdRng::seed_from_u64(seed);
@@ -303,7 +335,7 @@ impl ArtExprs {
     }
 }
 
-// ─── CPU generative backgrounds (formulas from ../tessel/tessel) ─────────────
+// ─── CPU generative backgrounds ───────────────────────────────────────────────
 
 fn hash2(ix: i32, iy: i32, seed: u64) -> f32 {
     let h = (ix as u64)
@@ -317,10 +349,8 @@ fn snoise(x: f32, y: f32, seed: u64) -> f32 {
     let (fx, fy) = (x - x.floor(), y - y.floor());
     let (ux, uy) = (fx * fx * (3.0 - 2.0 * fx), fy * fy * (3.0 - 2.0 * fy));
     let (a, b, c, d) = (
-        hash2(ix, iy, seed),
-        hash2(ix + 1, iy, seed),
-        hash2(ix, iy + 1, seed),
-        hash2(ix + 1, iy + 1, seed),
+        hash2(ix, iy, seed), hash2(ix + 1, iy, seed),
+        hash2(ix, iy + 1, seed), hash2(ix + 1, iy + 1, seed),
     );
     a * (1.0 - ux) * (1.0 - uy) + b * ux * (1.0 - uy) + c * (1.0 - ux) * uy + d * ux * uy
 }
@@ -339,13 +369,8 @@ fn render_voronoi(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
                 let fx = (cx as f32 + hash2(cx, cy, seed)) / scale - px;
                 let fy = (cy as f32 + hash2(cx, cy, seed.wrapping_add(999))) / scale - py;
                 let d = (fx * fx + fy * fy).sqrt();
-                if d < d1 {
-                    d2 = d1;
-                    d1 = d;
-                    cid = (cx as u64).wrapping_mul(1000003).wrapping_add(cy as u64);
-                } else if d < d2 {
-                    d2 = d;
-                }
+                if d < d1 { d2 = d1; d1 = d; cid = (cx as u64).wrapping_mul(1000003).wrapping_add(cy as u64); }
+                else if d < d2 { d2 = d; }
             }
         }
         let e = ((d2 - d1) / (d1 + d2 + 0.001)).clamp(0.0, 1.0);
@@ -359,12 +384,7 @@ fn render_voronoi(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
 
 fn render_flow_field(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
     let mut pix = vec![225u8; (w * h * 4) as usize];
-    for ch in pix.chunks_mut(4) {
-        ch[0] = 225;
-        ch[1] = 235;
-        ch[2] = 250;
-        ch[3] = 255;
-    }
+    for ch in pix.chunks_mut(4) { ch[0] = 225; ch[1] = 235; ch[2] = 250; ch[3] = 255; }
     let freq = 3.5 + snoise(0.1, 0.2, seed) * 2.0;
     let warp = 0.6 + t * 0.2;
     let lr = (hash2(seed as i32, 0, seed.wrapping_add(7)) * 100.0 + 30.0) as u8;
@@ -385,9 +405,7 @@ fn render_flow_field(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
                     let (x, y) = (xi + ddx, yi + ddy);
                     if x >= 0 && x < w as i32 && y >= 0 && y < h as i32 {
                         let idx = (y as u32 * w + x as u32) as usize * 4;
-                        pix[idx] = lr;
-                        pix[idx + 1] = lg;
-                        pix[idx + 2] = lb;
+                        pix[idx] = lr; pix[idx + 1] = lg; pix[idx + 2] = lb;
                     }
                 }
             }
@@ -416,12 +434,7 @@ fn render_crackle(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
                 let fx = (cx as f32 + 0.5 + rx) / scale - px;
                 let fy = (cy as f32 + 0.5 + ry) / scale - py;
                 let d = (fx * fx + fy * fy).sqrt();
-                if d < d1 {
-                    d2 = d1;
-                    d1 = d;
-                } else if d < d2 {
-                    d2 = d;
-                }
+                if d < d1 { d2 = d1; d1 = d; } else if d < d2 { d2 = d; }
             }
         }
         let e = ((d2 - d1) * scale * 4.0).clamp(0.0, 1.0);
@@ -435,14 +448,10 @@ fn render_crackle(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
 fn render_op_art(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
     let mut pix = vec![255u8; (w * h * 4) as usize];
     let rings = 6.0 + snoise(0.1, 0.1, seed) * 4.0;
-    let warp = 0.3 + snoise(0.2, 0.3, seed) * 0.4;
-    let freq = 2.0 + snoise(0.3, 0.4, seed) * 2.0;
+    let warp  = 0.3 + snoise(0.2, 0.3, seed) * 0.4;
+    let freq  = 2.0 + snoise(0.3, 0.4, seed) * 2.0;
     let twist = snoise(0.4, 0.5, seed) * 1.5;
-    let fg = [
-        hash2(seed as i32, 0, seed),
-        hash2(seed as i32, 1, seed),
-        hash2(seed as i32, 2, seed),
-    ];
+    let fg = [hash2(seed as i32, 0, seed), hash2(seed as i32, 1, seed), hash2(seed as i32, 2, seed)];
     let bg = [
         hash2(seed as i32, 3, seed) * 0.3 + 0.7,
         hash2(seed as i32, 4, seed) * 0.3 + 0.7,
@@ -469,11 +478,11 @@ fn render_op_art(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
 
 fn render_art(style: &ArtStyle, exprs: &ArtExprs, seed: u64, t: f32) -> Vec<u8> {
     match style {
-        ArtStyle::ExprTree => exprs.render(ART_SZ, ART_SZ, t),
-        ArtStyle::Voronoi => render_voronoi(ART_SZ, ART_SZ, seed, t),
+        ArtStyle::ExprTree  => exprs.render(ART_SZ, ART_SZ, t),
+        ArtStyle::Voronoi   => render_voronoi(ART_SZ, ART_SZ, seed, t),
         ArtStyle::FlowField => render_flow_field(ART_SZ, ART_SZ, seed, t),
-        ArtStyle::Crackle => render_crackle(ART_SZ, ART_SZ, seed, t),
-        ArtStyle::OpArt => render_op_art(ART_SZ, ART_SZ, seed, t),
+        ArtStyle::Crackle   => render_crackle(ART_SZ, ART_SZ, seed, t),
+        ArtStyle::OpArt     => render_op_art(ART_SZ, ART_SZ, seed, t),
     }
 }
 
@@ -488,18 +497,10 @@ struct ArtState {
 // ─── Pastel palette ───────────────────────────────────────────────────────────
 
 const PASTELS: &[(f32, f32, f32)] = &[
-    (1.00, 0.80, 0.80),
-    (0.80, 1.00, 0.82),
-    (0.82, 0.86, 1.00),
-    (1.00, 1.00, 0.80),
-    (1.00, 0.90, 0.80),
-    (0.80, 0.96, 1.00),
-    (0.94, 0.82, 1.00),
-    (0.82, 0.94, 0.82),
-    (1.00, 0.86, 0.94),
-    (0.88, 0.96, 1.00),
-    (0.94, 1.00, 0.88),
-    (1.00, 0.94, 0.86),
+    (1.00, 0.80, 0.80), (0.80, 1.00, 0.82), (0.82, 0.86, 1.00),
+    (1.00, 1.00, 0.80), (1.00, 0.90, 0.80), (0.80, 0.96, 1.00),
+    (0.94, 0.82, 1.00), (0.82, 0.94, 0.82), (1.00, 0.86, 0.94),
+    (0.88, 0.96, 1.00), (0.94, 1.00, 0.88), (1.00, 0.94, 0.86),
 ];
 
 fn pastel(idx: usize) -> Color {
@@ -542,6 +543,32 @@ fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
 }
 
+// ─── Tree UI helper ───────────────────────────────────────────────────────────
+
+fn draw_tree_ui(
+    ui: &mut egui::Ui,
+    node: &NodeCfg,
+    path: &[usize],
+    selected: &[usize],
+) -> Option<Vec<usize>> {
+    let mut clicked = None;
+    ui.horizontal(|ui| {
+        ui.add_space(path.len() as f32 * 14.0);
+        let icon = if node.children.is_empty() { "□" } else { "▣" };
+        if ui.selectable_label(path == selected, format!("{} {}", icon, node.label)).clicked() {
+            clicked = Some(path.to_vec());
+        }
+    });
+    for (i, child) in node.children.iter().enumerate() {
+        let mut child_path = path.to_vec();
+        child_path.push(i);
+        if let Some(p) = draw_tree_ui(ui, child, &child_path, selected) {
+            clicked = Some(p);
+        }
+    }
+    clicked
+}
+
 // ─── Panel ────────────────────────────────────────────────────────────────────
 
 fn panel_system(
@@ -552,63 +579,63 @@ fn panel_system(
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
     if !*style_done {
-        // Three colors: near-black bg · mid-grey surface · warm off-white text/accent
         const BG:  egui::Color32 = egui::Color32::from_rgb(0x12, 0x12, 0x14);
         const MID: egui::Color32 = egui::Color32::from_rgb(0x22, 0x22, 0x26);
         const FG:  egui::Color32 = egui::Color32::from_rgb(0xd8, 0xd4, 0xc8);
-
         let mut v = egui::Visuals::dark();
-
-        // Panels / windows
-        v.panel_fill             = BG;
-        v.window_fill            = BG;
-        v.extreme_bg_color       = BG;
-
-        // Widgets (idle, hovered, active)
-        v.widgets.inactive.bg_fill       = MID;
-        v.widgets.inactive.weak_bg_fill  = MID;
-        v.widgets.inactive.bg_stroke     = egui::Stroke::new(1.0, MID);
-        v.widgets.inactive.fg_stroke     = egui::Stroke::new(1.0, FG);
-
-
-        v.widgets.hovered.bg_fill        = egui::Color32::from_rgb(0x30, 0x30, 0x38);
-        v.widgets.hovered.weak_bg_fill   = egui::Color32::from_rgb(0x30, 0x30, 0x38);
-        v.widgets.hovered.bg_stroke      = egui::Stroke::new(1.0, FG);
-        v.widgets.hovered.fg_stroke      = egui::Stroke::new(1.5, FG);
-
-
-        v.widgets.active.bg_fill         = FG;
-        v.widgets.active.weak_bg_fill    = FG;
-        v.widgets.active.fg_stroke       = egui::Stroke::new(1.5, BG);
-
-
-        v.widgets.open.bg_fill           = MID;
-        v.widgets.open.fg_stroke         = egui::Stroke::new(1.0, FG);
-
-
-        v.widgets.noninteractive.bg_fill      = BG;
-        v.widgets.noninteractive.fg_stroke    = egui::Stroke::new(1.0, egui::Color32::from_rgb(0x55, 0x54, 0x50));
-        v.widgets.noninteractive.bg_stroke    = egui::Stroke::new(1.0, egui::Color32::from_rgb(0x28, 0x28, 0x2c));
-
-        // Text
+        v.panel_fill = BG; v.window_fill = BG; v.extreme_bg_color = BG;
+        v.widgets.inactive.bg_fill      = MID;
+        v.widgets.inactive.weak_bg_fill = MID;
+        v.widgets.inactive.bg_stroke    = egui::Stroke::new(1.0, MID);
+        v.widgets.inactive.fg_stroke    = egui::Stroke::new(1.0, FG);
+        v.widgets.hovered.bg_fill       = egui::Color32::from_rgb(0x30, 0x30, 0x38);
+        v.widgets.hovered.weak_bg_fill  = egui::Color32::from_rgb(0x30, 0x30, 0x38);
+        v.widgets.hovered.bg_stroke     = egui::Stroke::new(1.0, FG);
+        v.widgets.hovered.fg_stroke     = egui::Stroke::new(1.5, FG);
+        v.widgets.active.bg_fill        = FG;
+        v.widgets.active.weak_bg_fill   = FG;
+        v.widgets.active.fg_stroke      = egui::Stroke::new(1.5, BG);
+        v.widgets.open.bg_fill          = MID;
+        v.widgets.open.fg_stroke        = egui::Stroke::new(1.0, FG);
+        v.widgets.noninteractive.bg_fill    = BG;
+        v.widgets.noninteractive.fg_stroke  = egui::Stroke::new(1.0, egui::Color32::from_rgb(0x55, 0x54, 0x50));
+        v.widgets.noninteractive.bg_stroke  = egui::Stroke::new(1.0, egui::Color32::from_rgb(0x28, 0x28, 0x2c));
         v.override_text_color = Some(FG);
-
-        // Separators / faint lines
-        v.window_stroke   = egui::Stroke::new(1.0, MID);
+        v.window_stroke = egui::Stroke::new(1.0, MID);
         v.selection.bg_fill = egui::Color32::from_rgb(0x38, 0x38, 0x44);
-
         ctx.set_visuals(v);
-
         let mut style = (*ctx.style()).clone();
         style.spacing.item_spacing   = egui::vec2(6.0, 3.0);
         style.spacing.button_padding = egui::vec2(6.0, 2.0);
         style.spacing.slider_width   = 110.0;
         ctx.set_style(style);
-
         *style_done = true;
     }
+
     let mut changed = false;
     let mut any_hovered = false;
+
+    // Hover vars collected inside borrow blocks, applied after the block ends.
+    let mut hc_dir: Option<FlexDirection> = None;
+    let mut hc_wrap: Option<FlexWrap> = None;
+    let mut hc_justify: Option<JustifyContent> = None;
+    let mut hc_ai: Option<AlignItems> = None;
+    let mut hc_ac: Option<AlignContent> = None;
+    let mut hc_rg: Option<ValCfg> = None;
+    let mut hc_cgap: Option<ValCfg> = None;
+    let mut hs_w: Option<ValCfg> = None;
+    let mut hs_h: Option<ValCfg> = None;
+    let mut hs_minw: Option<ValCfg> = None;
+    let mut hs_minh: Option<ValCfg> = None;
+    let mut hs_maxw: Option<ValCfg> = None;
+    let mut hs_maxh: Option<ValCfg> = None;
+    let mut hs_pad: Option<ValCfg> = None;
+    let mut hi_basis: Option<ValCfg> = None;
+    let mut hi_as: Option<AlignSelf> = None;
+    let mut hi_margin: Option<ValCfg> = None;
+
+    let mut sel_path = cfg.selected.clone();
+    let mut is_root = sel_path.is_empty();
 
     egui::SidePanel::left("flex_panel")
         .exact_width(PANEL_W)
@@ -617,346 +644,244 @@ fn panel_system(
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.add_space(4.0);
 
-                // ── Container ────────────────────────────────────────────────────
-                egui::CollapsingHeader::new("Container")
+                // ── Tree ─────────────────────────────────────────────────────────
+                egui::CollapsingHeader::new("Tree")
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        ui.add_space(2.0);
+                        let clicked = draw_tree_ui(ui, &cfg.root, &[], &cfg.selected);
+                        if let Some(p) = clicked {
+                            if p != cfg.selected {
+                                cfg.selected = p.clone();
+                                sel_path = p;
+                                is_root = sel_path.is_empty();
+                                *preview = None;
+                            }
+                        }
+                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            if ui.button("+ Child").clicked() {
+                                let n = count_leaves(&cfg.root);
+                                let lbl = format!("node{}", n + 1);
+                                get_node_mut(&mut cfg.root, &sel_path)
+                                    .children.push(NodeCfg::new_leaf(&lbl, 80.0, 80.0));
+                                changed = true;
+                            }
+                            if !is_root && ui.button("Remove").clicked() {
+                                let pidx = sel_path.len() - 1;
+                                let idx = sel_path[pidx];
+                                get_node_mut(&mut cfg.root, &sel_path[..pidx]).children.remove(idx);
+                                let new_path = sel_path[..pidx].to_vec();
+                                cfg.selected = new_path.clone();
+                                sel_path = new_path;
+                                is_root = sel_path.is_empty();
+                                changed = true;
+                            }
+                            if !is_root && ui.button("+ Sibling").clicked() {
+                                let pidx = sel_path.len() - 1;
+                                let n = count_leaves(&cfg.root);
+                                let lbl = format!("node{}", n + 1);
+                                get_node_mut(&mut cfg.root, &sel_path[..pidx])
+                                    .children.push(NodeCfg::new_leaf(&lbl, 80.0, 80.0));
+                                changed = true;
+                            }
+                        });
+                        ui.add_space(2.0);
+                        ui.horizontal(|ui| {
+                            ui.label("label:");
+                            if path_valid(&cfg.root, &sel_path) {
+                                let node = get_node_mut(&mut cfg.root, &sel_path);
+                                if ui.text_edit_singleline(&mut node.label).changed() { changed = true; }
+                            }
+                        });
+                    });
+
+                ui.add_space(6.0);
+
+                // ── Flex Container / Sizing / Item ───────────────────────────────
+                // Guard: sel_path may have been invalidated this frame (remove/click)
+                if path_valid(&cfg.root, &sel_path) {
+
+                egui::CollapsingHeader::new("Flex Container")
                     .default_open(true)
                     .show(ui, |ui| {
                         ui.add_space(4.0);
                         egui::Grid::new("cg1").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
-                            ui.label("direction");
-                            let h = combo(ui, "fd", &mut cfg.flex_direction, &[
-                                ("Row", FlexDirection::Row),
-                                ("Column", FlexDirection::Column),
-                                ("RowReverse", FlexDirection::RowReverse),
-                                ("ColumnReverse", FlexDirection::ColumnReverse),
-                            ], &mut changed, &mut any_hovered);
-                            ui.end_row();
-                            if let Some(v) = h { any_hovered = true; if cfg.flex_direction != v { if preview.is_none() { *preview = Some(cfg.clone()); } cfg.flex_direction = v; cfg.needs_rebuild = true; } }
+                            {
+                                let n = get_node_mut(&mut cfg.root, &sel_path);
+                                ui.label("direction");
+                                hc_dir = combo(ui, "fd", &mut n.flex_direction, &[
+                                    ("Row", FlexDirection::Row), ("Column", FlexDirection::Column),
+                                    ("RowReverse", FlexDirection::RowReverse),
+                                    ("ColumnReverse", FlexDirection::ColumnReverse),
+                                ], &mut changed, &mut any_hovered); ui.end_row();
 
-                            ui.label("wrap");
-                            let h = combo(ui, "fw", &mut cfg.flex_wrap, &[
-                                ("NoWrap", FlexWrap::NoWrap),
-                                ("Wrap", FlexWrap::Wrap),
-                                ("WrapReverse", FlexWrap::WrapReverse),
-                            ], &mut changed, &mut any_hovered);
-                            ui.end_row();
-                            if let Some(v) = h { any_hovered = true; if cfg.flex_wrap != v { if preview.is_none() { *preview = Some(cfg.clone()); } cfg.flex_wrap = v; cfg.needs_rebuild = true; } }
+                                ui.label("wrap");
+                                hc_wrap = combo(ui, "fw", &mut n.flex_wrap, &[
+                                    ("NoWrap", FlexWrap::NoWrap), ("Wrap", FlexWrap::Wrap),
+                                    ("WrapReverse", FlexWrap::WrapReverse),
+                                ], &mut changed, &mut any_hovered); ui.end_row();
 
-                            ui.label("justify");
-                            let h = combo(ui, "jc", &mut cfg.justify_content, &[
-                                ("Default", JustifyContent::Default),
-                                ("FlexStart", JustifyContent::FlexStart),
-                                ("FlexEnd", JustifyContent::FlexEnd),
-                                ("Center", JustifyContent::Center),
-                                ("SpaceBetween", JustifyContent::SpaceBetween),
-                                ("SpaceAround", JustifyContent::SpaceAround),
-                                ("SpaceEvenly", JustifyContent::SpaceEvenly),
-                                ("Stretch", JustifyContent::Stretch),
-                                ("Start", JustifyContent::Start),
-                                ("End", JustifyContent::End),
-                            ], &mut changed, &mut any_hovered);
-                            ui.end_row();
-                            if let Some(v) = h { any_hovered = true; if cfg.justify_content != v { if preview.is_none() { *preview = Some(cfg.clone()); } cfg.justify_content = v; cfg.needs_rebuild = true; } }
+                                ui.label("justify");
+                                hc_justify = combo(ui, "jc", &mut n.justify_content, &[
+                                    ("Default", JustifyContent::Default),
+                                    ("FlexStart", JustifyContent::FlexStart),
+                                    ("FlexEnd", JustifyContent::FlexEnd),
+                                    ("Center", JustifyContent::Center),
+                                    ("SpaceBetween", JustifyContent::SpaceBetween),
+                                    ("SpaceAround", JustifyContent::SpaceAround),
+                                    ("SpaceEvenly", JustifyContent::SpaceEvenly),
+                                    ("Stretch", JustifyContent::Stretch),
+                                    ("Start", JustifyContent::Start), ("End", JustifyContent::End),
+                                ], &mut changed, &mut any_hovered); ui.end_row();
 
-                            ui.label("align-items");
-                            let h = combo(ui, "ai", &mut cfg.align_items, &[
-                                ("Default", AlignItems::Default),
-                                ("FlexStart", AlignItems::FlexStart),
-                                ("FlexEnd", AlignItems::FlexEnd),
-                                ("Center", AlignItems::Center),
-                                ("Baseline", AlignItems::Baseline),
-                                ("Stretch", AlignItems::Stretch),
-                                ("Start", AlignItems::Start),
-                                ("End", AlignItems::End),
-                            ], &mut changed, &mut any_hovered);
-                            ui.end_row();
-                            if let Some(v) = h { any_hovered = true; if cfg.align_items != v { if preview.is_none() { *preview = Some(cfg.clone()); } cfg.align_items = v; cfg.needs_rebuild = true; } }
+                                ui.label("align-items");
+                                hc_ai = combo(ui, "ai", &mut n.align_items, &[
+                                    ("Default", AlignItems::Default),
+                                    ("FlexStart", AlignItems::FlexStart),
+                                    ("FlexEnd", AlignItems::FlexEnd),
+                                    ("Center", AlignItems::Center),
+                                    ("Baseline", AlignItems::Baseline),
+                                    ("Stretch", AlignItems::Stretch),
+                                    ("Start", AlignItems::Start), ("End", AlignItems::End),
+                                ], &mut changed, &mut any_hovered); ui.end_row();
 
-                            ui.label("align-content");
-                            let h = combo(ui, "ac", &mut cfg.align_content, &[
-                                ("Default", AlignContent::Default),
-                                ("FlexStart", AlignContent::FlexStart),
-                                ("FlexEnd", AlignContent::FlexEnd),
-                                ("Center", AlignContent::Center),
-                                ("SpaceBetween", AlignContent::SpaceBetween),
-                                ("SpaceAround", AlignContent::SpaceAround),
-                                ("SpaceEvenly", AlignContent::SpaceEvenly),
-                                ("Stretch", AlignContent::Stretch),
-                                ("Start", AlignContent::Start),
-                                ("End", AlignContent::End),
-                            ], &mut changed, &mut any_hovered);
-                            ui.end_row();
-                            if let Some(v) = h { any_hovered = true; if cfg.align_content != v { if preview.is_none() { *preview = Some(cfg.clone()); } cfg.align_content = v; cfg.needs_rebuild = true; } }
+                                ui.label("align-content");
+                                hc_ac = combo(ui, "ac", &mut n.align_content, &[
+                                    ("Default", AlignContent::Default),
+                                    ("FlexStart", AlignContent::FlexStart),
+                                    ("FlexEnd", AlignContent::FlexEnd),
+                                    ("Center", AlignContent::Center),
+                                    ("SpaceBetween", AlignContent::SpaceBetween),
+                                    ("SpaceAround", AlignContent::SpaceAround),
+                                    ("SpaceEvenly", AlignContent::SpaceEvenly),
+                                    ("Stretch", AlignContent::Stretch),
+                                    ("Start", AlignContent::Start), ("End", AlignContent::End),
+                                ], &mut changed, &mut any_hovered); ui.end_row();
+                            }
                         });
-
-                        ui.add_space(6.0);
-                        ui.separator();
-                        ui.add_space(4.0);
-
+                        ui.add_space(4.0); ui.separator(); ui.add_space(4.0);
                         egui::Grid::new("cg2").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
-                            ui.label("row-gap");
-                            let h = val_row(ui, "rg", &mut cfg.row_gap, &mut changed, &mut any_hovered);
-                            ui.end_row();
-                            if let Some(v) = h { any_hovered = true; if cfg.row_gap != v { if preview.is_none() { *preview = Some(cfg.clone()); } cfg.row_gap = v; cfg.needs_rebuild = true; } }
-
-                            ui.label("column-gap");
-                            let h = val_row(ui, "cg", &mut cfg.column_gap, &mut changed, &mut any_hovered);
-                            ui.end_row();
-                            if let Some(v) = h { any_hovered = true; if cfg.column_gap != v { if preview.is_none() { *preview = Some(cfg.clone()); } cfg.column_gap = v; cfg.needs_rebuild = true; } }
-
-                            ui.label("padding");
-                            let h = val_row(ui, "cp", &mut cfg.padding, &mut changed, &mut any_hovered);
-                            ui.end_row();
-                            if let Some(v) = h { any_hovered = true; if cfg.padding != v { if preview.is_none() { *preview = Some(cfg.clone()); } cfg.padding = v; cfg.needs_rebuild = true; } }
-
-                            ui.label("width");
-                            let h = val_row(ui, "cw", &mut cfg.container_width, &mut changed, &mut any_hovered);
-                            ui.end_row();
-                            if let Some(v) = h { any_hovered = true; if cfg.container_width != v { if preview.is_none() { *preview = Some(cfg.clone()); } cfg.container_width = v; cfg.needs_rebuild = true; } }
-
-                            ui.label("height");
-                            let h = val_row(ui, "ch", &mut cfg.container_height, &mut changed, &mut any_hovered);
-                            ui.end_row();
-                            if let Some(v) = h { any_hovered = true; if cfg.container_height != v { if preview.is_none() { *preview = Some(cfg.clone()); } cfg.container_height = v; cfg.needs_rebuild = true; } }
-
-                            ui.label("min-height");
-                            let h = val_row(ui, "cmh", &mut cfg.container_min_height, &mut changed, &mut any_hovered);
-                            ui.end_row();
-                            if let Some(v) = h { any_hovered = true; if cfg.container_min_height != v { if preview.is_none() { *preview = Some(cfg.clone()); } cfg.container_min_height = v; cfg.needs_rebuild = true; } }
+                            {
+                                let n = get_node_mut(&mut cfg.root, &sel_path);
+                                ui.label("row-gap");
+                                hc_rg = val_row(ui, "rg", &mut n.row_gap, &mut changed, &mut any_hovered);
+                                ui.end_row();
+                                ui.label("column-gap");
+                                hc_cgap = val_row(ui, "cgap", &mut n.column_gap, &mut changed, &mut any_hovered);
+                                ui.end_row();
+                            }
                         });
                         ui.add_space(2.0);
+
+                        // Apply container hover previews
+                        let has_c = hc_dir.is_some() || hc_wrap.is_some() || hc_justify.is_some()
+                            || hc_ai.is_some() || hc_ac.is_some()
+                            || hc_rg.is_some() || hc_cgap.is_some();
+                        if has_c {
+                            any_hovered = true;
+                            let mut rb = false;
+                            if let Some(v) = hc_dir    { if get_node(&cfg.root, &sel_path).flex_direction  != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).flex_direction  = v; rb = true; } }
+                            if let Some(v) = hc_wrap   { if get_node(&cfg.root, &sel_path).flex_wrap       != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).flex_wrap       = v; rb = true; } }
+                            if let Some(v) = hc_justify{ if get_node(&cfg.root, &sel_path).justify_content != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).justify_content = v; rb = true; } }
+                            if let Some(v) = hc_ai     { if get_node(&cfg.root, &sel_path).align_items     != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).align_items     = v; rb = true; } }
+                            if let Some(v) = hc_ac     { if get_node(&cfg.root, &sel_path).align_content   != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).align_content   = v; rb = true; } }
+                            if let Some(v) = hc_rg     { if get_node(&cfg.root, &sel_path).row_gap         != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).row_gap         = v; rb = true; } }
+                            if let Some(v) = hc_cgap   { if get_node(&cfg.root, &sel_path).column_gap      != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).column_gap      = v; rb = true; } }
+                            if rb { cfg.needs_rebuild = true; }
+                        }
                     });
 
                 ui.add_space(6.0);
 
-                // ── Items ─────────────────────────────────────────────────────────
-                egui::CollapsingHeader::new("Items")
+                // ── Sizing ────────────────────────────────────────────────────────
+                egui::CollapsingHeader::new("Sizing")
                     .default_open(true)
                     .show(ui, |ui| {
                         ui.add_space(4.0);
-                        let mut n = cfg.items.len();
-                        if ui
-                            .add(egui::Slider::new(&mut n, 1..=12).text("count"))
-                            .changed()
-                        {
-                            while cfg.items.len() < n {
-                                let w = 60.0 + (cfg.items.len() % 6) as f32 * 20.0;
-                                cfg.items.push(ItemCfg::new(w, w));
-                            }
-                            cfg.items.truncate(n);
-                            if cfg.selected >= cfg.items.len() {
-                                cfg.selected = cfg.items.len() - 1;
-                            }
-                            changed = true;
-                        }
-                        ui.add_space(3.0);
-                        ui.horizontal_wrapped(|ui| {
-                            for i in 0..cfg.items.len() {
-                                if ui
-                                    .selectable_label(cfg.selected == i, format!(" {} ", i + 1))
-                                    .clicked()
-                                {
-                                    cfg.selected = i;
-                                }
-                            }
-                            if ui.button(" + ").clicked() && cfg.items.len() < 12 {
-                                let w = 60.0 + (cfg.items.len() % 6) as f32 * 20.0;
-                                cfg.items.push(ItemCfg::new(w, w));
-                                cfg.selected = cfg.items.len() - 1;
-                                changed = true;
-                            }
-                            if ui.button(" - ").clicked() && cfg.items.len() > 1 {
-                                let sel = cfg.selected;
-                                cfg.items.remove(sel);
-                                if cfg.selected >= cfg.items.len() {
-                                    cfg.selected = cfg.items.len() - 1;
-                                }
-                                changed = true;
+                        egui::Grid::new("sg").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
+                            {
+                                let n = get_node_mut(&mut cfg.root, &sel_path);
+                                ui.label("width");    hs_w    = val_row(ui, "sw",    &mut n.width,      &mut changed, &mut any_hovered); ui.end_row();
+                                ui.label("height");   hs_h    = val_row(ui, "sh",    &mut n.height,     &mut changed, &mut any_hovered); ui.end_row();
+                                ui.label("min-width");  hs_minw = val_row(ui, "sminw", &mut n.min_width,  &mut changed, &mut any_hovered); ui.end_row();
+                                ui.label("min-height"); hs_minh = val_row(ui, "sminh", &mut n.min_height, &mut changed, &mut any_hovered); ui.end_row();
+                                ui.label("max-width");  hs_maxw = val_row(ui, "smaxw", &mut n.max_width,  &mut changed, &mut any_hovered); ui.end_row();
+                                ui.label("max-height"); hs_maxh = val_row(ui, "smaxh", &mut n.max_height, &mut changed, &mut any_hovered); ui.end_row();
+                                ui.label("padding");    hs_pad  = val_row(ui, "spad",  &mut n.padding,    &mut changed, &mut any_hovered); ui.end_row();
                             }
                         });
-                        ui.separator();
-                        let sel = cfg.selected;
+                        ui.add_space(2.0);
 
-                        // Collect hover events inside the item borrow block,
-                        // then apply them after — avoids conflict with cfg.clone().
-                        let mut ih_align: Option<AlignSelf> = None;
-                        let mut ih_flex_basis: Option<ValCfg> = None;
-                        let mut ih_width: Option<ValCfg> = None;
-                        let mut ih_height: Option<ValCfg> = None;
-                        let mut ih_min_width: Option<ValCfg> = None;
-                        let mut ih_min_height: Option<ValCfg> = None;
-                        let mut ih_max_width: Option<ValCfg> = None;
-                        let mut ih_max_height: Option<ValCfg> = None;
-                        let mut ih_padding: Option<ValCfg> = None;
-                        let mut ih_margin: Option<ValCfg> = None;
-                        let mut apply_all_clicked = false;
-                        let mut apply_all_item: Option<ItemCfg> = None;
-
-                        if let Some(item) = cfg.items.get_mut(sel) {
-                            ui.add_space(4.0);
-                            ui.label(egui::RichText::new(format!("Item {}", sel + 1)).strong());
-                            ui.add_space(4.0);
-
-                            egui::Grid::new("ig1").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
-                                ui.label("flex-grow");
-                                changed |= ui.add(egui::Slider::new(&mut item.flex_grow, 0.0..=5.0).max_decimals(2)).changed();
-                                ui.end_row();
-
-                                ui.label("flex-shrink");
-                                changed |= ui.add(egui::Slider::new(&mut item.flex_shrink, 0.0..=5.0).max_decimals(2)).changed();
-                                ui.end_row();
-
-                                ui.label("flex-basis");
-                                ih_flex_basis = val_row(ui, "ib", &mut item.flex_basis, &mut changed, &mut any_hovered);
-                                ui.end_row();
-
-                                ui.label("align-self");
-                                ih_align = combo(ui, "as", &mut item.align_self, &[
-                                    ("Auto", AlignSelf::Auto),
-                                    ("FlexStart", AlignSelf::FlexStart),
-                                    ("FlexEnd", AlignSelf::FlexEnd),
-                                    ("Center", AlignSelf::Center),
-                                    ("Baseline", AlignSelf::Baseline),
-                                    ("Stretch", AlignSelf::Stretch),
-                                    ("Start", AlignSelf::Start),
-                                    ("End", AlignSelf::End),
-                                ], &mut changed, &mut any_hovered);
-                                ui.end_row();
-                            });
-
-                            ui.add_space(4.0);
-                            ui.separator();
-                            ui.add_space(4.0);
-
-                            egui::Grid::new("ig2").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
-                                ui.label("width");
-                                ih_width = val_row(ui, "iw", &mut item.width, &mut changed, &mut any_hovered);
-                                ui.end_row();
-
-                                ui.label("height");
-                                ih_height = val_row(ui, "ih", &mut item.height, &mut changed, &mut any_hovered);
-                                ui.end_row();
-
-                                ui.label("min-width");
-                                ih_min_width = val_row(ui, "iminw", &mut item.min_width, &mut changed, &mut any_hovered);
-                                ui.end_row();
-
-                                ui.label("min-height");
-                                ih_min_height = val_row(ui, "iminh", &mut item.min_height, &mut changed, &mut any_hovered);
-                                ui.end_row();
-
-                                ui.label("max-width");
-                                ih_max_width = val_row(ui, "imaxw", &mut item.max_width, &mut changed, &mut any_hovered);
-                                ui.end_row();
-
-                                ui.label("max-height");
-                                ih_max_height = val_row(ui, "imaxh", &mut item.max_height, &mut changed, &mut any_hovered);
-                                ui.end_row();
-
-                                ui.label("padding");
-                                ih_padding = val_row(ui, "ipad", &mut item.padding, &mut changed, &mut any_hovered);
-                                ui.end_row();
-
-                                ui.label("margin");
-                                ih_margin = val_row(ui, "imar", &mut item.margin, &mut changed, &mut any_hovered);
-                                ui.end_row();
-                            });
-
-                            ui.add_space(6.0);
-                            if ui.button("Apply to all").clicked() {
-                                apply_all_item = Some(item.clone());
-                                apply_all_clicked = true;
-                            }
-                        }
-
-                        // Apply item hover previews (item borrow is released above).
-                        let item_has_hover = ih_align.is_some()
-                            || ih_flex_basis.is_some()
-                            || ih_width.is_some()
-                            || ih_height.is_some()
-                            || ih_min_width.is_some()
-                            || ih_min_height.is_some()
-                            || ih_max_width.is_some()
-                            || ih_max_height.is_some()
-                            || ih_padding.is_some()
-                            || ih_margin.is_some();
-                        if item_has_hover {
+                        // Apply sizing hover previews
+                        let has_s = hs_w.is_some() || hs_h.is_some() || hs_minw.is_some()
+                            || hs_minh.is_some() || hs_maxw.is_some() || hs_maxh.is_some()
+                            || hs_pad.is_some();
+                        if has_s {
                             any_hovered = true;
-                            let mut rebuild = false;
-                            if let Some(v) = ih_align {
-                                if cfg.items[sel].align_self != v {
-                                    if preview.is_none() { *preview = Some(cfg.clone()); }
-                                    cfg.items[sel].align_self = v; rebuild = true;
-                                }
-                            }
-                            if let Some(v) = ih_flex_basis {
-                                if cfg.items[sel].flex_basis != v {
-                                    if preview.is_none() { *preview = Some(cfg.clone()); }
-                                    cfg.items[sel].flex_basis = v; rebuild = true;
-                                }
-                            }
-                            if let Some(v) = ih_width {
-                                if cfg.items[sel].width != v {
-                                    if preview.is_none() { *preview = Some(cfg.clone()); }
-                                    cfg.items[sel].width = v; rebuild = true;
-                                }
-                            }
-                            if let Some(v) = ih_height {
-                                if cfg.items[sel].height != v {
-                                    if preview.is_none() { *preview = Some(cfg.clone()); }
-                                    cfg.items[sel].height = v; rebuild = true;
-                                }
-                            }
-                            if let Some(v) = ih_min_width {
-                                if cfg.items[sel].min_width != v {
-                                    if preview.is_none() { *preview = Some(cfg.clone()); }
-                                    cfg.items[sel].min_width = v; rebuild = true;
-                                }
-                            }
-                            if let Some(v) = ih_min_height {
-                                if cfg.items[sel].min_height != v {
-                                    if preview.is_none() { *preview = Some(cfg.clone()); }
-                                    cfg.items[sel].min_height = v; rebuild = true;
-                                }
-                            }
-                            if let Some(v) = ih_max_width {
-                                if cfg.items[sel].max_width != v {
-                                    if preview.is_none() { *preview = Some(cfg.clone()); }
-                                    cfg.items[sel].max_width = v; rebuild = true;
-                                }
-                            }
-                            if let Some(v) = ih_max_height {
-                                if cfg.items[sel].max_height != v {
-                                    if preview.is_none() { *preview = Some(cfg.clone()); }
-                                    cfg.items[sel].max_height = v; rebuild = true;
-                                }
-                            }
-                            if let Some(v) = ih_padding {
-                                if cfg.items[sel].padding != v {
-                                    if preview.is_none() { *preview = Some(cfg.clone()); }
-                                    cfg.items[sel].padding = v; rebuild = true;
-                                }
-                            }
-                            if let Some(v) = ih_margin {
-                                if cfg.items[sel].margin != v {
-                                    if preview.is_none() { *preview = Some(cfg.clone()); }
-                                    cfg.items[sel].margin = v; rebuild = true;
-                                }
-                            }
-                            if rebuild { cfg.needs_rebuild = true; }
-                        }
-
-                        if apply_all_clicked {
-                            if let Some(t) = apply_all_item {
-                                for it in cfg.items.iter_mut() {
-                                    *it = t.clone();
-                                }
-                                changed = true;
-                            }
+                            let mut rb = false;
+                            if let Some(v) = hs_w    { if get_node(&cfg.root, &sel_path).width      != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).width      = v; rb = true; } }
+                            if let Some(v) = hs_h    { if get_node(&cfg.root, &sel_path).height     != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).height     = v; rb = true; } }
+                            if let Some(v) = hs_minw { if get_node(&cfg.root, &sel_path).min_width  != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).min_width  = v; rb = true; } }
+                            if let Some(v) = hs_minh { if get_node(&cfg.root, &sel_path).min_height != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).min_height = v; rb = true; } }
+                            if let Some(v) = hs_maxw { if get_node(&cfg.root, &sel_path).max_width  != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).max_width  = v; rb = true; } }
+                            if let Some(v) = hs_maxh { if get_node(&cfg.root, &sel_path).max_height != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).max_height = v; rb = true; } }
+                            if let Some(v) = hs_pad  { if get_node(&cfg.root, &sel_path).padding    != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).padding    = v; rb = true; } }
+                            if rb { cfg.needs_rebuild = true; }
                         }
                     });
 
                 ui.add_space(6.0);
+
+                // ── Flex Item (hidden for root) ───────────────────────────────────
+                if !is_root {
+                    egui::CollapsingHeader::new("Flex Item")
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            ui.add_space(4.0);
+                            egui::Grid::new("ig").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
+                                {
+                                    let n = get_node_mut(&mut cfg.root, &sel_path);
+                                    ui.label("flex-grow");
+                                    changed |= ui.add(egui::Slider::new(&mut n.flex_grow, 0.0..=5.0).max_decimals(2)).changed();
+                                    ui.end_row();
+                                    ui.label("flex-shrink");
+                                    changed |= ui.add(egui::Slider::new(&mut n.flex_shrink, 0.0..=5.0).max_decimals(2)).changed();
+                                    ui.end_row();
+                                    ui.label("flex-basis");
+                                    hi_basis = val_row(ui, "ib", &mut n.flex_basis, &mut changed, &mut any_hovered);
+                                    ui.end_row();
+                                    ui.label("align-self");
+                                    hi_as = combo(ui, "ias", &mut n.align_self, &[
+                                        ("Auto", AlignSelf::Auto), ("FlexStart", AlignSelf::FlexStart),
+                                        ("FlexEnd", AlignSelf::FlexEnd), ("Center", AlignSelf::Center),
+                                        ("Baseline", AlignSelf::Baseline), ("Stretch", AlignSelf::Stretch),
+                                        ("Start", AlignSelf::Start), ("End", AlignSelf::End),
+                                    ], &mut changed, &mut any_hovered);
+                                    ui.end_row();
+                                    ui.label("margin");
+                                    hi_margin = val_row(ui, "im", &mut n.margin, &mut changed, &mut any_hovered);
+                                    ui.end_row();
+                                }
+                            });
+                            ui.add_space(2.0);
+
+                            // Apply item hover previews
+                            let has_i = hi_basis.is_some() || hi_as.is_some() || hi_margin.is_some();
+                            if has_i {
+                                any_hovered = true;
+                                let mut rb = false;
+                                if let Some(v) = hi_basis  { if get_node(&cfg.root, &sel_path).flex_basis != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).flex_basis = v; rb = true; } }
+                                if let Some(v) = hi_as     { if get_node(&cfg.root, &sel_path).align_self != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).align_self = v; rb = true; } }
+                                if let Some(v) = hi_margin { if get_node(&cfg.root, &sel_path).margin     != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).margin     = v; rb = true; } }
+                                if rb { cfg.needs_rebuild = true; }
+                            }
+                        });
+
+                    ui.add_space(6.0);
+                } // end if !is_root
+
+                } // end if path_valid
 
                 // ── Background ────────────────────────────────────────────────────
                 egui::CollapsingHeader::new("Background")
@@ -966,33 +891,22 @@ fn panel_system(
                             let prev = cfg.bg_mode.clone();
                             ui.radio_value(&mut cfg.bg_mode, BgMode::Pastel, "Pastel");
                             ui.radio_value(&mut cfg.bg_mode, BgMode::RandomArt, "Generative Art");
-                            if cfg.bg_mode != prev {
-                                changed = true;
-                            }
+                            if cfg.bg_mode != prev { changed = true; }
                         });
                         if cfg.bg_mode == BgMode::RandomArt {
-                            let cur = ArtStyle::ALL
-                                .iter()
-                                .find(|(_, s)| *s == cfg.art_style)
-                                .map(|(n, _)| *n)
-                                .unwrap_or("?");
+                            let cur = ArtStyle::ALL.iter().find(|(_, s)| *s == cfg.art_style)
+                                .map(|(n, _)| *n).unwrap_or("?");
                             let mut hover_art: Option<ArtStyle> = None;
                             let art_resp = egui::ComboBox::from_label("style")
                                 .selected_text(cur)
                                 .show_ui(ui, |ui| {
                                     for (name, style) in ArtStyle::ALL {
                                         let r = ui.selectable_label(cfg.art_style == *style, *name);
-                                        if r.clicked() {
-                                            cfg.art_style = style.clone();
-                                            changed = true;
-                                        } else if r.hovered() {
-                                            hover_art = Some(style.clone());
-                                        }
+                                        if r.clicked() { cfg.art_style = style.clone(); changed = true; }
+                                        else if r.hovered() { hover_art = Some(style.clone()); }
                                     }
                                 });
-                            if art_resp.inner.is_some() {
-                                any_hovered = true;
-                            }
+                            if art_resp.inner.is_some() { any_hovered = true; }
                             if let Some(v) = hover_art {
                                 any_hovered = true;
                                 if cfg.art_style != v {
@@ -1002,30 +916,18 @@ fn panel_system(
                             }
                             let pd = cfg.art_depth;
                             ui.add(egui::Slider::new(&mut cfg.art_depth, 1..=9).text("depth"));
-                            if cfg.art_depth != pd {
-                                changed = true;
-                            }
-                            ui.add(
-                                egui::Slider::new(&mut cfg.art_anim, 0.0..=2.0)
-                                    .text("anim speed")
-                                    .step_by(0.05),
-                            );
+                            if cfg.art_depth != pd { changed = true; }
+                            ui.add(egui::Slider::new(&mut cfg.art_anim, 0.0..=2.0).text("anim speed").step_by(0.05));
                             ui.horizontal(|ui| {
-                                if ui.button("New seed").clicked() {
-                                    cfg.art_seed = rand::random::<u64>();
-                                    changed = true;
-                                }
-                                if ui.button("Regenerate").clicked() {
-                                    changed = true;
-                                }
+                                if ui.button("New seed").clicked() { cfg.art_seed = rand::random::<u64>(); changed = true; }
+                                if ui.button("Regenerate").clicked() { changed = true; }
                             });
                         }
                     });
 
                 ui.add_space(6.0);
                 if ui.button("Reset to defaults").clicked() {
-                    *cfg = FlexCfg::default();
-                    *preview = None;
+                    *cfg = FlexCfg::default(); *preview = None;
                 }
             });
         });
@@ -1036,6 +938,9 @@ fn panel_system(
     } else if !any_hovered {
         if let Some(saved) = preview.take() {
             *cfg = saved;
+            while !path_valid(&cfg.root, &cfg.selected) && !cfg.selected.is_empty() {
+                cfg.selected.pop();
+            }
             cfg.needs_rebuild = true;
         }
     }
@@ -1051,35 +956,21 @@ fn rebuild_viz(
     mut art: ResMut<ArtState>,
     roots: Query<Entity, With<VizRoot>>,
 ) {
-    if !cfg.needs_rebuild {
-        return;
-    }
+    if !cfg.needs_rebuild { return; }
     cfg.needs_rebuild = false;
-    for e in &roots {
-        commands.entity(e).despawn();
-    }
+    for e in &roots { commands.entity(e).despawn(); }
     art.exprs.clear();
     art.handles.clear();
     if cfg.bg_mode == BgMode::RandomArt {
-        let (n, base, depth, style) = (
-            cfg.items.len(),
-            cfg.art_seed,
-            cfg.art_depth,
-            cfg.art_style.clone(),
-        );
+        let n = count_leaves(&cfg.root);
+        let (base, depth, style) = (cfg.art_seed, cfg.art_depth, cfg.art_style.clone());
         for i in 0..n {
             let iseed = base.wrapping_add((i as u64).wrapping_mul(0x9e3779b97f4a7c15));
             let exprs = ArtExprs::generate(iseed, depth);
             let pixels = render_art(&style, &exprs, iseed, 0.0);
             let image = Image::new(
-                Extent3d {
-                    width: ART_SZ,
-                    height: ART_SZ,
-                    depth_or_array_layers: 1,
-                },
-                TextureDimension::D2,
-                pixels,
-                TextureFormat::Rgba8UnormSrgb,
+                Extent3d { width: ART_SZ, height: ART_SZ, depth_or_array_layers: 1 },
+                TextureDimension::D2, pixels, TextureFormat::Rgba8UnormSrgb,
                 RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
             );
             art.handles.push(images.add(image));
@@ -1090,116 +981,117 @@ fn rebuild_viz(
 }
 
 fn spawn_viz(commands: &mut Commands, cfg: &FlexCfg, art: &ArtState) {
-    commands
-        .spawn((
-            VizRoot,
-            Node {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::Stretch,
-                ..default()
-            },
-        ))
-        .with_children(|root| {
-            root.spawn(Node {
-                width: Val::Px(PANEL_W),
-                flex_shrink: 0.0,
-                ..default()
-            });
-            root.spawn(Node {
-                flex_grow: 1.0,
-                flex_direction: FlexDirection::Column,
-                padding: UiRect::all(Val::Px(16.0)),
-                ..default()
-            })
-            .with_children(|area| {
-                area.spawn((
-                    Node {
-                        display: Display::Flex,
-                        flex_direction: cfg.flex_direction,
-                        flex_wrap: cfg.flex_wrap,
-                        justify_content: cfg.justify_content,
-                        align_items: cfg.align_items,
-                        align_content: cfg.align_content,
-                        row_gap: cfg.row_gap.to_val(),
-                        column_gap: cfg.column_gap.to_val(),
-                        padding: UiRect::all(cfg.padding.to_val()),
-                        width: cfg.container_width.to_val(),
-                        height: cfg.container_height.to_val(),
-                        min_height: cfg.container_min_height.to_val(),
-                        flex_grow: 1.0,
-                        border: UiRect::all(Val::Px(2.0)),
-                        ..default()
-                    },
-                    BackgroundColor(Color::srgba(0.11, 0.11, 0.17, 1.0)),
-                    BorderColor::all(Color::srgba(0.35, 0.35, 0.55, 1.0)),
-                ))
-                .with_children(|container| {
-                    for (idx, item) in cfg.items.iter().enumerate() {
-                        let sel = idx == cfg.selected;
-                        let (bw, bc) = if sel {
-                            (3.0, Color::srgba(1.0, 0.85, 0.1, 1.0))
-                        } else {
-                            (1.5, Color::srgba(0.0, 0.0, 0.0, 0.35))
-                        };
-                        let mut e = container.spawn((
-                            ArtItemNode(idx),
-                            Node {
-                                flex_grow: item.flex_grow,
-                                flex_shrink: item.flex_shrink,
-                                flex_basis: item.flex_basis.to_val(),
-                                align_self: item.align_self,
-                                width: item.width.to_val(),
-                                height: item.height.to_val(),
-                                min_width: item.min_width.to_val(),
-                                min_height: item.min_height.to_val(),
-                                max_width: item.max_width.to_val(),
-                                max_height: item.max_height.to_val(),
-                                padding: UiRect::all(item.padding.to_val()),
-                                margin: UiRect::all(item.margin.to_val()),
-                                border: UiRect::all(Val::Px(bw)),
-                                flex_direction: FlexDirection::Column,
-                                justify_content: JustifyContent::Center,
-                                align_items: AlignItems::Center,
-                                overflow: Overflow::clip(),
-                                ..default()
-                            },
-                            BackgroundColor(if cfg.bg_mode == BgMode::Pastel {
-                                pastel(idx)
-                            } else {
-                                Color::WHITE
-                            }),
-                            BorderColor::all(bc),
-                        ));
-                        if cfg.bg_mode == BgMode::RandomArt {
-                            if let Some(h) = art.handles.get(idx) {
-                                e.insert(ImageNode::new(h.clone()));
-                            }
-                        }
-                        let info = item_info(idx, item);
-                        e.with_children(|node| {
-                            node.spawn((
-                                Text::new(format!("{}", idx + 1)),
-                                TextFont {
-                                    font_size: 26.0,
-                                    ..default()
-                                },
-                                TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
-                            ));
-                            node.spawn((
-                                Text::new(info),
-                                TextFont {
-                                    font_size: 9.0,
-                                    ..default()
-                                },
-                                TextColor(Color::srgba(0.05, 0.05, 0.1, 0.70)),
-                            ));
-                        });
-                    }
-                });
-            });
-        });
+    let viz_root = commands.spawn((VizRoot, Node {
+        width: Val::Percent(100.0), height: Val::Percent(100.0),
+        flex_direction: FlexDirection::Row, align_items: AlignItems::Stretch,
+        ..default()
+    })).id();
+
+    let spacer = commands.spawn(Node { width: Val::Px(PANEL_W), flex_shrink: 0.0, ..default() }).id();
+    let area = commands.spawn(Node {
+        flex_grow: 1.0, flex_direction: FlexDirection::Column,
+        padding: UiRect::all(Val::Px(16.0)), ..default()
+    }).id();
+    commands.entity(viz_root).add_children(&[spacer, area]);
+
+    let mut leaf_idx = 0usize;
+    spawn_node(commands, area, &cfg.root, cfg, art, &cfg.selected, &[], &mut leaf_idx);
+}
+
+fn spawn_node(
+    commands: &mut Commands,
+    parent_entity: Entity,
+    node: &NodeCfg,
+    cfg: &FlexCfg,
+    art: &ArtState,
+    selected_path: &[usize],
+    current_path: &[usize],
+    leaf_idx: &mut usize,
+) {
+    let is_selected = current_path == selected_path;
+    let is_leaf = node.children.is_empty();
+
+    let (bw, bc) = if is_selected {
+        (3.0, Color::srgba(1.0, 0.85, 0.1, 1.0))
+    } else {
+        (1.5, Color::srgba(0.0, 0.0, 0.0, 0.35))
+    };
+
+    let bg_color = if is_leaf {
+        if cfg.bg_mode == BgMode::Pastel { pastel(*leaf_idx) } else { Color::WHITE }
+    } else {
+        Color::srgba(0.11, 0.11, 0.17, 1.0)
+    };
+
+    let node_bevy = Node {
+        display: Display::Flex,
+        flex_direction: node.flex_direction,
+        flex_wrap: node.flex_wrap,
+        justify_content: node.justify_content,
+        align_items: node.align_items,
+        align_content: node.align_content,
+        row_gap: node.row_gap.to_val(),
+        column_gap: node.column_gap.to_val(),
+        flex_grow: node.flex_grow,
+        flex_shrink: node.flex_shrink,
+        flex_basis: node.flex_basis.to_val(),
+        align_self: node.align_self,
+        width: node.width.to_val(),
+        height: node.height.to_val(),
+        min_width: node.min_width.to_val(),
+        min_height: node.min_height.to_val(),
+        max_width: node.max_width.to_val(),
+        max_height: node.max_height.to_val(),
+        padding: UiRect::all(node.padding.to_val()),
+        margin: UiRect::all(node.margin.to_val()),
+        border: UiRect::all(Val::Px(bw)),
+        overflow: Overflow::clip(),
+        ..default()
+    };
+
+    if is_leaf {
+        let my_idx = *leaf_idx;
+        *leaf_idx += 1;
+        let info = node_info(node);
+        let entity = commands.spawn((
+            ArtItemNode(my_idx), node_bevy,
+            BackgroundColor(bg_color), BorderColor::all(bc),
+        )).id();
+        if cfg.bg_mode == BgMode::RandomArt {
+            if let Some(h) = art.handles.get(my_idx) {
+                commands.entity(entity).insert(ImageNode::new(h.clone()));
+            }
+        }
+        let text_big = commands.spawn((
+            Text::new(node.label.clone()),
+            TextFont { font_size: 26.0, ..default() },
+            TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
+        )).id();
+        let text_info = commands.spawn((
+            Text::new(info),
+            TextFont { font_size: 9.0, ..default() },
+            TextColor(Color::srgba(0.05, 0.05, 0.1, 0.70)),
+        )).id();
+        commands.entity(entity).add_children(&[text_big, text_info]);
+        commands.entity(parent_entity).add_child(entity);
+    } else {
+        let entity = commands.spawn((
+            node_bevy, BackgroundColor(bg_color), BorderColor::all(bc),
+        )).id();
+        let lbl = commands.spawn((
+            Text::new(node.label.clone()),
+            TextFont { font_size: 10.0, ..default() },
+            TextColor(Color::srgba(0.7, 0.7, 0.9, 0.55)),
+            Node { position_type: PositionType::Absolute, top: Val::Px(2.0), left: Val::Px(4.0), ..default() },
+        )).id();
+        commands.entity(entity).add_child(lbl);
+        commands.entity(parent_entity).add_child(entity);
+        for (i, child) in node.children.iter().enumerate() {
+            let mut child_path = current_path.to_vec();
+            child_path.push(i);
+            spawn_node(commands, entity, child, cfg, art, selected_path, &child_path, leaf_idx);
+        }
+    }
 }
 
 // ─── Animation ────────────────────────────────────────────────────────────────
@@ -1211,18 +1103,13 @@ fn animate_art(
     time: Res<Time>,
     mut last_t: Local<f32>,
 ) {
-    if cfg.art_anim < 1e-4 || cfg.bg_mode != BgMode::RandomArt {
-        return;
-    }
+    if cfg.art_anim < 1e-4 || cfg.bg_mode != BgMode::RandomArt { return; }
     let t = (time.elapsed_secs() * cfg.art_anim).sin();
-    if (t - *last_t).abs() < 1e-4 {
-        return;
-    }
+    if (t - *last_t).abs() < 1e-4 { return; }
     *last_t = t;
     for (exprs, handle) in art.exprs.iter().zip(art.handles.iter()) {
         if let Some(image) = images.get_mut(handle) {
-            let pixels: Vec<u8> = exprs.render(ART_SZ, ART_SZ, t);
-            image.data = Some(pixels);
+            image.data = Some(exprs.render(ART_SZ, ART_SZ, t));
         }
     }
 }
@@ -1237,29 +1124,18 @@ fn combo<T: Copy + PartialEq>(
     changed: &mut bool,
     popup_open: &mut bool,
 ) -> Option<T> {
-    let sel = options
-        .iter()
-        .find(|(_, v)| *v == *val)
-        .map(|(s, _)| *s)
-        .unwrap_or("?");
+    let sel = options.iter().find(|(_, v)| *v == *val).map(|(s, _)| *s).unwrap_or("?");
     let mut hover = None;
     let resp = egui::ComboBox::from_id_salt(label)
-        .selected_text(sel)
-        .width(130.0)
+        .selected_text(sel).width(130.0)
         .show_ui(ui, |ui| {
             for (name, opt) in options {
                 let r = ui.selectable_label(*val == *opt, *name);
-                if r.clicked() {
-                    *val = *opt;
-                    *changed = true;
-                } else if r.hovered() {
-                    hover = Some(*opt);
-                }
+                if r.clicked() { *val = *opt; *changed = true; }
+                else if r.hovered() { hover = Some(*opt); }
             }
         });
-    if resp.inner.is_some() {
-        *popup_open = true;
-    }
+    if resp.inner.is_some() { *popup_open = true; }
     hover
 }
 
@@ -1275,65 +1151,39 @@ fn val_row(
     let mut is_open = false;
     ui.horizontal(|ui| {
         let cur = val.variant();
-        let resp = egui::ComboBox::from_id_salt(id)
-            .width(72.0)
-            .selected_text(cur)
+        let resp = egui::ComboBox::from_id_salt(id).width(72.0).selected_text(cur)
             .show_ui(ui, |ui| {
                 for &v in VARIANTS {
                     let r = ui.selectable_label(cur == v, v);
-                    if r.clicked() {
-                        *val = val.cast(v);
-                        *changed = true;
-                    } else if r.hovered() {
-                        hover = Some(val.cast(v));
-                    }
+                    if r.clicked() { *val = val.cast(v); *changed = true; }
+                    else if r.hovered() { hover = Some(val.cast(v)); }
                 }
             });
-        if resp.inner.is_some() {
-            is_open = true;
-        }
+        if resp.inner.is_some() { is_open = true; }
         if let Some(n) = val.num() {
             let mut n = n;
-            let (lo, hi) = if matches!(val, ValCfg::Px(_)) {
-                (0.0_f32, 600.0_f32)
-            } else {
-                (0.0_f32, 100.0_f32)
-            };
-            if ui
-                .add(egui::Slider::new(&mut n, lo..=hi).max_decimals(0))
-                .changed()
-            {
-                val.set_num(n);
-                *changed = true;
+            let (lo, hi) = if matches!(val, ValCfg::Px(_)) { (0.0_f32, 600.0_f32) } else { (0.0_f32, 100.0_f32) };
+            if ui.add(egui::Slider::new(&mut n, lo..=hi).max_decimals(0)).changed() {
+                val.set_num(n); *changed = true;
             }
         }
     });
-    if is_open {
-        *popup_open = true;
-    }
+    if is_open { *popup_open = true; }
     hover
 }
 
-// ─── Item info ────────────────────────────────────────────────────────────────
+// ─── Node info ────────────────────────────────────────────────────────────────
 
-fn item_info(idx: usize, item: &ItemCfg) -> String {
+fn node_info(node: &NodeCfg) -> String {
     format!(
-        "#{} g:{} s:{}\nbasis:{} w:{} h:{}",
-        idx + 1,
-        ff(item.flex_grow),
-        ff(item.flex_shrink),
-        item.flex_basis.variant(),
-        fv(&item.width),
-        fv(&item.height)
+        "g:{} s:{}\nbasis:{} w:{} h:{}",
+        ff(node.flex_grow), ff(node.flex_shrink),
+        node.flex_basis.variant(), fv(&node.width), fv(&node.height)
     )
 }
 
 fn ff(v: f32) -> String {
-    if (v - v.round()).abs() < 0.005 {
-        format!("{}", v as i32)
-    } else {
-        format!("{v:.1}")
-    }
+    if (v - v.round()).abs() < 0.005 { format!("{}", v as i32) } else { format!("{v:.1}") }
 }
 
 fn fv(v: &ValCfg) -> String {
