@@ -1,4 +1,4 @@
-//! Flex My Box — interactive Bevy 0.18 flexbox explorer.
+//! Flexplore — interactive Bevy 0.18 flexbox explorer.
 
 use bevy::{
     asset::RenderAssetUsages,
@@ -10,8 +10,6 @@ use rand::{Rng, SeedableRng, rngs::StdRng};
 
 const PANEL_W: f32 = 390.0;
 const ART_SZ: u32 = 128;
-
-// ─── Val wrapper ─────────────────────────────────────────────────────────────
 
 #[derive(Clone, PartialEq, Debug)]
 enum ValCfg {
@@ -523,7 +521,7 @@ fn main() {
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
-                    title: "Flex My Box — Flexbox Explorer".into(),
+                    title: "Flexplore".into(),
                     resolution: (1280u32, 800u32).into(),
                     ..default()
                 }),
@@ -548,25 +546,44 @@ fn setup(mut commands: Commands) {
 fn draw_tree_ui(
     ui: &mut egui::Ui,
     node: &NodeCfg,
-    path: &[usize],
+    path: &mut Vec<usize>,
     selected: &[usize],
 ) -> Option<Vec<usize>> {
     let mut clicked = None;
     ui.horizontal(|ui| {
         ui.add_space(path.len() as f32 * 14.0);
         let icon = if node.children.is_empty() { "□" } else { "▣" };
-        if ui.selectable_label(path == selected, format!("{} {}", icon, node.label)).clicked() {
-            clicked = Some(path.to_vec());
+        if ui.selectable_label(path.as_slice() == selected, format!("{} {}", icon, node.label)).clicked() {
+            clicked = Some(path.clone());
         }
     });
     for (i, child) in node.children.iter().enumerate() {
-        let mut child_path = path.to_vec();
-        child_path.push(i);
-        if let Some(p) = draw_tree_ui(ui, child, &child_path, selected) {
-            clicked = Some(p);
-        }
+        path.push(i);
+        let r = draw_tree_ui(ui, child, path, selected);
+        path.pop();
+        if r.is_some() { clicked = r; }
     }
     clicked
+}
+
+// ─── Panel helpers ────────────────────────────────────────────────────────────
+
+fn apply_hover<T: PartialEq + Clone>(
+    opt: Option<T>,
+    cfg: &mut FlexCfg,
+    preview: &mut Option<FlexCfg>,
+    path: &[usize],
+    get: impl Fn(&NodeCfg) -> T,
+    set: impl FnOnce(&mut NodeCfg, T),
+) -> bool {
+    let Some(v) = opt else { return false };
+    if get(get_node(&cfg.root, path)) != v {
+        if preview.is_none() { *preview = Some(cfg.clone()); }
+        set(get_node_mut(&mut cfg.root, path), v);
+        true
+    } else {
+        false
+    }
 }
 
 // ─── Panel ────────────────────────────────────────────────────────────────────
@@ -649,7 +666,7 @@ fn panel_system(
                     .default_open(true)
                     .show(ui, |ui| {
                         ui.add_space(2.0);
-                        let clicked = draw_tree_ui(ui, &cfg.root, &[], &cfg.selected);
+                        let clicked = draw_tree_ui(ui, &cfg.root, &mut vec![], &cfg.selected);
                         if let Some(p) = clicked {
                             if p != cfg.selected {
                                 cfg.selected = p.clone();
@@ -780,14 +797,15 @@ fn panel_system(
                             || hc_rg.is_some() || hc_cgap.is_some();
                         if has_c {
                             any_hovered = true;
-                            let mut rb = false;
-                            if let Some(v) = hc_dir    { if get_node(&cfg.root, &sel_path).flex_direction  != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).flex_direction  = v; rb = true; } }
-                            if let Some(v) = hc_wrap   { if get_node(&cfg.root, &sel_path).flex_wrap       != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).flex_wrap       = v; rb = true; } }
-                            if let Some(v) = hc_justify{ if get_node(&cfg.root, &sel_path).justify_content != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).justify_content = v; rb = true; } }
-                            if let Some(v) = hc_ai     { if get_node(&cfg.root, &sel_path).align_items     != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).align_items     = v; rb = true; } }
-                            if let Some(v) = hc_ac     { if get_node(&cfg.root, &sel_path).align_content   != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).align_content   = v; rb = true; } }
-                            if let Some(v) = hc_rg     { if get_node(&cfg.root, &sel_path).row_gap         != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).row_gap         = v; rb = true; } }
-                            if let Some(v) = hc_cgap   { if get_node(&cfg.root, &sel_path).column_gap      != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).column_gap      = v; rb = true; } }
+                            let p = &mut *preview; let sp = &sel_path;
+                            let rb =
+                                apply_hover(hc_dir,     &mut cfg, p, sp, |n| n.flex_direction,        |n, v| n.flex_direction  = v) |
+                                apply_hover(hc_wrap,    &mut cfg, p, sp, |n| n.flex_wrap,              |n, v| n.flex_wrap        = v) |
+                                apply_hover(hc_justify, &mut cfg, p, sp, |n| n.justify_content,        |n, v| n.justify_content  = v) |
+                                apply_hover(hc_ai,      &mut cfg, p, sp, |n| n.align_items,            |n, v| n.align_items      = v) |
+                                apply_hover(hc_ac,      &mut cfg, p, sp, |n| n.align_content,          |n, v| n.align_content    = v) |
+                                apply_hover(hc_rg,      &mut cfg, p, sp, |n| n.row_gap.clone(),        |n, v| n.row_gap          = v) |
+                                apply_hover(hc_cgap,    &mut cfg, p, sp, |n| n.column_gap.clone(),     |n, v| n.column_gap       = v);
                             if rb { cfg.needs_rebuild = true; }
                         }
                     });
@@ -819,14 +837,15 @@ fn panel_system(
                             || hs_pad.is_some();
                         if has_s {
                             any_hovered = true;
-                            let mut rb = false;
-                            if let Some(v) = hs_w    { if get_node(&cfg.root, &sel_path).width      != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).width      = v; rb = true; } }
-                            if let Some(v) = hs_h    { if get_node(&cfg.root, &sel_path).height     != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).height     = v; rb = true; } }
-                            if let Some(v) = hs_minw { if get_node(&cfg.root, &sel_path).min_width  != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).min_width  = v; rb = true; } }
-                            if let Some(v) = hs_minh { if get_node(&cfg.root, &sel_path).min_height != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).min_height = v; rb = true; } }
-                            if let Some(v) = hs_maxw { if get_node(&cfg.root, &sel_path).max_width  != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).max_width  = v; rb = true; } }
-                            if let Some(v) = hs_maxh { if get_node(&cfg.root, &sel_path).max_height != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).max_height = v; rb = true; } }
-                            if let Some(v) = hs_pad  { if get_node(&cfg.root, &sel_path).padding    != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).padding    = v; rb = true; } }
+                            let p = &mut *preview; let sp = &sel_path;
+                            let rb =
+                                apply_hover(hs_w,    &mut cfg, p, sp, |n| n.width.clone(),      |n, v| n.width      = v) |
+                                apply_hover(hs_h,    &mut cfg, p, sp, |n| n.height.clone(),     |n, v| n.height     = v) |
+                                apply_hover(hs_minw, &mut cfg, p, sp, |n| n.min_width.clone(),  |n, v| n.min_width  = v) |
+                                apply_hover(hs_minh, &mut cfg, p, sp, |n| n.min_height.clone(), |n, v| n.min_height = v) |
+                                apply_hover(hs_maxw, &mut cfg, p, sp, |n| n.max_width.clone(),  |n, v| n.max_width  = v) |
+                                apply_hover(hs_maxh, &mut cfg, p, sp, |n| n.max_height.clone(), |n, v| n.max_height = v) |
+                                apply_hover(hs_pad,  &mut cfg, p, sp, |n| n.padding.clone(),    |n, v| n.padding    = v);
                             if rb { cfg.needs_rebuild = true; }
                         }
                     });
@@ -870,10 +889,11 @@ fn panel_system(
                             let has_i = hi_basis.is_some() || hi_as.is_some() || hi_margin.is_some();
                             if has_i {
                                 any_hovered = true;
-                                let mut rb = false;
-                                if let Some(v) = hi_basis  { if get_node(&cfg.root, &sel_path).flex_basis != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).flex_basis = v; rb = true; } }
-                                if let Some(v) = hi_as     { if get_node(&cfg.root, &sel_path).align_self != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).align_self = v; rb = true; } }
-                                if let Some(v) = hi_margin { if get_node(&cfg.root, &sel_path).margin     != v { if preview.is_none() { *preview = Some(cfg.clone()); } get_node_mut(&mut cfg.root, &sel_path).margin     = v; rb = true; } }
+                                let p = &mut *preview; let sp = &sel_path;
+                                let rb =
+                                    apply_hover(hi_basis,  &mut cfg, p, sp, |n| n.flex_basis.clone(), |n, v| n.flex_basis = v) |
+                                    apply_hover(hi_as,     &mut cfg, p, sp, |n| n.align_self,         |n, v| n.align_self = v) |
+                                    apply_hover(hi_margin, &mut cfg, p, sp, |n| n.margin.clone(),     |n, v| n.margin     = v);
                                 if rb { cfg.needs_rebuild = true; }
                             }
                         });
@@ -1122,7 +1142,7 @@ fn combo<T: Copy + PartialEq>(
     val: &mut T,
     options: &[(&str, T)],
     changed: &mut bool,
-    popup_open: &mut bool,
+    any_open: &mut bool,
 ) -> Option<T> {
     let sel = options.iter().find(|(_, v)| *v == *val).map(|(s, _)| *s).unwrap_or("?");
     let mut hover = None;
@@ -1135,7 +1155,7 @@ fn combo<T: Copy + PartialEq>(
                 else if r.hovered() { hover = Some(*opt); }
             }
         });
-    if resp.inner.is_some() { *popup_open = true; }
+    if resp.inner.is_some() { *any_open = true; }
     hover
 }
 
@@ -1144,7 +1164,7 @@ fn val_row(
     id: &str,
     val: &mut ValCfg,
     changed: &mut bool,
-    popup_open: &mut bool,
+    any_open: &mut bool,
 ) -> Option<ValCfg> {
     const VARIANTS: &[&str] = &["Auto", "Px", "Percent", "Vw", "Vh"];
     let mut hover = None;
@@ -1168,7 +1188,7 @@ fn val_row(
             }
         }
     });
-    if is_open { *popup_open = true; }
+    if is_open { *any_open = true; }
     hover
 }
 

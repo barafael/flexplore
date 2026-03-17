@@ -2555,7 +2555,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "flex-my-box"
+name = "flexplore"
 version = "0.1.0"
 dependencies = [
  "bevy",
