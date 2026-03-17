@@ -596,18 +596,18 @@ fn panel_system(
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
     if !*style_done {
-        const BG:  egui::Color32 = egui::Color32::from_rgb(0x12, 0x12, 0x14);
-        const MID: egui::Color32 = egui::Color32::from_rgb(0x22, 0x22, 0x26);
-        const FG:  egui::Color32 = egui::Color32::from_rgb(0xd8, 0xd4, 0xc8);
+        const BG:  egui::Color32 = egui::Color32::from_rgb(0x10, 0x10, 0x14);
+        const MID: egui::Color32 = egui::Color32::from_rgb(0x2a, 0x2a, 0x30);
+        const FG:  egui::Color32 = egui::Color32::from_rgb(0xe8, 0xe4, 0xd8);
         let mut v = egui::Visuals::dark();
         v.panel_fill = BG; v.window_fill = BG; v.extreme_bg_color = BG;
         v.widgets.inactive.bg_fill      = MID;
         v.widgets.inactive.weak_bg_fill = MID;
-        v.widgets.inactive.bg_stroke    = egui::Stroke::new(1.0, MID);
+        v.widgets.inactive.bg_stroke    = egui::Stroke::new(1.0, egui::Color32::from_rgb(0x3a, 0x3a, 0x42));
         v.widgets.inactive.fg_stroke    = egui::Stroke::new(1.0, FG);
-        v.widgets.hovered.bg_fill       = egui::Color32::from_rgb(0x30, 0x30, 0x38);
-        v.widgets.hovered.weak_bg_fill  = egui::Color32::from_rgb(0x30, 0x30, 0x38);
-        v.widgets.hovered.bg_stroke     = egui::Stroke::new(1.0, FG);
+        v.widgets.hovered.bg_fill       = egui::Color32::from_rgb(0x38, 0x38, 0x42);
+        v.widgets.hovered.weak_bg_fill  = egui::Color32::from_rgb(0x38, 0x38, 0x42);
+        v.widgets.hovered.bg_stroke     = egui::Stroke::new(1.0, egui::Color32::from_rgb(0x88, 0x88, 0x98));
         v.widgets.hovered.fg_stroke     = egui::Stroke::new(1.5, FG);
         v.widgets.active.bg_fill        = FG;
         v.widgets.active.weak_bg_fill   = FG;
@@ -615,11 +615,11 @@ fn panel_system(
         v.widgets.open.bg_fill          = MID;
         v.widgets.open.fg_stroke        = egui::Stroke::new(1.0, FG);
         v.widgets.noninteractive.bg_fill    = BG;
-        v.widgets.noninteractive.fg_stroke  = egui::Stroke::new(1.0, egui::Color32::from_rgb(0x55, 0x54, 0x50));
-        v.widgets.noninteractive.bg_stroke  = egui::Stroke::new(1.0, egui::Color32::from_rgb(0x28, 0x28, 0x2c));
+        v.widgets.noninteractive.fg_stroke  = egui::Stroke::new(1.0, egui::Color32::from_rgb(0x70, 0x6e, 0x66));
+        v.widgets.noninteractive.bg_stroke  = egui::Stroke::new(1.0, egui::Color32::from_rgb(0x34, 0x34, 0x3a));
         v.override_text_color = Some(FG);
-        v.window_stroke = egui::Stroke::new(1.0, MID);
-        v.selection.bg_fill = egui::Color32::from_rgb(0x38, 0x38, 0x44);
+        v.window_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(0x3a, 0x3a, 0x42));
+        v.selection.bg_fill = egui::Color32::from_rgb(0x40, 0x40, 0x52);
         ctx.set_visuals(v);
         let mut style = (*ctx.style()).clone();
         style.spacing.item_spacing   = egui::vec2(6.0, 3.0);
@@ -667,14 +667,13 @@ fn panel_system(
                     .show(ui, |ui| {
                         ui.add_space(2.0);
                         let clicked = draw_tree_ui(ui, &cfg.root, &mut vec![], &cfg.selected);
-                        if let Some(p) = clicked {
-                            if p != cfg.selected {
+                        if let Some(p) = clicked
+                            && p != cfg.selected {
                                 cfg.selected = p.clone();
                                 sel_path = p;
                                 is_root = sel_path.is_empty();
                                 *preview = None;
                             }
-                        }
                         ui.add_space(4.0);
                         ui.horizontal(|ui| {
                             if ui.button("+ Child").clicked() {
@@ -955,15 +954,14 @@ fn panel_system(
     if changed {
         *preview = None;
         cfg.needs_rebuild = true;
-    } else if !any_hovered {
-        if let Some(saved) = preview.take() {
+    } else if !any_hovered
+        && let Some(saved) = preview.take() {
             *cfg = saved;
             while !path_valid(&cfg.root, &cfg.selected) && !cfg.selected.is_empty() {
                 cfg.selected.pop();
             }
             cfg.needs_rebuild = true;
         }
-    }
     Ok(())
 }
 
@@ -997,7 +995,7 @@ fn rebuild_viz(
             art.exprs.push(exprs);
         }
     }
-    spawn_viz(&mut commands, &*cfg, &*art);
+    spawn_viz(&mut commands, &cfg, &art);
 }
 
 fn spawn_viz(commands: &mut Commands, cfg: &FlexCfg, art: &ArtState) {
@@ -1077,11 +1075,10 @@ fn spawn_node(
             ArtItemNode(my_idx), node_bevy,
             BackgroundColor(bg_color), BorderColor::all(bc),
         )).id();
-        if cfg.bg_mode == BgMode::RandomArt {
-            if let Some(h) = art.handles.get(my_idx) {
+        if cfg.bg_mode == BgMode::RandomArt
+            && let Some(h) = art.handles.get(my_idx) {
                 commands.entity(entity).insert(ImageNode::new(h.clone()));
             }
-        }
         let text_big = commands.spawn((
             Text::new(node.label.clone()),
             TextFont { font_size: 26.0, ..default() },
