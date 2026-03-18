@@ -814,6 +814,297 @@ fn emit_html_node(
     }
 }
 
+// ─── Tailwind HTML code generation ───────────────────────────────────────────
+
+fn tw_flex_direction(d: FlexDirection) -> &'static str {
+    match d {
+        FlexDirection::Row => "flex-row",
+        FlexDirection::Column => "flex-col",
+        FlexDirection::RowReverse => "flex-row-reverse",
+        FlexDirection::ColumnReverse => "flex-col-reverse",
+    }
+}
+
+fn tw_flex_wrap(w: FlexWrap) -> &'static str {
+    match w {
+        FlexWrap::NoWrap => "flex-nowrap",
+        FlexWrap::Wrap => "flex-wrap",
+        FlexWrap::WrapReverse => "flex-wrap-reverse",
+    }
+}
+
+fn tw_justify_content(j: JustifyContent) -> &'static str {
+    match j {
+        JustifyContent::FlexStart => "justify-start",
+        JustifyContent::FlexEnd => "justify-end",
+        JustifyContent::Center => "justify-center",
+        JustifyContent::SpaceBetween => "justify-between",
+        JustifyContent::SpaceAround => "justify-around",
+        JustifyContent::SpaceEvenly => "justify-evenly",
+        _ => "justify-start",
+    }
+}
+
+fn tw_align_items(a: AlignItems) -> &'static str {
+    match a {
+        AlignItems::FlexStart => "items-start",
+        AlignItems::FlexEnd => "items-end",
+        AlignItems::Center => "items-center",
+        AlignItems::Baseline => "items-baseline",
+        AlignItems::Stretch => "items-stretch",
+        _ => "items-stretch",
+    }
+}
+
+fn tw_align_content(a: AlignContent) -> &'static str {
+    match a {
+        AlignContent::FlexStart => "content-start",
+        AlignContent::FlexEnd => "content-end",
+        AlignContent::Center => "content-center",
+        AlignContent::SpaceBetween => "content-between",
+        AlignContent::SpaceAround => "content-around",
+        AlignContent::SpaceEvenly => "content-evenly",
+        AlignContent::Stretch => "content-stretch",
+        _ => "content-stretch",
+    }
+}
+
+fn tw_align_self(a: AlignSelf) -> &'static str {
+    match a {
+        AlignSelf::Auto => "self-auto",
+        AlignSelf::FlexStart => "self-start",
+        AlignSelf::FlexEnd => "self-end",
+        AlignSelf::Center => "self-center",
+        AlignSelf::Baseline => "self-baseline",
+        AlignSelf::Stretch => "self-stretch",
+        _ => "self-auto",
+    }
+}
+
+fn tw_val(property: &str, v: &ValCfg) -> String {
+    match v {
+        ValCfg::Auto => format!("{property}-auto"),
+        ValCfg::Px(n) => format!("{property}-[{n:.1}px]"),
+        ValCfg::Percent(n) => format!("{property}-[{n:.1}%]"),
+        ValCfg::Vw(n) => format!("{property}-[{n:.1}vw]"),
+        ValCfg::Vh(n) => format!("{property}-[{n:.1}vh]"),
+    }
+}
+
+fn emit_tailwind(root: &NodeCfg) -> String {
+    let mut buf = String::new();
+    emit_tailwind_node(&mut buf, root, 0, &mut 0);
+    buf
+}
+
+fn emit_tailwind_node(buf: &mut String, node: &NodeCfg, depth: usize, leaf_idx: &mut usize) {
+    let pad = "  ".repeat(depth);
+    let is_leaf = node.children.is_empty();
+
+    let bg = if is_leaf {
+        let (r, g, b) = PASTELS[*leaf_idx % PASTELS.len()];
+        *leaf_idx += 1;
+        format!(
+            "bg-[rgb({},{},{})]",
+            (r * 255.0) as u8,
+            (g * 255.0) as u8,
+            (b * 255.0) as u8,
+        )
+    } else {
+        "bg-[rgba(28,28,43,1)]".into()
+    };
+
+    let mut classes = vec![
+        "flex".into(),
+        tw_flex_direction(node.flex_direction).into(),
+        tw_flex_wrap(node.flex_wrap).into(),
+        tw_justify_content(node.justify_content).into(),
+        tw_align_items(node.align_items).into(),
+        tw_align_content(node.align_content).into(),
+        tw_val("gap-x", &node.column_gap),
+        tw_val("gap-y", &node.row_gap),
+        format!("grow-[{:.1}]", node.flex_grow),
+        format!("shrink-[{:.1}]", node.flex_shrink),
+        tw_val("basis", &node.flex_basis),
+        tw_align_self(node.align_self).into(),
+        tw_val("w", &node.width),
+        tw_val("h", &node.height),
+        tw_val("min-w", &node.min_width),
+        tw_val("min-h", &node.min_height),
+        tw_val("max-w", &node.max_width),
+        tw_val("max-h", &node.max_height),
+        tw_val("p", &node.padding),
+        tw_val("m", &node.margin),
+        bg,
+        "box-border".into(),
+    ];
+
+    if is_leaf {
+        classes.push("text-[26px]".into());
+        classes.push("text-[rgba(13,13,26,0.85)]".into());
+    }
+
+    let cls = classes.join(" ");
+
+    if is_leaf {
+        buf.push_str(&format!("{pad}<div class=\"{cls}\">{}</div>\n", node.label));
+    } else {
+        buf.push_str(&format!("{pad}<div class=\"{cls}\">\n"));
+        for child in &node.children {
+            emit_tailwind_node(buf, child, depth + 1, leaf_idx);
+        }
+        buf.push_str(&format!("{pad}</div>\n"));
+    }
+}
+
+// ─── SwiftUI code generation ─────────────────────────────────────────────────
+
+fn swift_val(v: &ValCfg) -> String {
+    match v {
+        ValCfg::Auto => ".infinity".into(),
+        ValCfg::Px(n) => format!("{n:.1}"),
+        ValCfg::Percent(n) => format!("{n:.1} /* {n:.1}% — use GeometryReader for relative sizing */"),
+        ValCfg::Vw(n) => format!("UIScreen.main.bounds.width * {:.3}", n / 100.0),
+        ValCfg::Vh(n) => format!("UIScreen.main.bounds.height * {:.3}", n / 100.0),
+    }
+}
+
+fn swift_optional_val(v: &ValCfg) -> Option<String> {
+    match v {
+        ValCfg::Auto => None,
+        _ => Some(swift_val(v)),
+    }
+}
+
+fn swift_alignment(a: AlignItems) -> &'static str {
+    match a {
+        AlignItems::FlexStart => ".top",
+        AlignItems::FlexEnd => ".bottom",
+        AlignItems::Center => ".center",
+        AlignItems::Baseline => ".firstTextBaseline",
+        AlignItems::Stretch => ".center",
+        _ => ".center",
+    }
+}
+
+fn swift_h_alignment(a: AlignItems) -> &'static str {
+    match a {
+        AlignItems::FlexStart => ".leading",
+        AlignItems::FlexEnd => ".trailing",
+        AlignItems::Center => ".center",
+        _ => ".center",
+    }
+}
+
+fn emit_swiftui(root: &NodeCfg) -> String {
+    let mut buf = String::from("struct ContentView: View {\n    var body: some View {\n");
+    emit_swiftui_node(&mut buf, root, 2, &mut 0);
+    buf.push_str("    }\n}\n");
+    buf
+}
+
+fn emit_swiftui_node(buf: &mut String, node: &NodeCfg, depth: usize, leaf_idx: &mut usize) {
+    let pad = "    ".repeat(depth);
+    let is_leaf = node.children.is_empty();
+
+    if is_leaf {
+        let (r, g, b) = PASTELS[*leaf_idx % PASTELS.len()];
+        *leaf_idx += 1;
+
+        buf.push_str(&format!("{pad}Text({:?})\n", node.label));
+        buf.push_str(&format!("{pad}    .font(.system(size: 26))\n"));
+        buf.push_str(&format!(
+            "{pad}    .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))\n"
+        ));
+
+        // Frame
+        let w = swift_optional_val(&node.width);
+        let h = swift_optional_val(&node.height);
+        if w.is_some() || h.is_some() {
+            let w_str = w.as_deref().unwrap_or("nil");
+            let h_str = h.as_deref().unwrap_or("nil");
+            buf.push_str(&format!("{pad}    .frame(width: {w_str}, height: {h_str})\n"));
+        }
+        // Min/max frame
+        let min_w = swift_optional_val(&node.min_width);
+        let min_h = swift_optional_val(&node.min_height);
+        let max_w = swift_optional_val(&node.max_width);
+        let max_h = swift_optional_val(&node.max_height);
+        if min_w.is_some() || min_h.is_some() || max_w.is_some() || max_h.is_some() {
+            buf.push_str(&format!(
+                "{pad}    .frame(minWidth: {}, minHeight: {}, maxWidth: {}, maxHeight: {})\n",
+                min_w.as_deref().unwrap_or("nil"),
+                min_h.as_deref().unwrap_or("nil"),
+                max_w.as_deref().unwrap_or("nil"),
+                max_h.as_deref().unwrap_or("nil"),
+            ));
+        }
+        if let Some(p) = swift_optional_val(&node.padding) {
+            buf.push_str(&format!("{pad}    .padding({p})\n"));
+        }
+        buf.push_str(&format!(
+            "{pad}    .background(Color(red: {r:.2}, green: {g:.2}, blue: {b:.2}))\n"
+        ));
+    } else {
+        // Container: choose HStack or VStack based on flex_direction
+        let is_row = matches!(
+            node.flex_direction,
+            FlexDirection::Row | FlexDirection::RowReverse
+        );
+
+        let spacing = match &node.column_gap {
+            ValCfg::Px(n) if is_row => format!(", spacing: {n:.1}"),
+            _ => match &node.row_gap {
+                ValCfg::Px(n) if !is_row => format!(", spacing: {n:.1}"),
+                _ => String::new(),
+            },
+        };
+
+        let alignment = if is_row {
+            swift_alignment(node.align_items)
+        } else {
+            swift_h_alignment(node.align_items)
+        };
+
+        let stack = if is_row { "HStack" } else { "VStack" };
+        buf.push_str(&format!("{pad}{stack}(alignment: {alignment}{spacing}) {{\n"));
+
+        for child in &node.children {
+            emit_swiftui_node(buf, child, depth + 1, leaf_idx);
+        }
+
+        buf.push_str(&format!("{pad}}}\n"));
+
+        // Frame modifiers on the container
+        let w = swift_optional_val(&node.width);
+        let h = swift_optional_val(&node.height);
+        if w.is_some() || h.is_some() {
+            let w_str = w.as_deref().unwrap_or("nil");
+            let h_str = h.as_deref().unwrap_or("nil");
+            buf.push_str(&format!("{pad}.frame(width: {w_str}, height: {h_str})\n"));
+        }
+        let min_w = swift_optional_val(&node.min_width);
+        let min_h = swift_optional_val(&node.min_height);
+        let max_w = swift_optional_val(&node.max_width);
+        let max_h = swift_optional_val(&node.max_height);
+        if min_w.is_some() || min_h.is_some() || max_w.is_some() || max_h.is_some() {
+            buf.push_str(&format!(
+                "{pad}.frame(minWidth: {}, minHeight: {}, maxWidth: {}, maxHeight: {})\n",
+                min_w.as_deref().unwrap_or("nil"),
+                min_h.as_deref().unwrap_or("nil"),
+                max_w.as_deref().unwrap_or("nil"),
+                max_h.as_deref().unwrap_or("nil"),
+            ));
+        }
+        if let Some(p) = swift_optional_val(&node.padding) {
+            buf.push_str(&format!("{pad}.padding({p})\n"));
+        }
+        buf.push_str(&format!(
+            "{pad}.background(Color(red: 0.11, green: 0.11, blue: 0.17))\n"
+        ));
+    }
+}
+
 fn apply_hover<T: PartialEq + Clone>(
     opt: Option<T>,
     cfg: &mut FlexCfg,
@@ -1191,17 +1482,23 @@ fn panel_system(
                     });
 
                 ui.add_space(6.0);
+                if ui.button("Reset to defaults").clicked() {
+                    *cfg = FlexCfg::default(); *preview = None;
+                }
+                ui.add_space(4.0);
+                ui.label("Copy code:");
                 ui.horizontal(|ui| {
-                    if ui.button("Reset to defaults").clicked() {
-                        *cfg = FlexCfg::default(); *preview = None;
+                    if ui.button("Bevy").clicked() {
+                        ui.ctx().copy_text(emit_bevy_code(&cfg.root));
                     }
-                    if ui.button("📋 Bevy").clicked() {
-                        let code = emit_bevy_code(&cfg.root);
-                        ui.ctx().copy_text(code);
+                    if ui.button("HTML/CSS").clicked() {
+                        ui.ctx().copy_text(emit_html_css(&cfg.root));
                     }
-                    if ui.button("📋 HTML/CSS").clicked() {
-                        let code = emit_html_css(&cfg.root);
-                        ui.ctx().copy_text(code);
+                    if ui.button("Tailwind").clicked() {
+                        ui.ctx().copy_text(emit_tailwind(&cfg.root));
+                    }
+                    if ui.button("SwiftUI").clicked() {
+                        ui.ctx().copy_text(emit_swiftui(&cfg.root));
                     }
                 });
             });
