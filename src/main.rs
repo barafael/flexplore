@@ -522,7 +522,7 @@ fn main() {
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
                     title: "Flexplore".into(),
-                    resolution: (1280u32, 800u32).into(),
+                    fit_canvas_to_parent: true,
                     ..default()
                 }),
                 ..default()
