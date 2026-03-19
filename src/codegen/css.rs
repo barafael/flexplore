@@ -6,6 +6,22 @@ use bevy::prelude::*;
 use crate::art::PASTELS;
 use crate::config::{NodeConfig, ValueConfig};
 
+fn is_zero_or_auto(v: &ValueConfig) -> bool {
+    matches!(v, ValueConfig::Auto) || matches!(v, ValueConfig::Px(n) if *n == 0.0)
+}
+
+fn is_zero_px(v: &ValueConfig) -> bool {
+    matches!(v, ValueConfig::Px(n) if *n == 0.0)
+}
+
+fn format_num(v: f32) -> String {
+    if (v - v.round()).abs() < 0.005 {
+        format!("{}", v as i32)
+    } else {
+        format!("{v:.1}")
+    }
+}
+
 fn emit_css_value(v: &ValueConfig) -> String {
     match v {
         ValueConfig::Auto => "auto".into(),
@@ -124,42 +140,70 @@ fn emit_html_node(
     };
 
     writeln!(css, ".{class} {{")?;
-    if node.visible {
-        css.push_str("  display: flex;\n");
-    } else {
+
+    // Only emit properties that differ from CSS defaults.
+    if !node.visible {
         css.push_str("  display: none;\n");
+    } else {
+        css.push_str("  display: flex;\n");
     }
-    writeln!(
-        css,
-        "  flex-direction: {};",
-        css_flex_direction(node.flex_direction)
-    )?;
-    writeln!(css, "  flex-wrap: {};", css_flex_wrap(node.flex_wrap))?;
-    writeln!(
-        css,
-        "  justify-content: {};",
-        css_justify_content(node.justify_content)
-    )?;
-    writeln!(css, "  align-items: {};", css_align_items(node.align_items))?;
-    writeln!(
-        css,
-        "  align-content: {};",
-        css_align_content(node.align_content)
-    )?;
-    writeln!(css, "  row-gap: {};", emit_css_value(&node.row_gap))?;
-    writeln!(css, "  column-gap: {};", emit_css_value(&node.column_gap))?;
-    writeln!(css, "  flex-grow: {:.1};", node.flex_grow)?;
-    writeln!(css, "  flex-shrink: {:.1};", node.flex_shrink)?;
-    writeln!(css, "  flex-basis: {};", emit_css_value(&node.flex_basis))?;
-    writeln!(css, "  align-self: {};", css_align_self(node.align_self))?;
-    writeln!(css, "  width: {};", emit_css_value(&node.width))?;
-    writeln!(css, "  height: {};", emit_css_value(&node.height))?;
-    writeln!(css, "  min-width: {};", emit_css_value(&node.min_width))?;
-    writeln!(css, "  min-height: {};", emit_css_value(&node.min_height))?;
-    writeln!(css, "  max-width: {};", emit_css_value(&node.max_width))?;
-    writeln!(css, "  max-height: {};", emit_css_value(&node.max_height))?;
-    writeln!(css, "  padding: {};", emit_css_value(&node.padding))?;
-    writeln!(css, "  margin: {};", emit_css_value(&node.margin))?;
+    if node.flex_direction != FlexDirection::Row {
+        writeln!(css, "  flex-direction: {};", css_flex_direction(node.flex_direction))?;
+    }
+    if node.flex_wrap != FlexWrap::NoWrap {
+        writeln!(css, "  flex-wrap: {};", css_flex_wrap(node.flex_wrap))?;
+    }
+    if !matches!(node.justify_content, JustifyContent::Default | JustifyContent::FlexStart | JustifyContent::Start) {
+        writeln!(css, "  justify-content: {};", css_justify_content(node.justify_content))?;
+    }
+    if !matches!(node.align_items, AlignItems::Default | AlignItems::Stretch) {
+        writeln!(css, "  align-items: {};", css_align_items(node.align_items))?;
+    }
+    if !matches!(node.align_content, AlignContent::Default | AlignContent::Stretch) {
+        writeln!(css, "  align-content: {};", css_align_content(node.align_content))?;
+    }
+    if !is_zero_or_auto(&node.row_gap) {
+        writeln!(css, "  row-gap: {};", emit_css_value(&node.row_gap))?;
+    }
+    if !is_zero_or_auto(&node.column_gap) {
+        writeln!(css, "  column-gap: {};", emit_css_value(&node.column_gap))?;
+    }
+    if node.flex_grow != 0.0 {
+        writeln!(css, "  flex-grow: {};", format_num(node.flex_grow))?;
+    }
+    if node.flex_shrink != 1.0 {
+        writeln!(css, "  flex-shrink: {};", format_num(node.flex_shrink))?;
+    }
+    if !matches!(node.flex_basis, ValueConfig::Auto) {
+        writeln!(css, "  flex-basis: {};", emit_css_value(&node.flex_basis))?;
+    }
+    if node.align_self != AlignSelf::Auto {
+        writeln!(css, "  align-self: {};", css_align_self(node.align_self))?;
+    }
+    if !matches!(node.width, ValueConfig::Auto) {
+        writeln!(css, "  width: {};", emit_css_value(&node.width))?;
+    }
+    if !matches!(node.height, ValueConfig::Auto) {
+        writeln!(css, "  height: {};", emit_css_value(&node.height))?;
+    }
+    if !matches!(node.min_width, ValueConfig::Auto) {
+        writeln!(css, "  min-width: {};", emit_css_value(&node.min_width))?;
+    }
+    if !is_zero_or_auto(&node.min_height) {
+        writeln!(css, "  min-height: {};", emit_css_value(&node.min_height))?;
+    }
+    if !matches!(node.max_width, ValueConfig::Auto) {
+        writeln!(css, "  max-width: {};", emit_css_value(&node.max_width))?;
+    }
+    if !matches!(node.max_height, ValueConfig::Auto) {
+        writeln!(css, "  max-height: {};", emit_css_value(&node.max_height))?;
+    }
+    if !is_zero_px(&node.padding) {
+        writeln!(css, "  padding: {};", emit_css_value(&node.padding))?;
+    }
+    if !is_zero_px(&node.margin) {
+        writeln!(css, "  margin: {};", emit_css_value(&node.margin))?;
+    }
     if node.order != 0 {
         writeln!(css, "  order: {};", node.order)?;
     }
