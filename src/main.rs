@@ -543,27 +543,40 @@ fn setup(mut commands: Commands) {
 
 // ─── Tree UI helper ───────────────────────────────────────────────────────────
 
+/// Returns (clicked_path, remove_requested)
 fn draw_tree_ui(
     ui: &mut egui::Ui,
-    node: &NodeCfg,
+    node: &mut NodeCfg,
     path: &mut Vec<usize>,
     selected: &[usize],
-) -> Option<Vec<usize>> {
+    changed: &mut bool,
+) -> (Option<Vec<usize>>, bool) {
     let mut clicked = None;
+    let mut remove = false;
+    let is_selected = path.as_slice() == selected;
+    let is_root = path.is_empty();
     ui.horizontal(|ui| {
         ui.add_space(path.len() as f32 * 14.0);
         let icon = if node.children.is_empty() { "□" } else { "▣" };
-        if ui.selectable_label(path.as_slice() == selected, format!("{} {}", icon, node.label)).clicked() {
+        if is_selected {
+            let _ = ui.selectable_label(true, icon);
+            let r = ui.add(egui::TextEdit::singleline(&mut node.label).desired_width(80.0));
+            if r.changed() { *changed = true; }
+            if !is_root && ui.small_button("x").clicked() {
+                remove = true;
+            }
+        } else if ui.selectable_label(false, format!("{} {}", icon, node.label)).clicked() {
             clicked = Some(path.clone());
         }
     });
-    for (i, child) in node.children.iter().enumerate() {
+    for i in 0..node.children.len() {
         path.push(i);
-        let r = draw_tree_ui(ui, child, path, selected);
+        let (r, rem) = draw_tree_ui(ui, &mut node.children[i], path, selected, changed);
         path.pop();
         if r.is_some() { clicked = r; }
+        if rem { remove = true; }
     }
-    clicked
+    (clicked, remove)
 }
 
 // ─── Panel helpers ────────────────────────────────────────────────────────────
@@ -1210,16 +1223,6 @@ fn panel_system(
                                     .children.push(NodeCfg::new_leaf(&lbl, 80.0, 80.0));
                                 changed = true;
                             }
-                            if !is_root && ui.button("Remove").clicked() {
-                                let pidx = sel_path.len() - 1;
-                                let idx = sel_path[pidx];
-                                get_node_mut(&mut cfg.root, &sel_path[..pidx]).children.remove(idx);
-                                let new_path = sel_path[..pidx].to_vec();
-                                cfg.selected = new_path.clone();
-                                sel_path = new_path;
-                                is_root = sel_path.is_empty();
-                                changed = true;
-                            }
                             if !is_root && ui.button("+ Sibling").clicked() {
                                 let pidx = sel_path.len() - 1;
                                 let n = count_leaves(&cfg.root);
@@ -1229,15 +1232,19 @@ fn panel_system(
                                 changed = true;
                             }
                         });
-                        ui.horizontal(|ui| {
-                            ui.label("label:");
-                            if path_valid(&cfg.root, &sel_path) {
-                                let node = get_node_mut(&mut cfg.root, &sel_path);
-                                if ui.text_edit_singleline(&mut node.label).changed() { changed = true; }
-                            }
-                        });
                         ui.add_space(2.0);
-                        let clicked = draw_tree_ui(ui, &cfg.root, &mut vec![], &cfg.selected);
+                        let sel_snapshot = cfg.selected.clone();
+                        let (clicked, remove_req) = draw_tree_ui(ui, &mut cfg.root, &mut vec![], &sel_snapshot, &mut changed);
+                        if remove_req && !sel_path.is_empty() {
+                            let pidx = sel_path.len() - 1;
+                            let idx = sel_path[pidx];
+                            get_node_mut(&mut cfg.root, &sel_path[..pidx]).children.remove(idx);
+                            let new_path = sel_path[..pidx].to_vec();
+                            cfg.selected = new_path.clone();
+                            sel_path = new_path;
+                            is_root = sel_path.is_empty();
+                            changed = true;
+                        }
                         if let Some(p) = clicked
                             && p != cfg.selected {
                                 cfg.selected = p.clone();
