@@ -1202,16 +1202,6 @@ fn panel_system(
                 egui::CollapsingHeader::new("Tree")
                     .default_open(true)
                     .show(ui, |ui| {
-                        ui.add_space(2.0);
-                        let clicked = draw_tree_ui(ui, &cfg.root, &mut vec![], &cfg.selected);
-                        if let Some(p) = clicked
-                            && p != cfg.selected {
-                                cfg.selected = p.clone();
-                                sel_path = p;
-                                is_root = sel_path.is_empty();
-                                *preview = None;
-                            }
-                        ui.add_space(4.0);
                         ui.horizontal(|ui| {
                             if ui.button("+ Child").clicked() {
                                 let n = count_leaves(&cfg.root);
@@ -1239,7 +1229,6 @@ fn panel_system(
                                 changed = true;
                             }
                         });
-                        ui.add_space(2.0);
                         ui.horizontal(|ui| {
                             ui.label("label:");
                             if path_valid(&cfg.root, &sel_path) {
@@ -1247,6 +1236,15 @@ fn panel_system(
                                 if ui.text_edit_singleline(&mut node.label).changed() { changed = true; }
                             }
                         });
+                        ui.add_space(2.0);
+                        let clicked = draw_tree_ui(ui, &cfg.root, &mut vec![], &cfg.selected);
+                        if let Some(p) = clicked
+                            && p != cfg.selected {
+                                cfg.selected = p.clone();
+                                sel_path = p;
+                                is_root = sel_path.is_empty();
+                                *preview = None;
+                            }
                     });
 
                 ui.add_space(6.0);
@@ -1759,9 +1757,9 @@ fn ff(v: f32) -> String {
 fn fv(v: &ValCfg) -> String {
     match v {
         ValCfg::Auto => "auto".into(),
-        ValCfg::Px(n) => format!("{:.0}px", n),
-        ValCfg::Percent(n) => format!("{:.0}%", n),
-        ValCfg::Vw(n) => format!("{:.0}vw", n),
-        ValCfg::Vh(n) => format!("{:.0}vh", n),
+        ValCfg::Px(n) => format!("{n:.0}px"),
+        ValCfg::Percent(n) => format!("{n:.0}%"),
+        ValCfg::Vw(n) => format!("{n:.0}vw"),
+        ValCfg::Vh(n) => format!("{n:.0}vh"),
     }
 }
