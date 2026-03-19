@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use bevy::prelude::*;
 
 use crate::art::PASTELS;
@@ -57,40 +59,34 @@ fn emit_swiftui_node(buf: &mut String, node: &NodeConfig, depth: usize, leaf_idx
         let (r, g, b) = PASTELS[*leaf_idx % PASTELS.len()];
         *leaf_idx += 1;
 
-        buf.push_str(&format!("{pad}Text({:?})\n", node.label));
-        buf.push_str(&format!("{pad}    .font(.system(size: 26))\n"));
-        buf.push_str(&format!(
-            "{pad}    .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))\n"
-        ));
+        let _ = writeln!(buf, "{pad}Text({:?})", node.label);
+        let _ = writeln!(buf, "{pad}    .font(.system(size: 26))");
+        let _ = writeln!(buf, "{pad}    .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))");
 
         let w = swift_optional_value(&node.width);
         let h = swift_optional_value(&node.height);
         if w.is_some() || h.is_some() {
             let w_str = w.as_deref().unwrap_or("nil");
             let h_str = h.as_deref().unwrap_or("nil");
-            buf.push_str(&format!(
-                "{pad}    .frame(width: {w_str}, height: {h_str})\n"
-            ));
+            let _ = writeln!(buf, "{pad}    .frame(width: {w_str}, height: {h_str})");
         }
         let min_w = swift_optional_value(&node.min_width);
         let min_h = swift_optional_value(&node.min_height);
         let max_w = swift_optional_value(&node.max_width);
         let max_h = swift_optional_value(&node.max_height);
         if min_w.is_some() || min_h.is_some() || max_w.is_some() || max_h.is_some() {
-            buf.push_str(&format!(
-                "{pad}    .frame(minWidth: {}, minHeight: {}, maxWidth: {}, maxHeight: {})\n",
+            let _ = writeln!(buf,
+                "{pad}    .frame(minWidth: {}, minHeight: {}, maxWidth: {}, maxHeight: {})",
                 min_w.as_deref().unwrap_or("nil"),
                 min_h.as_deref().unwrap_or("nil"),
                 max_w.as_deref().unwrap_or("nil"),
                 max_h.as_deref().unwrap_or("nil"),
-            ));
+            );
         }
         if let Some(p) = swift_optional_value(&node.padding) {
-            buf.push_str(&format!("{pad}    .padding({p})\n"));
+            let _ = writeln!(buf, "{pad}    .padding({p})");
         }
-        buf.push_str(&format!(
-            "{pad}    .background(Color(red: {r:.2}, green: {g:.2}, blue: {b:.2}))\n"
-        ));
+        let _ = writeln!(buf, "{pad}    .background(Color(red: {r:.2}, green: {g:.2}, blue: {b:.2}))");
     } else {
         let is_row = matches!(
             node.flex_direction,
@@ -112,41 +108,37 @@ fn emit_swiftui_node(buf: &mut String, node: &NodeConfig, depth: usize, leaf_idx
         };
 
         let stack = if is_row { "HStack" } else { "VStack" };
-        buf.push_str(&format!(
-            "{pad}{stack}(alignment: {alignment}{spacing}) {{\n"
-        ));
+        let _ = writeln!(buf, "{pad}{stack}(alignment: {alignment}{spacing}) {{");
 
         for child in &node.children {
             emit_swiftui_node(buf, child, depth + 1, leaf_idx);
         }
 
-        buf.push_str(&format!("{pad}}}\n"));
+        let _ = writeln!(buf, "{pad}}}");
 
         let w = swift_optional_value(&node.width);
         let h = swift_optional_value(&node.height);
         if w.is_some() || h.is_some() {
             let w_str = w.as_deref().unwrap_or("nil");
             let h_str = h.as_deref().unwrap_or("nil");
-            buf.push_str(&format!("{pad}.frame(width: {w_str}, height: {h_str})\n"));
+            let _ = writeln!(buf, "{pad}.frame(width: {w_str}, height: {h_str})");
         }
         let min_w = swift_optional_value(&node.min_width);
         let min_h = swift_optional_value(&node.min_height);
         let max_w = swift_optional_value(&node.max_width);
         let max_h = swift_optional_value(&node.max_height);
         if min_w.is_some() || min_h.is_some() || max_w.is_some() || max_h.is_some() {
-            buf.push_str(&format!(
-                "{pad}.frame(minWidth: {}, minHeight: {}, maxWidth: {}, maxHeight: {})\n",
+            let _ = writeln!(buf,
+                "{pad}.frame(minWidth: {}, minHeight: {}, maxWidth: {}, maxHeight: {})",
                 min_w.as_deref().unwrap_or("nil"),
                 min_h.as_deref().unwrap_or("nil"),
                 max_w.as_deref().unwrap_or("nil"),
                 max_h.as_deref().unwrap_or("nil"),
-            ));
+            );
         }
         if let Some(p) = swift_optional_value(&node.padding) {
-            buf.push_str(&format!("{pad}.padding({p})\n"));
+            let _ = writeln!(buf, "{pad}.padding({p})");
         }
-        buf.push_str(&format!(
-            "{pad}.background(Color(red: 0.11, green: 0.11, blue: 0.17))\n"
-        ));
+        let _ = writeln!(buf, "{pad}.background(Color(red: 0.11, green: 0.11, blue: 0.17))");
     }
 }

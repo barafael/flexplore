@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use bevy::prelude::*;
 
 use crate::art::PASTELS;
@@ -112,64 +114,28 @@ fn emit_html_node(
         "rgba(28, 28, 43, 1)".into()
     };
 
-    css.push_str(&format!(".{class} {{\n"));
+    let _ = writeln!(css, ".{class} {{");
     css.push_str("  display: flex;\n");
-    css.push_str(&format!(
-        "  flex-direction: {};\n",
-        css_flex_direction(node.flex_direction)
-    ));
-    css.push_str(&format!(
-        "  flex-wrap: {};\n",
-        css_flex_wrap(node.flex_wrap)
-    ));
-    css.push_str(&format!(
-        "  justify-content: {};\n",
-        css_justify_content(node.justify_content)
-    ));
-    css.push_str(&format!(
-        "  align-items: {};\n",
-        css_align_items(node.align_items)
-    ));
-    css.push_str(&format!(
-        "  align-content: {};\n",
-        css_align_content(node.align_content)
-    ));
-    css.push_str(&format!("  row-gap: {};\n", emit_css_value(&node.row_gap)));
-    css.push_str(&format!(
-        "  column-gap: {};\n",
-        emit_css_value(&node.column_gap)
-    ));
-    css.push_str(&format!("  flex-grow: {:.1};\n", node.flex_grow));
-    css.push_str(&format!("  flex-shrink: {:.1};\n", node.flex_shrink));
-    css.push_str(&format!(
-        "  flex-basis: {};\n",
-        emit_css_value(&node.flex_basis)
-    ));
-    css.push_str(&format!(
-        "  align-self: {};\n",
-        css_align_self(node.align_self)
-    ));
-    css.push_str(&format!("  width: {};\n", emit_css_value(&node.width)));
-    css.push_str(&format!("  height: {};\n", emit_css_value(&node.height)));
-    css.push_str(&format!(
-        "  min-width: {};\n",
-        emit_css_value(&node.min_width)
-    ));
-    css.push_str(&format!(
-        "  min-height: {};\n",
-        emit_css_value(&node.min_height)
-    ));
-    css.push_str(&format!(
-        "  max-width: {};\n",
-        emit_css_value(&node.max_width)
-    ));
-    css.push_str(&format!(
-        "  max-height: {};\n",
-        emit_css_value(&node.max_height)
-    ));
-    css.push_str(&format!("  padding: {};\n", emit_css_value(&node.padding)));
-    css.push_str(&format!("  margin: {};\n", emit_css_value(&node.margin)));
-    css.push_str(&format!("  background: {bg};\n"));
+    let _ = writeln!(css, "  flex-direction: {};", css_flex_direction(node.flex_direction));
+    let _ = writeln!(css, "  flex-wrap: {};", css_flex_wrap(node.flex_wrap));
+    let _ = writeln!(css, "  justify-content: {};", css_justify_content(node.justify_content));
+    let _ = writeln!(css, "  align-items: {};", css_align_items(node.align_items));
+    let _ = writeln!(css, "  align-content: {};", css_align_content(node.align_content));
+    let _ = writeln!(css, "  row-gap: {};", emit_css_value(&node.row_gap));
+    let _ = writeln!(css, "  column-gap: {};", emit_css_value(&node.column_gap));
+    let _ = writeln!(css, "  flex-grow: {:.1};", node.flex_grow);
+    let _ = writeln!(css, "  flex-shrink: {:.1};", node.flex_shrink);
+    let _ = writeln!(css, "  flex-basis: {};", emit_css_value(&node.flex_basis));
+    let _ = writeln!(css, "  align-self: {};", css_align_self(node.align_self));
+    let _ = writeln!(css, "  width: {};", emit_css_value(&node.width));
+    let _ = writeln!(css, "  height: {};", emit_css_value(&node.height));
+    let _ = writeln!(css, "  min-width: {};", emit_css_value(&node.min_width));
+    let _ = writeln!(css, "  min-height: {};", emit_css_value(&node.min_height));
+    let _ = writeln!(css, "  max-width: {};", emit_css_value(&node.max_width));
+    let _ = writeln!(css, "  max-height: {};", emit_css_value(&node.max_height));
+    let _ = writeln!(css, "  padding: {};", emit_css_value(&node.padding));
+    let _ = writeln!(css, "  margin: {};", emit_css_value(&node.margin));
+    let _ = writeln!(css, "  background: {bg};");
     css.push_str("  box-sizing: border-box;\n");
     if is_leaf {
         css.push_str("  color: rgba(13, 13, 26, 0.85);\n");
@@ -178,15 +144,12 @@ fn emit_html_node(
     css.push_str("}\n\n");
 
     if is_leaf {
-        html.push_str(&format!(
-            "{pad_html}<div class=\"{class}\">{}</div>\n",
-            node.label
-        ));
+        let _ = writeln!(html, "{pad_html}<div class=\"{class}\">{}</div>", node.label);
     } else {
-        html.push_str(&format!("{pad_html}<div class=\"{class}\">\n"));
+        let _ = writeln!(html, "{pad_html}<div class=\"{class}\">");
         for child in &node.children {
             emit_html_node(css, html, child, depth + 1, leaf_idx, id_counter);
         }
-        html.push_str(&format!("{pad_html}</div>\n"));
+        let _ = writeln!(html, "{pad_html}</div>");
     }
 }

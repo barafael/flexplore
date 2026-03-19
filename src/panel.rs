@@ -296,8 +296,8 @@ pub fn panel_system(
                                 apply_hover(hover_justify, &mut cfg, p, sp, |n| n.justify_content,        |n, v| n.justify_content  = v) |
                                 apply_hover(hover_align_items,      &mut cfg, p, sp, |n| n.align_items,            |n, v| n.align_items      = v) |
                                 apply_hover(hover_align_content,      &mut cfg, p, sp, |n| n.align_content,          |n, v| n.align_content    = v) |
-                                apply_hover(hover_row_gap,      &mut cfg, p, sp, |n| n.row_gap.clone(),        |n, v| n.row_gap          = v) |
-                                apply_hover(hover_column_gap,    &mut cfg, p, sp, |n| n.column_gap.clone(),     |n, v| n.column_gap       = v);
+                                apply_hover(hover_row_gap,      &mut cfg, p, sp, |n| n.row_gap,        |n, v| n.row_gap          = v) |
+                                apply_hover(hover_column_gap,    &mut cfg, p, sp, |n| n.column_gap,     |n, v| n.column_gap       = v);
                             if needs_rebuild { cfg.needs_rebuild = true; }
                         }
                     });
@@ -329,13 +329,13 @@ pub fn panel_system(
                             any_hovered = true;
                             let p = &mut *preview; let sp = &sel_path;
                             let needs_rebuild =
-                                apply_hover(hover_width,    &mut cfg, p, sp, |n| n.width.clone(),      |n, v| n.width      = v) |
-                                apply_hover(hover_height,    &mut cfg, p, sp, |n| n.height.clone(),     |n, v| n.height     = v) |
-                                apply_hover(hover_min_width, &mut cfg, p, sp, |n| n.min_width.clone(),  |n, v| n.min_width  = v) |
-                                apply_hover(hover_min_height, &mut cfg, p, sp, |n| n.min_height.clone(), |n, v| n.min_height = v) |
-                                apply_hover(hover_max_width, &mut cfg, p, sp, |n| n.max_width.clone(),  |n, v| n.max_width  = v) |
-                                apply_hover(hover_max_height, &mut cfg, p, sp, |n| n.max_height.clone(), |n, v| n.max_height = v) |
-                                apply_hover(hover_padding,  &mut cfg, p, sp, |n| n.padding.clone(),    |n, v| n.padding    = v);
+                                apply_hover(hover_width,    &mut cfg, p, sp, |n| n.width,      |n, v| n.width      = v) |
+                                apply_hover(hover_height,    &mut cfg, p, sp, |n| n.height,     |n, v| n.height     = v) |
+                                apply_hover(hover_min_width, &mut cfg, p, sp, |n| n.min_width,  |n, v| n.min_width  = v) |
+                                apply_hover(hover_min_height, &mut cfg, p, sp, |n| n.min_height, |n, v| n.min_height = v) |
+                                apply_hover(hover_max_width, &mut cfg, p, sp, |n| n.max_width,  |n, v| n.max_width  = v) |
+                                apply_hover(hover_max_height, &mut cfg, p, sp, |n| n.max_height, |n, v| n.max_height = v) |
+                                apply_hover(hover_padding,  &mut cfg, p, sp, |n| n.padding,    |n, v| n.padding    = v);
                             if needs_rebuild { cfg.needs_rebuild = true; }
                         }
                     });
@@ -379,9 +379,9 @@ pub fn panel_system(
                                 any_hovered = true;
                                 let p = &mut *preview; let sp = &sel_path;
                                 let needs_rebuild =
-                                    apply_hover(hover_basis,  &mut cfg, p, sp, |n| n.flex_basis.clone(), |n, v| n.flex_basis = v) |
+                                    apply_hover(hover_basis,  &mut cfg, p, sp, |n| n.flex_basis, |n, v| n.flex_basis = v) |
                                     apply_hover(hover_align_self,     &mut cfg, p, sp, |n| n.align_self,         |n, v| n.align_self = v) |
-                                    apply_hover(hover_margin, &mut cfg, p, sp, |n| n.margin.clone(),     |n, v| n.margin     = v);
+                                    apply_hover(hover_margin, &mut cfg, p, sp, |n| n.margin,     |n, v| n.margin     = v);
                                 if needs_rebuild { cfg.needs_rebuild = true; }
                             }
                         });
@@ -395,7 +395,7 @@ pub fn panel_system(
                     .default_open(true)
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
-                            let prev = cfg.bg_mode.clone();
+                            let prev = cfg.bg_mode;
                             ui.radio_value(&mut cfg.bg_mode, BackgroundMode::Pastel, "Pastel").on_hover_text("Fill leaf nodes with solid pastel colors");
                             ui.radio_value(&mut cfg.bg_mode, BackgroundMode::RandomArt, "Generative Art").on_hover_text("Fill leaf nodes with procedurally generated art textures");
                             if cfg.bg_mode != prev { changed = true; }
@@ -409,8 +409,8 @@ pub fn panel_system(
                                     for style in ArtStyle::iter() {
                                         let name = style.to_string();
                                         let r = ui.selectable_label(cfg.art_style == style, &name);
-                                        if r.clicked() { cfg.art_style = style.clone(); changed = true; }
-                                        else if r.hovered() { hover_art = Some(style.clone()); }
+                                        if r.clicked() { cfg.art_style = style; changed = true; }
+                                        else if r.hovered() { hover_art = Some(style); }
                                     }
                                 });
                             if art_resp.inner.is_some() { any_hovered = true; }

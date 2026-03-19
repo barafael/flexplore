@@ -46,7 +46,7 @@ pub fn rebuild_viz(
     art.handles.clear();
     if cfg.bg_mode == BackgroundMode::RandomArt {
         let n = cfg.root.count_leaves();
-        let (base, depth, style) = (cfg.art_seed, cfg.art_depth, cfg.art_style.clone());
+        let (base, depth, style) = (cfg.art_seed, cfg.art_depth, cfg.art_style);
         for i in 0..n {
             let iseed = base.wrapping_add((i as u64).wrapping_mul(0x9e3779b97f4a7c15));
             let exprs = ArtExpressions::generate(iseed, depth);
@@ -344,9 +344,19 @@ pub fn viz_click(
     nodes: Query<(&Interaction, &VizNodePath), Changed<Interaction>>,
     mut cfg: ResMut<FlexConfig>,
 ) {
+    // Pick the deepest pressed node — clicks bubble up to ancestors,
+    // so multiple nodes report Pressed simultaneously.
+    let mut best: Option<&Vec<usize>> = None;
     for (interaction, path) in &nodes {
-        if *interaction == Interaction::Pressed && cfg.selected != path.0 {
-            cfg.selected = path.0.clone();
+        if *interaction == Interaction::Pressed {
+            if best.is_none_or(|b| path.0.len() > b.len()) {
+                best = Some(&path.0);
+            }
+        }
+    }
+    if let Some(path) = best {
+        if cfg.selected != *path {
+            cfg.selected = path.clone();
             cfg.needs_rebuild = true;
         }
     }

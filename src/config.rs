@@ -13,7 +13,7 @@ pub enum ValueKind {
     Vh,
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum ValueConfig {
     Auto,
     Px(f32),
@@ -162,7 +162,7 @@ impl NodeConfig {
 }
 
 impl NodeConfig {
-    pub fn get<'a>(&'a self, path: &[usize]) -> &'a NodeConfig {
+    pub fn get(&self, path: &[usize]) -> &NodeConfig {
         if path.is_empty() {
             self
         } else {
@@ -170,7 +170,7 @@ impl NodeConfig {
         }
     }
 
-    pub fn get_mut<'a>(&'a mut self, path: &[usize]) -> &'a mut NodeConfig {
+    pub fn get_mut(&mut self, path: &[usize]) -> &mut NodeConfig {
         if path.is_empty() {
             self
         } else {
@@ -227,13 +227,13 @@ impl NodeConfig {
 
 // ─── Background mode + art style ─────────────────────────────────────────────
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum BackgroundMode {
     Pastel,
     RandomArt,
 }
 
-#[derive(Clone, PartialEq, Debug, Display, EnumIter)]
+#[derive(Clone, Copy, PartialEq, Debug, Display, EnumIter)]
 pub enum ArtStyle {
     #[strum(serialize = "Expr Tree")]
     ExprTree,

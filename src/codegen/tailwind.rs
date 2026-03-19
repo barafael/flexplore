@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use bevy::prelude::*;
 
 use crate::art::PASTELS;
@@ -134,12 +136,12 @@ fn emit_tailwind_node(buf: &mut String, node: &NodeConfig, depth: usize, leaf_id
     let cls = classes.join(" ");
 
     if is_leaf {
-        buf.push_str(&format!("{pad}<div class=\"{cls}\">{}</div>\n", node.label));
+        let _ = writeln!(buf, "{pad}<div class=\"{cls}\">{}</div>", node.label);
     } else {
-        buf.push_str(&format!("{pad}<div class=\"{cls}\">\n"));
+        let _ = writeln!(buf, "{pad}<div class=\"{cls}\">");
         for child in &node.children {
             emit_tailwind_node(buf, child, depth + 1, leaf_idx);
         }
-        buf.push_str(&format!("{pad}</div>\n"));
+        let _ = writeln!(buf, "{pad}</div>");
     }
 }
