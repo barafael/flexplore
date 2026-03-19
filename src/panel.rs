@@ -6,6 +6,9 @@ use crate::codegen::{emit_bevy_code, emit_flutter, emit_html_css, emit_react, em
 use crate::config::*;
 use crate::history::UndoHistory;
 
+type TemplateFn = fn() -> NodeConfig;
+type CodegenFn = fn(&NodeConfig, ColorPalette) -> anyhow::Result<String>;
+
 // ─── Tree UI helper ───────────────────────────────────────────────────────────
 
 fn draw_tree_ui(
@@ -482,7 +485,7 @@ pub fn panel_system(
                 egui::CollapsingHeader::new("Templates")
                     .default_open(false)
                     .show(ui, |ui| {
-                        let templates: &[(&str, fn() -> NodeConfig)] = &[
+                        let templates: &[(&str, TemplateFn)] = &[
                             ("Holy Grail", crate::templates::holy_grail),
                             ("Sidebar + Content", crate::templates::sidebar_content),
                             ("Card Grid", crate::templates::card_grid),
@@ -594,7 +597,7 @@ pub fn panel_system(
                 ui.label("Copy code:");
                 ui.horizontal(|ui| {
                     let pal = cfg.palette;
-                    let copy_targets: &[(&str, fn(&NodeConfig, ColorPalette) -> anyhow::Result<String>)] = &[
+                    let copy_targets: &[(&str, CodegenFn)] = &[
                         ("Bevy", emit_bevy_code),
                         ("HTML/CSS", emit_html_css),
                         ("Tailwind", emit_tailwind),

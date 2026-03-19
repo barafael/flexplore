@@ -98,30 +98,30 @@ fn spawn_viz(commands: &mut Commands, cfg: &FlexConfig, art: &ArtState) {
         .id();
     commands.entity(viz_root).add_children(&[spacer, area]);
 
-    let mut leaf_idx = 0usize;
-    spawn_node(
-        commands,
-        area,
-        &cfg.root,
+    let mut ctx = SpawnCtx {
         cfg,
         art,
-        cfg.selected(),
-        &[],
-        &mut leaf_idx,
-    );
+        selected_path: cfg.selected(),
+        leaf_idx: 0,
+    };
+    spawn_node(commands, area, &cfg.root, &mut ctx, &[]);
+}
+
+struct SpawnCtx<'a> {
+    cfg: &'a FlexConfig,
+    art: &'a ArtState,
+    selected_path: &'a [usize],
+    leaf_idx: usize,
 }
 
 fn spawn_node(
     commands: &mut Commands,
     parent_entity: Entity,
     node: &NodeConfig,
-    cfg: &FlexConfig,
-    art: &ArtState,
-    selected_path: &[usize],
+    ctx: &mut SpawnCtx,
     current_path: &[usize],
-    leaf_idx: &mut usize,
 ) {
-    let is_selected = current_path == selected_path;
+    let is_selected = current_path == ctx.selected_path;
     let is_leaf = node.children.is_empty();
 
     let (border_width, border_color) = if is_selected {
@@ -131,8 +131,8 @@ fn spawn_node(
     };
 
     let bg_color = if is_leaf {
-        if cfg.bg_mode == BackgroundMode::Pastel {
-            palette_bevy_color(cfg.palette, *leaf_idx)
+        if ctx.cfg.bg_mode == BackgroundMode::Pastel {
+            palette_bevy_color(ctx.cfg.palette, ctx.leaf_idx)
         } else {
             Color::WHITE
         }
@@ -167,8 +167,8 @@ fn spawn_node(
     };
 
     if is_leaf {
-        let my_idx = *leaf_idx;
-        *leaf_idx += 1;
+        let my_idx = ctx.leaf_idx;
+        ctx.leaf_idx += 1;
         let entity = commands
             .spawn((
                 node_bevy,
@@ -179,8 +179,8 @@ fn spawn_node(
                 VizNodeInfo(node.info()),
             ))
             .id();
-        if cfg.bg_mode == BackgroundMode::RandomArt
-            && let Some(h) = art.handles.get(my_idx)
+        if ctx.cfg.bg_mode == BackgroundMode::RandomArt
+            && let Some(h) = ctx.art.handles.get(my_idx)
         {
             commands.entity(entity).insert(ImageNode::new(h.clone()));
         }
@@ -244,16 +244,7 @@ fn spawn_node(
             let child = &node.children[i];
             let mut child_path = current_path.to_vec();
             child_path.push(i);
-            spawn_node(
-                commands,
-                entity,
-                child,
-                cfg,
-                art,
-                selected_path,
-                &child_path,
-                leaf_idx,
-            );
+            spawn_node(commands, entity, child, ctx, &child_path);
         }
     }
 }
