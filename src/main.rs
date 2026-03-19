@@ -5,6 +5,7 @@ mod codegen;
 mod config;
 mod history;
 mod panel;
+mod persist;
 mod viz;
 
 use bevy::prelude::*;
@@ -30,8 +31,9 @@ fn main() {
         .init_resource::<FlexConfig>()
         .init_resource::<ArtState>()
         .insert_resource(UndoHistory::new(FlexConfig::default()))
-        .add_systems(Startup, setup)
+        .add_systems(Startup, (setup, load_autosave))
         .add_systems(EguiPrimaryContextPass, panel::panel_system)
+        .add_systems(Update, auto_save_system)
         .add_systems(
             Update,
             (
@@ -47,4 +49,20 @@ fn main() {
 
 fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
+}
+
+fn load_autosave(mut cfg: ResMut<FlexConfig>, mut history: ResMut<UndoHistory>) {
+    if let Some(loaded) = persist::auto_load() {
+        *cfg = loaded;
+        cfg.request_rebuild();
+        history.push(cfg.clone());
+    }
+}
+
+fn auto_save_system(cfg: Res<FlexConfig>, mut timer: Local<Option<Timer>>, time: Res<Time>) {
+    let t = timer.get_or_insert_with(|| Timer::from_seconds(2.0, TimerMode::Repeating));
+    t.tick(time.delta());
+    if t.just_finished() && cfg.is_changed() {
+        persist::auto_save(&cfg);
+    }
 }

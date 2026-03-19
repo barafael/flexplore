@@ -89,6 +89,7 @@ pub fn panel_system(
     mut history: ResMut<UndoHistory>,
     mut preview: Local<Option<FlexConfig>>,
     mut style_done: Local<bool>,
+    mut import_buf: Local<String>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
 
@@ -488,7 +489,36 @@ pub fn panel_system(
                 ui.add_space(6.0);
                 if ui.button("Reset to defaults").on_hover_text("Restore all settings and the node tree to the initial state").clicked() {
                     *cfg = FlexConfig::default(); *preview = None;
+                    changed = true;
                 }
+
+                ui.add_space(6.0);
+                egui::CollapsingHeader::new("Import / Export")
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            if ui.button("Export JSON").on_hover_text("Download layout as JSON").clicked() {
+                                if let Some(json) = crate::persist::export_json(&cfg) {
+                                    #[cfg(target_arch = "wasm32")]
+                                    crate::persist::trigger_download(&json);
+                                    #[cfg(not(target_arch = "wasm32"))]
+                                    { ui.ctx().copy_text(json); }
+                                }
+                            }
+                        });
+                        ui.label("Paste JSON to import:");
+                        ui.add(egui::TextEdit::multiline(&mut *import_buf).desired_rows(3).desired_width(f32::INFINITY));
+                        if ui.button("Load from JSON").clicked() && !import_buf.is_empty() {
+                            if let Some(loaded) = crate::persist::import_json(&import_buf) {
+                                *cfg = loaded;
+                                cfg.request_rebuild();
+                                *preview = None;
+                                history.push(cfg.clone());
+                                import_buf.clear();
+                            }
+                        }
+                    });
+
                 ui.add_space(4.0);
                 ui.label("Copy code:");
                 ui.horizontal(|ui| {
