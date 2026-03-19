@@ -24,13 +24,13 @@ pub enum ValueConfig {
 }
 
 impl ValueConfig {
-    pub fn to_val(&self) -> Val {
+    pub fn to_val(self) -> Val {
         match self {
             ValueConfig::Auto => Val::Auto,
-            ValueConfig::Px(v) => Val::Px(*v),
-            ValueConfig::Percent(v) => Val::Percent(*v),
-            ValueConfig::Vw(v) => Val::Vw(*v),
-            ValueConfig::Vh(v) => Val::Vh(*v),
+            ValueConfig::Px(v) => Val::Px(v),
+            ValueConfig::Percent(v) => Val::Percent(v),
+            ValueConfig::Vw(v) => Val::Vw(v),
+            ValueConfig::Vh(v) => Val::Vh(v),
         }
     }
     pub fn kind(&self) -> ValueKind {
@@ -249,10 +249,45 @@ pub enum ArtStyle {
     OpArt,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Display, EnumIter, Serialize, Deserialize)]
 pub enum Theme {
-    Dark,
-    Light,
+    Latte,
+    #[strum(serialize = "Frappé")]
+    Frappe,
+    Macchiato,
+    Mocha,
+}
+
+impl Theme {
+    pub fn is_light(self) -> bool {
+        self == Theme::Latte
+    }
+}
+
+fn deserialize_theme<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Theme, D::Error> {
+    use serde::Deserialize;
+    let s = String::deserialize(d)?;
+    Ok(match s.as_str() {
+        "Dark" | "Mocha" => Theme::Mocha,
+        "Light" | "Latte" => Theme::Latte,
+        "Frappe" | "Frappé" => Theme::Frappe,
+        "Macchiato" => Theme::Macchiato,
+        _ => Theme::Mocha,
+    })
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Display, EnumIter, Serialize, Deserialize)]
+pub enum ColorPalette {
+    Pastel1,
+    Pastel2,
+    Set1,
+    Set2,
+    Set3,
+    Tableau10,
+    Category10,
+    Accent,
+    Dark2,
+    Paired,
 }
 
 // ─── Main resource ────────────────────────────────────────────────────────────
@@ -267,9 +302,16 @@ pub struct FlexConfig {
     pub art_seed: u64,
     pub art_depth: u32,
     pub art_anim: f32,
+    #[serde(deserialize_with = "deserialize_theme")]
     pub theme: Theme,
+    #[serde(default = "default_palette")]
+    pub palette: ColorPalette,
     #[serde(skip)]
     needs_rebuild: bool,
+}
+
+fn default_palette() -> ColorPalette {
+    ColorPalette::Pastel1
 }
 
 impl FlexConfig {
@@ -318,7 +360,8 @@ impl Default for FlexConfig {
             art_seed: 137,
             art_depth: 5,
             art_anim: 0.0,
-            theme: Theme::Dark,
+            theme: Theme::Mocha,
+            palette: ColorPalette::Pastel1,
             needs_rebuild: true,
         }
     }

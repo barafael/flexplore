@@ -21,12 +21,6 @@ fn draw_tree_ui(
     let is_root = path.is_empty();
     ui.horizontal(|ui| {
         ui.add_space(path.len() as f32 * 14.0);
-        // Visibility toggle
-        let vis_icon = if node.visible { "\u{25C9}" } else { "\u{25CE}" };
-        if ui.small_button(vis_icon).on_hover_text("Toggle visibility").clicked() {
-            node.visible = !node.visible;
-            *changed = true;
-        }
         let icon = if node.children.is_empty() { "□" } else { "▣" };
         if is_selected {
             let _ = ui.selectable_label(true, icon);
@@ -105,19 +99,15 @@ pub fn panel_system(
                 egui::Key::Z,
             )
     });
-    if undo_pressed {
-        if let Some(snapshot) = history.undo() {
-            *cfg = snapshot.clone();
-            cfg.request_rebuild();
-            *preview = None;
-        }
+    if undo_pressed && let Some(snapshot) = history.undo() {
+        *cfg = snapshot.clone();
+        cfg.request_rebuild();
+        *preview = None;
     }
-    if redo_pressed {
-        if let Some(snapshot) = history.redo() {
-            *cfg = snapshot.clone();
-            cfg.request_rebuild();
-            *preview = None;
-        }
+    if redo_pressed && let Some(snapshot) = history.redo() {
+        *cfg = snapshot.clone();
+        cfg.request_rebuild();
+        *preview = None;
     }
 
     // ── Tree navigation shortcuts ────────────────────────────────────────────
@@ -221,24 +211,30 @@ pub fn panel_system(
 
                 // ── Toolbar ───────────────────────────────────────────────────────
                 ui.horizontal(|ui| {
-                    if ui.button(match cfg.theme { Theme::Dark => "Light mode", Theme::Light => "Dark mode" }).clicked() {
-                        cfg.theme = match cfg.theme { Theme::Dark => Theme::Light, Theme::Light => Theme::Dark };
-                        changed = true;
-                    }
+                    let prev_theme = cfg.theme;
+                    egui::ComboBox::from_id_salt("theme_sel")
+                        .selected_text(cfg.theme.to_string())
+                        .width(90.0)
+                        .show_ui(ui, |ui| {
+                            for t in Theme::iter() {
+                                ui.selectable_value(&mut cfg.theme, t, t.to_string());
+                            }
+                        });
+                    if cfg.theme != prev_theme { changed = true; }
                     ui.separator();
-                    if ui.add_enabled(history.can_undo(), egui::Button::new("⟲ Undo")).clicked() {
-                        if let Some(snapshot) = history.undo() {
-                            *cfg = snapshot.clone();
-                            cfg.request_rebuild();
-                            *preview = None;
-                        }
+                    if ui.add_enabled(history.can_undo(), egui::Button::new("⟲ Undo")).clicked()
+                        && let Some(snapshot) = history.undo()
+                    {
+                        *cfg = snapshot.clone();
+                        cfg.request_rebuild();
+                        *preview = None;
                     }
-                    if ui.add_enabled(history.can_redo(), egui::Button::new("⟳ Redo")).clicked() {
-                        if let Some(snapshot) = history.redo() {
-                            *cfg = snapshot.clone();
-                            cfg.request_rebuild();
-                            *preview = None;
-                        }
+                    if ui.add_enabled(history.can_redo(), egui::Button::new("⟳ Redo")).clicked()
+                        && let Some(snapshot) = history.redo()
+                    {
+                        *cfg = snapshot.clone();
+                        cfg.request_rebuild();
+                        *preview = None;
                     }
                 });
                 ui.add_space(4.0);
@@ -292,7 +288,14 @@ pub fn panel_system(
 
                 ui.add_space(6.0);
 
-                if cfg.root.get(&sel_path).is_some() {
+                if let Some(n) = cfg.root.get_mut(&sel_path) {
+
+                ui.horizontal(|ui| {
+                    if ui.checkbox(&mut n.visible, "Visible").on_hover_text("Whether this node is displayed in the layout").changed() {
+                        changed = true;
+                    }
+                });
+                ui.add_space(4.0);
 
                 egui::CollapsingHeader::new("Flex Container")
                     .default_open(true)
@@ -508,6 +511,19 @@ pub fn panel_system(
                             ui.radio_value(&mut cfg.bg_mode, BackgroundMode::RandomArt, "Generative Art").on_hover_text("Fill leaf nodes with procedurally generated art textures");
                             if cfg.bg_mode != prev { changed = true; }
                         });
+                        let prev_pal = cfg.palette;
+                        ui.horizontal(|ui| {
+                            ui.label("palette");
+                            egui::ComboBox::from_id_salt("palette_sel")
+                                .selected_text(cfg.palette.to_string())
+                                .width(110.0)
+                                .show_ui(ui, |ui| {
+                                    for p in ColorPalette::iter() {
+                                        ui.selectable_value(&mut cfg.palette, p, p.to_string());
+                                    }
+                                });
+                        });
+                        if cfg.palette != prev_pal { changed = true; }
                         if cfg.bg_mode == BackgroundMode::RandomArt {
                             let cur = cfg.art_style.to_string();
                             let mut hover_art: Option<ArtStyle> = None;
@@ -551,42 +567,44 @@ pub fn panel_system(
                     .default_open(false)
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
-                            if ui.button("Export JSON").on_hover_text("Download layout as JSON").clicked() {
-                                if let Some(json) = crate::persist::export_json(&cfg) {
-                                    #[cfg(target_arch = "wasm32")]
-                                    crate::persist::trigger_download(&json);
-                                    #[cfg(not(target_arch = "wasm32"))]
-                                    { ui.ctx().copy_text(json); }
-                                }
+                            if ui.button("Export JSON").on_hover_text("Download layout as JSON").clicked()
+                                && let Some(json) = crate::persist::export_json(&cfg)
+                            {
+                                #[cfg(target_arch = "wasm32")]
+                                crate::persist::trigger_download(&json);
+                                #[cfg(not(target_arch = "wasm32"))]
+                                { ui.ctx().copy_text(json); }
                             }
                         });
                         ui.label("Paste JSON to import:");
                         ui.add(egui::TextEdit::multiline(&mut *import_buf).desired_rows(3).desired_width(f32::INFINITY));
-                        if ui.button("Load from JSON").clicked() && !import_buf.is_empty() {
-                            if let Some(loaded) = crate::persist::import_json(&import_buf) {
-                                *cfg = loaded;
-                                cfg.request_rebuild();
-                                *preview = None;
-                                history.push(cfg.clone());
-                                import_buf.clear();
-                            }
+                        if ui.button("Load from JSON").clicked()
+                            && !import_buf.is_empty()
+                            && let Some(loaded) = crate::persist::import_json(&import_buf)
+                        {
+                            *cfg = loaded;
+                            cfg.request_rebuild();
+                            *preview = None;
+                            history.push(cfg.clone());
+                            import_buf.clear();
                         }
                     });
 
                 ui.add_space(4.0);
                 ui.label("Copy code:");
                 ui.horizontal(|ui| {
-                    let copy_targets: &[(&str, fn(&NodeConfig) -> anyhow::Result<String>)] = &[
-                        ("Bevy", |r| emit_bevy_code(r)),
-                        ("HTML/CSS", |r| emit_html_css(r)),
-                        ("Tailwind", |r| emit_tailwind(r)),
-                        ("React", |r| emit_react(r)),
-                        ("SwiftUI", |r| emit_swiftui(r)),
-                        ("Flutter", |r| emit_flutter(r)),
+                    let pal = cfg.palette;
+                    let copy_targets: &[(&str, fn(&NodeConfig, ColorPalette) -> anyhow::Result<String>)] = &[
+                        ("Bevy", emit_bevy_code),
+                        ("HTML/CSS", emit_html_css),
+                        ("Tailwind", emit_tailwind),
+                        ("React", emit_react),
+                        ("SwiftUI", emit_swiftui),
+                        ("Flutter", emit_flutter),
                     ];
                     for (name, emitter) in copy_targets {
                         if ui.button(*name).on_hover_text(format!("Copy {name} code to clipboard")).clicked() {
-                            match emitter(&cfg.root) {
+                            match emitter(&cfg.root, pal) {
                                 Ok(code) => {
                                     ui.ctx().copy_text(code);
                                     let now = ui.ctx().input(|i| i.time);
@@ -640,77 +658,48 @@ pub fn panel_system(
 // ─── Theme ───────────────────────────────────────────────────────────────────
 
 fn apply_theme(ctx: &egui::Context, theme: Theme) {
-    let no_rounding = egui::CornerRadius::ZERO;
-    let mut v = match theme {
-        Theme::Dark => {
-            const BG: egui::Color32 = egui::Color32::from_rgb(0x10, 0x10, 0x14);
-            const MID: egui::Color32 = egui::Color32::from_rgb(0x2a, 0x2a, 0x30);
-            const FG: egui::Color32 = egui::Color32::from_rgb(0xe8, 0xe4, 0xd8);
-            let mut v = egui::Visuals::dark();
-            v.panel_fill = BG;
-            v.window_fill = BG;
-            v.extreme_bg_color = BG;
-            v.widgets.inactive.bg_fill = MID;
-            v.widgets.inactive.weak_bg_fill = MID;
-            v.widgets.inactive.bg_stroke =
-                egui::Stroke::new(1.0, egui::Color32::from_rgb(0x3a, 0x3a, 0x42));
-            v.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, FG);
-            v.widgets.hovered.bg_fill = egui::Color32::from_rgb(0x38, 0x38, 0x42);
-            v.widgets.hovered.weak_bg_fill = egui::Color32::from_rgb(0x38, 0x38, 0x42);
-            v.widgets.hovered.bg_stroke =
-                egui::Stroke::new(1.0, egui::Color32::from_rgb(0x88, 0x88, 0x98));
-            v.widgets.hovered.fg_stroke = egui::Stroke::new(1.5, FG);
-            v.widgets.active.bg_fill = FG;
-            v.widgets.active.weak_bg_fill = FG;
-            v.widgets.active.fg_stroke = egui::Stroke::new(1.5, BG);
-            v.widgets.open.bg_fill = MID;
-            v.widgets.open.fg_stroke = egui::Stroke::new(1.0, FG);
-            v.widgets.noninteractive.bg_fill = BG;
-            v.widgets.noninteractive.fg_stroke =
-                egui::Stroke::new(1.0, egui::Color32::from_rgb(0x70, 0x6e, 0x66));
-            v.widgets.noninteractive.bg_stroke =
-                egui::Stroke::new(1.0, egui::Color32::from_rgb(0x34, 0x34, 0x3a));
-            v.override_text_color = Some(FG);
-            v.window_stroke =
-                egui::Stroke::new(1.0, egui::Color32::from_rgb(0x3a, 0x3a, 0x42));
-            v.selection.bg_fill = egui::Color32::from_rgb(0x40, 0x40, 0x52);
-            v
-        }
-        Theme::Light => {
-            const BG: egui::Color32 = egui::Color32::from_rgb(0xf4, 0xf2, 0xee);
-            const MID: egui::Color32 = egui::Color32::from_rgb(0xe0, 0xde, 0xd8);
-            const FG: egui::Color32 = egui::Color32::from_rgb(0x20, 0x20, 0x24);
-            let mut v = egui::Visuals::light();
-            v.panel_fill = BG;
-            v.window_fill = BG;
-            v.extreme_bg_color = egui::Color32::WHITE;
-            v.widgets.inactive.bg_fill = MID;
-            v.widgets.inactive.weak_bg_fill = MID;
-            v.widgets.inactive.bg_stroke =
-                egui::Stroke::new(1.0, egui::Color32::from_rgb(0xc0, 0xbe, 0xb8));
-            v.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, FG);
-            v.widgets.hovered.bg_fill = egui::Color32::from_rgb(0xd4, 0xd2, 0xcc);
-            v.widgets.hovered.weak_bg_fill = egui::Color32::from_rgb(0xd4, 0xd2, 0xcc);
-            v.widgets.hovered.bg_stroke =
-                egui::Stroke::new(1.0, egui::Color32::from_rgb(0x88, 0x88, 0x90));
-            v.widgets.hovered.fg_stroke = egui::Stroke::new(1.5, FG);
-            v.widgets.active.bg_fill = FG;
-            v.widgets.active.weak_bg_fill = FG;
-            v.widgets.active.fg_stroke = egui::Stroke::new(1.5, BG);
-            v.widgets.open.bg_fill = MID;
-            v.widgets.open.fg_stroke = egui::Stroke::new(1.0, FG);
-            v.widgets.noninteractive.bg_fill = BG;
-            v.widgets.noninteractive.fg_stroke =
-                egui::Stroke::new(1.0, egui::Color32::from_rgb(0x60, 0x5e, 0x58));
-            v.widgets.noninteractive.bg_stroke =
-                egui::Stroke::new(1.0, egui::Color32::from_rgb(0xc4, 0xc2, 0xbc));
-            v.override_text_color = Some(FG);
-            v.window_stroke =
-                egui::Stroke::new(1.0, egui::Color32::from_rgb(0xc0, 0xbe, 0xb8));
-            v.selection.bg_fill = egui::Color32::from_rgb(0xc0, 0xd0, 0xe8);
-            v
-        }
+    let flavor = match theme {
+        Theme::Latte => catppuccin::PALETTE.latte,
+        Theme::Frappe => catppuccin::PALETTE.frappe,
+        Theme::Macchiato => catppuccin::PALETTE.macchiato,
+        Theme::Mocha => catppuccin::PALETTE.mocha,
     };
+    let c = &flavor.colors;
+    let cc = |color: &catppuccin::Color| egui::Color32::from_rgb(color.rgb.r, color.rgb.g, color.rgb.b);
+
+    let no_rounding = egui::CornerRadius::ZERO;
+    let mut v = if theme.is_light() { egui::Visuals::light() } else { egui::Visuals::dark() };
+
+    let bg = cc(&c.base);
+    let fg = cc(&c.text);
+    let s0 = cc(&c.surface0);
+    let s1 = cc(&c.surface1);
+    let s2 = cc(&c.surface2);
+    let o0 = cc(&c.overlay0);
+    let crust = cc(&c.crust);
+
+    v.panel_fill = bg;
+    v.window_fill = bg;
+    v.extreme_bg_color = crust;
+    v.widgets.inactive.bg_fill = s0;
+    v.widgets.inactive.weak_bg_fill = s0;
+    v.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, s1);
+    v.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, fg);
+    v.widgets.hovered.bg_fill = s1;
+    v.widgets.hovered.weak_bg_fill = s1;
+    v.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, o0);
+    v.widgets.hovered.fg_stroke = egui::Stroke::new(1.5, fg);
+    v.widgets.active.bg_fill = fg;
+    v.widgets.active.weak_bg_fill = fg;
+    v.widgets.active.fg_stroke = egui::Stroke::new(1.5, bg);
+    v.widgets.open.bg_fill = s0;
+    v.widgets.open.fg_stroke = egui::Stroke::new(1.0, fg);
+    v.widgets.noninteractive.bg_fill = bg;
+    v.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, o0);
+    v.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, s1);
+    v.override_text_color = Some(fg);
+    v.window_stroke = egui::Stroke::new(1.0, s1);
+    v.selection.bg_fill = s2;
     v.window_corner_radius = no_rounding;
     v.menu_corner_radius = no_rounding;
     v.widgets.inactive.corner_radius = no_rounding;

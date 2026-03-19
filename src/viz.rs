@@ -5,7 +5,7 @@ use bevy::{
 };
 use bevy_egui::EguiContexts;
 
-use crate::art::{ArtExpressions, ArtState, pastel};
+use crate::art::{ArtExpressions, ArtState, palette_bevy_color};
 use crate::config::*;
 
 // ─── Components ───────────────────────────────────────────────────────────────
@@ -132,7 +132,7 @@ fn spawn_node(
 
     let bg_color = if is_leaf {
         if cfg.bg_mode == BackgroundMode::Pastel {
-            pastel(*leaf_idx)
+            palette_bevy_color(cfg.palette, *leaf_idx)
         } else {
             Color::WHITE
         }
@@ -348,16 +348,16 @@ pub fn viz_click(
     // so multiple nodes report Pressed simultaneously.
     let mut best: Option<&Vec<usize>> = None;
     for (interaction, path) in &nodes {
-        if *interaction == Interaction::Pressed {
-            if best.is_none_or(|b| path.0.len() > b.len()) {
-                best = Some(&path.0);
-            }
+        if *interaction == Interaction::Pressed
+            && best.is_none_or(|b| path.0.len() > b.len())
+        {
+            best = Some(&path.0);
         }
     }
-    if let Some(path) = best {
-        if cfg.selected() != *path {
-            cfg.select(path.clone());
-        }
+    if let Some(path) = best
+        && cfg.selected() != *path
+    {
+        cfg.select(path.clone());
     }
 }
 
