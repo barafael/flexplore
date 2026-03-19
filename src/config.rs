@@ -1,10 +1,11 @@
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter};
 
 pub const PANEL_WIDTH: f32 = 390.0;
 pub const ART_TEXTURE_SIZE: u32 = 128;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Display, EnumIter)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Display, EnumIter, Serialize, Deserialize)]
 pub enum ValueKind {
     Auto,
     Px,
@@ -13,7 +14,7 @@ pub enum ValueKind {
     Vh,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub enum ValueConfig {
     Auto,
     Px(f32),
@@ -82,7 +83,7 @@ impl ValueConfig {
 
 // ─── Node config (recursive tree) ────────────────────────────────────────────
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct NodeConfig {
     pub label: String,
     pub flex_direction: FlexDirection,
@@ -162,30 +163,20 @@ impl NodeConfig {
 }
 
 impl NodeConfig {
-    pub fn get(&self, path: &[usize]) -> &NodeConfig {
+    pub fn get(&self, path: &[usize]) -> Option<&NodeConfig> {
         if path.is_empty() {
-            self
+            Some(self)
         } else {
-            self.children[path[0]].get(&path[1..])
+            self.children.get(path[0])?.get(&path[1..])
         }
     }
 
-    pub fn get_mut(&mut self, path: &[usize]) -> &mut NodeConfig {
+    pub fn get_mut(&mut self, path: &[usize]) -> Option<&mut NodeConfig> {
         if path.is_empty() {
-            self
+            Some(self)
         } else {
-            self.children[path[0]].get_mut(&path[1..])
+            self.children.get_mut(path[0])?.get_mut(&path[1..])
         }
-    }
-
-    pub fn path_valid(&self, path: &[usize]) -> bool {
-        if path.is_empty() {
-            return true;
-        }
-        if path[0] >= self.children.len() {
-            return false;
-        }
-        self.children[path[0]].path_valid(&path[1..])
     }
 
     pub fn count_leaves(&self) -> usize {
@@ -227,13 +218,13 @@ impl NodeConfig {
 
 // ─── Background mode + art style ─────────────────────────────────────────────
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub enum BackgroundMode {
     Pastel,
     RandomArt,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug, Display, EnumIter)]
+#[derive(Clone, Copy, PartialEq, Debug, Display, EnumIter, Serialize, Deserialize)]
 pub enum ArtStyle {
     #[strum(serialize = "Expr Tree")]
     ExprTree,
@@ -247,16 +238,46 @@ pub enum ArtStyle {
 
 // ─── Main resource ────────────────────────────────────────────────────────────
 
-#[derive(Resource, Clone)]
+#[derive(Resource, Clone, Serialize, Deserialize)]
 pub struct FlexConfig {
     pub root: NodeConfig,
-    pub selected: Vec<usize>,
+    #[serde(skip)]
+    selected: Vec<usize>,
     pub bg_mode: BackgroundMode,
     pub art_style: ArtStyle,
     pub art_seed: u64,
     pub art_depth: u32,
     pub art_anim: f32,
-    pub needs_rebuild: bool,
+    #[serde(skip)]
+    needs_rebuild: bool,
+}
+
+impl FlexConfig {
+    pub fn selected(&self) -> &[usize] {
+        &self.selected
+    }
+
+    /// Set the selected node path and mark for rebuild.
+    pub fn select(&mut self, path: Vec<usize>) {
+        self.selected = path;
+        self.needs_rebuild = true;
+    }
+
+    /// Deselect towards root until the path is valid.
+    pub fn sanitize_selection(&mut self) {
+        while self.root.get(&self.selected).is_none() && !self.selected.is_empty() {
+            self.selected.pop();
+        }
+    }
+
+    pub fn request_rebuild(&mut self) {
+        self.needs_rebuild = true;
+    }
+
+    /// Returns true (and resets the flag) if a rebuild was requested.
+    pub fn take_rebuild(&mut self) -> bool {
+        std::mem::replace(&mut self.needs_rebuild, false)
+    }
 }
 
 impl Default for FlexConfig {

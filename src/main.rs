@@ -3,6 +3,7 @@
 mod art;
 mod codegen;
 mod config;
+mod history;
 mod panel;
 mod viz;
 
@@ -11,6 +12,7 @@ use bevy_egui::{EguiPlugin, EguiPrimaryContextPass};
 
 use art::ArtState;
 use config::FlexConfig;
+use history::UndoHistory;
 
 fn main() {
     App::new()
@@ -27,6 +29,7 @@ fn main() {
         ))
         .init_resource::<FlexConfig>()
         .init_resource::<ArtState>()
+        .insert_resource(UndoHistory::new(FlexConfig::default()))
         .add_systems(Startup, setup)
         .add_systems(EguiPrimaryContextPass, panel::panel_system)
         .add_systems(

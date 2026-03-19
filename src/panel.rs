@@ -4,6 +4,7 @@ use strum::IntoEnumIterator;
 
 use crate::codegen::{emit_bevy_code, emit_html_css, emit_swiftui, emit_tailwind};
 use crate::config::*;
+use crate::history::UndoHistory;
 
 // ─── Tree UI helper ───────────────────────────────────────────────────────────
 
@@ -66,11 +67,14 @@ fn apply_hover<T: PartialEq + Clone>(
     set: impl FnOnce(&mut NodeConfig, T),
 ) -> bool {
     let Some(v) = opt else { return false };
-    if get(cfg.root.get(path)) != v {
+    let Some(node) = cfg.root.get(path) else { return false };
+    if get(node) != v {
         if preview.is_none() {
             *preview = Some(cfg.clone());
         }
-        set(cfg.root.get_mut(path), v);
+        if let Some(node) = cfg.root.get_mut(path) {
+            set(node, v);
+        }
         true
     } else {
         false
@@ -82,10 +86,36 @@ fn apply_hover<T: PartialEq + Clone>(
 pub fn panel_system(
     mut contexts: EguiContexts,
     mut cfg: ResMut<FlexConfig>,
+    mut history: ResMut<UndoHistory>,
     mut preview: Local<Option<FlexConfig>>,
     mut style_done: Local<bool>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
+
+    // ── Undo / Redo shortcuts ────────────────────────────────────────────────
+    let undo_pressed = ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Z));
+    let redo_pressed = ctx.input_mut(|i| {
+        i.consume_key(egui::Modifiers::COMMAND, egui::Key::Y)
+            || i.consume_key(
+                egui::Modifiers::COMMAND.plus(egui::Modifiers::SHIFT),
+                egui::Key::Z,
+            )
+    });
+    if undo_pressed {
+        if let Some(snapshot) = history.undo() {
+            *cfg = snapshot.clone();
+            cfg.request_rebuild();
+            *preview = None;
+        }
+    }
+    if redo_pressed {
+        if let Some(snapshot) = history.redo() {
+            *cfg = snapshot.clone();
+            cfg.request_rebuild();
+            *preview = None;
+        }
+    }
+
     if !*style_done {
         const BG: egui::Color32 = egui::Color32::from_rgb(0x10, 0x10, 0x14);
         const MID: egui::Color32 = egui::Color32::from_rgb(0x2a, 0x2a, 0x30);
@@ -155,7 +185,7 @@ pub fn panel_system(
     let mut hover_align_self: Option<AlignSelf> = None;
     let mut hover_margin: Option<ValueConfig> = None;
 
-    let mut sel_path = cfg.selected.clone();
+    let mut sel_path = cfg.selected().to_vec();
     let mut is_root = sel_path.is_empty();
 
     egui::SidePanel::left("flex_panel")
@@ -163,6 +193,25 @@ pub fn panel_system(
         .resizable(false)
         .show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
+                ui.add_space(4.0);
+
+                // ── Undo / Redo buttons ──────────────────────────────────────────
+                ui.horizontal(|ui| {
+                    if ui.add_enabled(history.can_undo(), egui::Button::new("⟲ Undo")).clicked() {
+                        if let Some(snapshot) = history.undo() {
+                            *cfg = snapshot.clone();
+                            cfg.request_rebuild();
+                            *preview = None;
+                        }
+                    }
+                    if ui.add_enabled(history.can_redo(), egui::Button::new("⟳ Redo")).clicked() {
+                        if let Some(snapshot) = history.redo() {
+                            *cfg = snapshot.clone();
+                            cfg.request_rebuild();
+                            *preview = None;
+                        }
+                    }
+                });
                 ui.add_space(4.0);
 
                 // ── Tree ─────────────────────────────────────────────────────────
@@ -173,44 +222,48 @@ pub fn panel_system(
                             if ui.button("+ Child").on_hover_text("Add a new child node inside the selected node").clicked() {
                                 let n = cfg.root.count_leaves();
                                 let lbl = format!("node{}", n + 1);
-                                cfg.root.get_mut(&sel_path)
-                                    .children.push(NodeConfig::new_leaf(&lbl, 80.0, 80.0));
-                                changed = true;
+                                if let Some(node) = cfg.root.get_mut(&sel_path) {
+                                    node.children.push(NodeConfig::new_leaf(&lbl, 80.0, 80.0));
+                                    changed = true;
+                                }
                             }
                             if !is_root && ui.button("+ Sibling").on_hover_text("Add a new node next to the selected node (same parent)").clicked() {
                                 let pidx = sel_path.len() - 1;
                                 let n = cfg.root.count_leaves();
                                 let lbl = format!("node{}", n + 1);
-                                cfg.root.get_mut(&sel_path[..pidx])
-                                    .children.push(NodeConfig::new_leaf(&lbl, 80.0, 80.0));
-                                changed = true;
+                                if let Some(parent) = cfg.root.get_mut(&sel_path[..pidx]) {
+                                    parent.children.push(NodeConfig::new_leaf(&lbl, 80.0, 80.0));
+                                    changed = true;
+                                }
                             }
                         });
                         ui.add_space(2.0);
-                        let sel_snapshot = cfg.selected.clone();
+                        let sel_snapshot = cfg.selected().to_vec();
                         let (clicked, remove_req) = draw_tree_ui(ui, &mut cfg.root, &mut vec![], &sel_snapshot, &mut changed);
                         if remove_req && !sel_path.is_empty() {
                             let pidx = sel_path.len() - 1;
                             let idx = sel_path[pidx];
-                            cfg.root.get_mut(&sel_path[..pidx]).children.remove(idx);
+                            if let Some(parent) = cfg.root.get_mut(&sel_path[..pidx]) {
+                                parent.children.remove(idx);
+                            }
                             let new_path = sel_path[..pidx].to_vec();
-                            cfg.selected = new_path.clone();
-                            sel_path = new_path;
+                            sel_path = new_path.clone();
                             is_root = sel_path.is_empty();
+                            cfg.select(new_path);
                             changed = true;
                         }
                         if let Some(p) = clicked
-                            && p != cfg.selected {
-                                cfg.selected = p.clone();
-                                sel_path = p;
+                            && p != cfg.selected() {
+                                sel_path = p.clone();
                                 is_root = sel_path.is_empty();
+                                cfg.select(p);
                                 *preview = None;
                             }
                     });
 
                 ui.add_space(6.0);
 
-                if cfg.root.path_valid(&sel_path) {
+                if cfg.root.get(&sel_path).is_some() {
 
                 egui::CollapsingHeader::new("Flex Container")
                     .default_open(true)
@@ -218,7 +271,7 @@ pub fn panel_system(
                         ui.add_space(4.0);
                         egui::Grid::new("cg1").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
                             {
-                                let n = cfg.root.get_mut(&sel_path);
+                                let Some(n) = cfg.root.get_mut(&sel_path) else { return };
                                 label_with_help(ui, "direction", "The main axis along which children are laid out (Row = horizontal, Column = vertical)");
                                 hover_direction = combo(ui, "fd", &mut n.flex_direction, &[
                                     ("Row", FlexDirection::Row), ("Column", FlexDirection::Column),
@@ -273,7 +326,7 @@ pub fn panel_system(
                         ui.add_space(4.0); ui.separator(); ui.add_space(4.0);
                         egui::Grid::new("cg2").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
                             {
-                                let n = cfg.root.get_mut(&sel_path);
+                                let Some(n) = cfg.root.get_mut(&sel_path) else { return };
                                 label_with_help(ui, "row-gap", "Spacing between rows of children");
                                 hover_row_gap = val_row(ui, "rg", &mut n.row_gap, &mut changed, &mut any_hovered);
                                 ui.end_row();
@@ -298,7 +351,7 @@ pub fn panel_system(
                                 apply_hover(hover_align_content,      &mut cfg, p, sp, |n| n.align_content,          |n, v| n.align_content    = v) |
                                 apply_hover(hover_row_gap,      &mut cfg, p, sp, |n| n.row_gap,        |n, v| n.row_gap          = v) |
                                 apply_hover(hover_column_gap,    &mut cfg, p, sp, |n| n.column_gap,     |n, v| n.column_gap       = v);
-                            if needs_rebuild { cfg.needs_rebuild = true; }
+                            if needs_rebuild { cfg.request_rebuild(); }
                         }
                     });
 
@@ -310,7 +363,7 @@ pub fn panel_system(
                         ui.add_space(4.0);
                         egui::Grid::new("sg").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
                             {
-                                let n = cfg.root.get_mut(&sel_path);
+                                let Some(n) = cfg.root.get_mut(&sel_path) else { return };
                                 label_with_help(ui, "width", "The preferred width of this node");    hover_width    = val_row(ui, "sw",    &mut n.width,      &mut changed, &mut any_hovered); ui.end_row();
                                 label_with_help(ui, "height", "The preferred height of this node");   hover_height    = val_row(ui, "sh",    &mut n.height,     &mut changed, &mut any_hovered); ui.end_row();
                                 label_with_help(ui, "min-width", "The minimum width this node can shrink to");  hover_min_width = val_row(ui, "sminw", &mut n.min_width,  &mut changed, &mut any_hovered); ui.end_row();
@@ -336,7 +389,7 @@ pub fn panel_system(
                                 apply_hover(hover_max_width, &mut cfg, p, sp, |n| n.max_width,  |n, v| n.max_width  = v) |
                                 apply_hover(hover_max_height, &mut cfg, p, sp, |n| n.max_height, |n, v| n.max_height = v) |
                                 apply_hover(hover_padding,  &mut cfg, p, sp, |n| n.padding,    |n, v| n.padding    = v);
-                            if needs_rebuild { cfg.needs_rebuild = true; }
+                            if needs_rebuild { cfg.request_rebuild(); }
                         }
                     });
 
@@ -349,7 +402,7 @@ pub fn panel_system(
                             ui.add_space(4.0);
                             egui::Grid::new("ig").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
                                 {
-                                    let n = cfg.root.get_mut(&sel_path);
+                                    let Some(n) = cfg.root.get_mut(&sel_path) else { return };
                                     label_with_help(ui, "flex-grow", "How much this node grows relative to siblings when there is extra space (0 = don't grow)");
                                     changed |= ui.add(egui::Slider::new(&mut n.flex_grow, 0.0..=5.0).max_decimals(2)).changed();
                                     ui.end_row();
@@ -382,7 +435,7 @@ pub fn panel_system(
                                     apply_hover(hover_basis,  &mut cfg, p, sp, |n| n.flex_basis, |n, v| n.flex_basis = v) |
                                     apply_hover(hover_align_self,     &mut cfg, p, sp, |n| n.align_self,         |n, v| n.align_self = v) |
                                     apply_hover(hover_margin, &mut cfg, p, sp, |n| n.margin,     |n, v| n.margin     = v);
-                                if needs_rebuild { cfg.needs_rebuild = true; }
+                                if needs_rebuild { cfg.request_rebuild(); }
                             }
                         });
 
@@ -418,7 +471,7 @@ pub fn panel_system(
                                 any_hovered = true;
                                 if cfg.art_style != v {
                                     if preview.is_none() { *preview = Some(cfg.clone()); }
-                                    cfg.art_style = v; cfg.needs_rebuild = true;
+                                    cfg.art_style = v; cfg.request_rebuild();
                                 }
                             }
                             let pd = cfg.art_depth;
@@ -457,13 +510,12 @@ pub fn panel_system(
 
     if changed {
         *preview = None;
-        cfg.needs_rebuild = true;
+        cfg.request_rebuild();
+        history.push(cfg.clone());
     } else if !any_hovered && let Some(saved) = preview.take() {
         *cfg = saved;
-        while !cfg.root.path_valid(&cfg.selected) && !cfg.selected.is_empty() {
-            cfg.selected.pop();
-        }
-        cfg.needs_rebuild = true;
+        cfg.sanitize_selection();
+        cfg.request_rebuild();
     }
     Ok(())
 }
