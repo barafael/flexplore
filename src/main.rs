@@ -514,6 +514,7 @@ struct VizRoot;
 #[allow(dead_code)]
 struct ArtItemNode(usize);
 
+
 // ─── App ─────────────────────────────────────────────────────────────────────
 
 fn main() {
@@ -577,6 +578,27 @@ fn draw_tree_ui(
         if rem { remove = true; }
     }
     (clicked, remove)
+}
+
+/// Estimate a text scale factor from a node's configured dimensions.
+/// Returns a multiplier relative to the "base" 80px node size, capped at 2x.
+fn text_scale(node: &NodeCfg) -> f32 {
+    fn approx_px(v: &ValCfg) -> Option<f32> {
+        match v {
+            ValCfg::Px(n) => Some(*n),
+            ValCfg::Percent(n) => Some(n / 100.0 * 600.0), // assume ~600px reference
+            ValCfg::Vw(n) | ValCfg::Vh(n) => Some(n / 100.0 * 800.0),
+            ValCfg::Auto => None,
+        }
+    }
+    let w = approx_px(&node.width);
+    let h = approx_px(&node.height);
+    let min_dim = match (w, h) {
+        (Some(w), Some(h)) => w.min(h),
+        (Some(v), None) | (None, Some(v)) => v,
+        (None, None) => 80.0,
+    };
+    (min_dim / 80.0).clamp(0.25, 2.0)
 }
 
 // ─── Panel helpers ────────────────────────────────────────────────────────────
@@ -1573,7 +1595,8 @@ fn spawn_viz(commands: &mut Commands, cfg: &FlexCfg, art: &ArtState) {
 
     let spacer = commands.spawn(Node { width: Val::Px(PANEL_W), flex_shrink: 0.0, ..default() }).id();
     let area = commands.spawn(Node {
-        flex_grow: 1.0, flex_direction: FlexDirection::Column,
+        flex_grow: 1.0, height: Val::Percent(100.0),
+        display: Display::Block,
         padding: UiRect::all(Val::Px(16.0)), ..default()
     }).id();
     commands.entity(viz_root).add_children(&[spacer, area]);
@@ -1645,14 +1668,15 @@ fn spawn_node(
             && let Some(h) = art.handles.get(my_idx) {
                 commands.entity(entity).insert(ImageNode::new(h.clone()));
             }
+        let scale = text_scale(node);
         let text_big = commands.spawn((
             Text::new(node.label.clone()),
-            TextFont { font_size: 26.0, ..default() },
+            TextFont { font_size: (26.0_f32 * scale).clamp(1.0, 52.0), ..default() },
             TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
         )).id();
         let text_info = commands.spawn((
             Text::new(info),
-            TextFont { font_size: 9.0, ..default() },
+            TextFont { font_size: (9.0_f32 * scale).clamp(1.0, 18.0), ..default() },
             TextColor(Color::srgba(0.05, 0.05, 0.1, 0.70)),
         )).id();
         commands.entity(entity).add_children(&[text_big, text_info]);
@@ -1661,9 +1685,10 @@ fn spawn_node(
         let entity = commands.spawn((
             node_bevy, BackgroundColor(bg_color), BorderColor::all(bc),
         )).id();
+        let cscale = text_scale(node);
         let lbl = commands.spawn((
             Text::new(node.label.clone()),
-            TextFont { font_size: 10.0, ..default() },
+            TextFont { font_size: (10.0_f32 * cscale).clamp(1.0, 20.0), ..default() },
             TextColor(Color::srgba(0.7, 0.7, 0.9, 0.55)),
             Node { position_type: PositionType::Absolute, top: Val::Px(2.0), left: Val::Px(4.0), ..default() },
         )).id();
