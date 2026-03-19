@@ -1170,6 +1170,14 @@ fn panel_system(
         v.override_text_color = Some(FG);
         v.window_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(0x3a, 0x3a, 0x42));
         v.selection.bg_fill = egui::Color32::from_rgb(0x40, 0x40, 0x52);
+        let no_rounding = egui::CornerRadius::ZERO;
+        v.window_corner_radius = no_rounding;
+        v.menu_corner_radius = no_rounding;
+        v.widgets.inactive.corner_radius = no_rounding;
+        v.widgets.hovered.corner_radius = no_rounding;
+        v.widgets.active.corner_radius = no_rounding;
+        v.widgets.open.corner_radius = no_rounding;
+        v.widgets.noninteractive.corner_radius = no_rounding;
         ctx.set_visuals(v);
         let mut style = (*ctx.style()).clone();
         style.spacing.item_spacing   = egui::vec2(6.0, 3.0);
