@@ -50,9 +50,6 @@ fn emit_node(
     // Only emit non-default fields. Bevy defaults: Display::Flex, Row, NoWrap,
     // JustifyContent/AlignItems/AlignContent::Default, gaps Px(0), grow 0, shrink 1,
     // basis/sizes Auto, padding/margin zero.
-    if !node.visible {
-        emit_field(buf, &pad, "display", "Display::None")?;
-    }
     if node.flex_direction != FlexDirection::Row {
         emit_field(buf, &pad, "flex_direction", &format!("FlexDirection::{:?}", node.flex_direction))?;
     }
@@ -95,7 +92,7 @@ fn emit_node(
     if !matches!(node.min_width, ValueConfig::Auto) {
         emit_field(buf, &pad, "min_width", &emit_bevy_value(&node.min_width))?;
     }
-    if !matches!(node.min_height, ValueConfig::Auto) && !matches!(node.min_height, ValueConfig::Px(v) if v == 0.0) {
+    if !matches!(node.min_height, ValueConfig::Auto) {
         emit_field(buf, &pad, "min_height", &emit_bevy_value(&node.min_height))?;
     }
     if !matches!(node.max_width, ValueConfig::Auto) {
@@ -117,7 +114,10 @@ fn emit_node(
     writeln!(buf, "{pad}    }},")?;
 
     writeln!(buf, "{pad}    BackgroundColor({bg}),")?;
-    write!(buf, "{pad})")?;
+    if !node.visible {
+        writeln!(buf, "{pad}    Visibility::Hidden,")?;
+    }
+    write!(buf, "{pad}))")?;
 
     if is_leaf {
         buf.push_str(".with_children(|parent| {\n");
@@ -195,13 +195,14 @@ mod tests {
     }
 
     #[test]
-    fn emits_display_none_when_hidden() {
+    fn emits_visibility_hidden_when_not_visible() {
         let mut node = NodeConfig::new_leaf("hidden", 80.0, 80.0);
         node.visible = false;
         let mut root = NodeConfig::new_container("root");
         root.children = vec![node];
         let code = emit_bevy_code(&root, ColorPalette::Pastel1).unwrap();
-        assert!(code.contains("Display::None"));
+        assert!(code.contains("Visibility::Hidden"), "should use Visibility::Hidden, not Display::None");
+        assert!(!code.contains("Display::None"), "should not use Display::None");
     }
 
     #[test]

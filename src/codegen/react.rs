@@ -128,10 +128,9 @@ fn emit_react_node(
     };
 
     writeln!(buf, "{pad}<div style={{{{")?;
+    writeln!(buf, "{pad}  display: 'flex',")?;
     if !node.visible {
-        writeln!(buf, "{pad}  display: 'none',")?;
-    } else {
-        writeln!(buf, "{pad}  display: 'flex',")?;
+        writeln!(buf, "{pad}  visibility: 'hidden',")?;
     }
     if node.flex_direction != FlexDirection::Row {
         writeln!(buf, "{pad}  flexDirection: {},", camel_direction(node.flex_direction))?;
@@ -175,7 +174,7 @@ fn emit_react_node(
     if !matches!(node.min_width, ValueConfig::Auto) {
         writeln!(buf, "{pad}  minWidth: {},", css_value(&node.min_width))?;
     }
-    if !matches!(node.min_height, ValueConfig::Auto) && !matches!(node.min_height, ValueConfig::Px(v) if v == 0.0) {
+    if !matches!(node.min_height, ValueConfig::Auto) {
         writeln!(buf, "{pad}  minHeight: {},", css_value(&node.min_height))?;
     }
     if !matches!(node.max_width, ValueConfig::Auto) {
@@ -242,13 +241,14 @@ mod tests {
     }
 
     #[test]
-    fn emits_display_none_when_hidden() {
+    fn emits_visibility_hidden_when_not_visible() {
         let mut node = NodeConfig::new_leaf("A", 80.0, 80.0);
         node.visible = false;
         let mut root = NodeConfig::new_container("root");
         root.children = vec![node];
         let code = emit_react(&root, ColorPalette::Pastel1).unwrap();
-        assert!(code.contains("display: 'none'"));
+        assert!(code.contains("visibility: 'hidden'"), "should use visibility:hidden, not display:none");
+        assert!(code.contains("display: 'flex'"), "should keep display:flex alongside visibility:hidden");
     }
 
     #[test]

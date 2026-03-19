@@ -1,19 +1,15 @@
 //! Flexplore — interactive Bevy 0.18 flexbox explorer.
 
-mod art;
-mod codegen;
-mod config;
 mod history;
 mod panel;
 mod persist;
-mod templates;
 mod viz;
 
 use bevy::prelude::*;
 use bevy_egui::{EguiPlugin, EguiPrimaryContextPass};
 
-use art::ArtState;
-use config::FlexConfig;
+use flexplore::art::ArtState;
+use flexplore::config::FlexConfig;
 use history::UndoHistory;
 
 fn main() {

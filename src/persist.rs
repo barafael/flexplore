@@ -1,4 +1,4 @@
-use crate::config::FlexConfig;
+use flexplore::config::FlexConfig;
 
 // ─── Native persistence ──────────────────────────────────────────────────────
 

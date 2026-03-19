@@ -15,6 +15,7 @@ catppuccin = { version = "2", features = ["serde"] }
 colorous = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+image = { version = "0.25.10", default-features = false, features = ["png"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dirs = "6"

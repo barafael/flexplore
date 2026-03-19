@@ -109,7 +109,16 @@ pub fn emit_html_css(root: &NodeConfig, palette: ColorPalette) -> Result<String>
     let mut css = String::new();
     let mut html = String::new();
     emit_html_node(&mut css, &mut html, root, 0, &mut 0, &mut 0, palette)?;
-    Ok(format!("<style>\n{css}</style>\n\n{html}"))
+    // Wrap in a complete HTML document. Body acts as Bevy's viewport container:
+    // a column flex layout so flex-grow fills height, with align-items: start
+    // so the root's explicit width is respected (not stretched).
+    Ok(format!(
+        "<!DOCTYPE html>\n<html>\n<head>\n<style>\n\
+         html, body {{\n  margin: 0;\n  height: 100%;\n}}\n\
+         body {{\n  display: flex;\n  flex-direction: column;\n  align-items: flex-start;\n}}\n\n\
+         {css}\
+         </style>\n</head>\n<body>\n{html}</body>\n</html>"
+    ))
 }
 
 fn emit_html_node(
@@ -143,10 +152,9 @@ fn emit_html_node(
     writeln!(css, ".{class} {{")?;
 
     // Only emit properties that differ from CSS defaults.
+    css.push_str("  display: flex;\n");
     if !node.visible {
-        css.push_str("  display: none;\n");
-    } else {
-        css.push_str("  display: flex;\n");
+        css.push_str("  visibility: hidden;\n");
     }
     if node.flex_direction != FlexDirection::Row {
         writeln!(css, "  flex-direction: {};", css_flex_direction(node.flex_direction))?;
@@ -190,7 +198,7 @@ fn emit_html_node(
     if !matches!(node.min_width, ValueConfig::Auto) {
         writeln!(css, "  min-width: {};", emit_css_value(&node.min_width))?;
     }
-    if !is_zero_or_auto(&node.min_height) {
+    if !matches!(node.min_height, ValueConfig::Auto) {
         writeln!(css, "  min-height: {};", emit_css_value(&node.min_height))?;
     }
     if !matches!(node.max_width, ValueConfig::Auto) {
@@ -263,13 +271,14 @@ mod tests {
     }
 
     #[test]
-    fn emits_display_none_when_hidden() {
+    fn emits_visibility_hidden_when_not_visible() {
         let mut node = NodeConfig::new_leaf("hidden", 80.0, 80.0);
         node.visible = false;
         let mut root = NodeConfig::new_container("root");
         root.children = vec![node];
         let code = emit_html_css(&root, ColorPalette::Pastel1).unwrap();
-        assert!(code.contains("display: none"));
+        assert!(code.contains("visibility: hidden"), "should use visibility:hidden, not display:none");
+        assert!(code.contains("display: flex"), "should keep display:flex alongside visibility:hidden");
     }
 
     #[test]

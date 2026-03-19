@@ -5,8 +5,8 @@ use bevy::{
 };
 use bevy_egui::EguiContexts;
 
-use crate::art::{ArtExpressions, ArtState, palette_bevy_color};
-use crate::config::*;
+use flexplore::art::{ArtExpressions, ArtState, palette_bevy_color};
+use flexplore::config::*;
 
 // ─── Components ───────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::config::FlexConfig;
+use flexplore::config::FlexConfig;
 
 const MAX_UNDO: usize = 100;
 

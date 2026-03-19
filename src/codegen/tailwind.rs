@@ -125,9 +125,10 @@ fn emit_tailwind_node(
         "bg-[rgba(28,28,43,1)]".into()
     };
 
-    let mut classes: Vec<String> = vec![
-        (if node.visible { "flex" } else { "hidden" }).into(),
-    ];
+    let mut classes: Vec<String> = vec!["flex".into()];
+    if !node.visible {
+        classes.push("invisible".into());
+    }
     if node.flex_direction != FlexDirection::Row {
         classes.push(tailwind_flex_direction(node.flex_direction).into());
     }
@@ -170,7 +171,7 @@ fn emit_tailwind_node(
     if !matches!(node.min_width, ValueConfig::Auto) {
         classes.push(tailwind_value("min-w", &node.min_width));
     }
-    if !matches!(node.min_height, ValueConfig::Auto) && !matches!(node.min_height, ValueConfig::Px(v) if v == 0.0) {
+    if !matches!(node.min_height, ValueConfig::Auto) {
         classes.push(tailwind_value("min-h", &node.min_height));
     }
     if !matches!(node.max_width, ValueConfig::Auto) {
@@ -242,13 +243,14 @@ mod tests {
     }
 
     #[test]
-    fn emits_hidden_when_not_visible() {
+    fn emits_invisible_when_not_visible() {
         let mut node = NodeConfig::new_leaf("A", 80.0, 80.0);
         node.visible = false;
         let mut root = NodeConfig::new_container("root");
         root.children = vec![node];
         let code = emit_tailwind(&root, ColorPalette::Pastel1).unwrap();
-        assert!(code.contains("hidden"));
+        assert!(code.contains("invisible"), "should use invisible, not hidden");
+        assert!(code.contains("flex"), "should keep flex alongside invisible");
     }
 
     #[test]

@@ -191,6 +191,12 @@ fn emit_swiftui_node(
         let mut children: Vec<&NodeConfig> = node.children.iter().collect();
         children.sort_by_key(|c| c.order);
         if is_reversed {
+            let dir_label = match node.flex_direction {
+                FlexDirection::RowReverse => "RowReverse",
+                FlexDirection::ColumnReverse => "ColumnReverse",
+                _ => unreachable!(),
+            };
+            writeln!(buf, "{pad}    // NOTE: flex-direction: {dir_label} — children reversed in source to approximate visual order")?;
             children.reverse();
         }
         for child in children {

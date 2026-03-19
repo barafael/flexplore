@@ -2,8 +2,8 @@ use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
 use strum::IntoEnumIterator;
 
-use crate::codegen::{emit_bevy_code, emit_flutter, emit_html_css, emit_react, emit_swiftui, emit_tailwind};
-use crate::config::*;
+use flexplore::codegen::{emit_bevy_code, emit_flutter, emit_html_css, emit_react, emit_swiftui, emit_tailwind};
+use flexplore::config::*;
 use crate::history::UndoHistory;
 
 type TemplateFn = fn() -> NodeConfig;
@@ -214,16 +214,26 @@ pub fn panel_system(
 
                 // ── Toolbar ───────────────────────────────────────────────────────
                 ui.horizontal(|ui| {
-                    let prev_theme = cfg.theme;
-                    egui::ComboBox::from_id_salt("theme_sel")
+                    let mut hover_theme: Option<Theme> = None;
+                    let theme_resp = egui::ComboBox::from_id_salt("theme_sel")
                         .selected_text(cfg.theme.to_string())
                         .width(90.0)
                         .show_ui(ui, |ui| {
                             for t in Theme::iter() {
-                                ui.selectable_value(&mut cfg.theme, t, t.to_string());
+                                let r = ui.selectable_label(cfg.theme == t, t.to_string());
+                                if r.clicked() { cfg.theme = t; changed = true; }
+                                else if r.hovered() { hover_theme = Some(t); }
                             }
                         });
-                    if cfg.theme != prev_theme { changed = true; }
+                    if theme_resp.inner.is_some() { any_hovered = true; }
+                    if let Some(t) = hover_theme {
+                        any_hovered = true;
+                        if cfg.theme != t {
+                            if preview.is_none() { *preview = Some(cfg.clone()); }
+                            cfg.theme = t;
+                            *applied_theme = None; // force re-apply
+                        }
+                    }
                     ui.separator();
                     if ui.add_enabled(history.can_undo(), egui::Button::new("⟲ Undo")).clicked()
                         && let Some(snapshot) = history.undo()
@@ -486,10 +496,10 @@ pub fn panel_system(
                     .default_open(false)
                     .show(ui, |ui| {
                         let templates: &[(&str, TemplateFn)] = &[
-                            ("Holy Grail", crate::templates::holy_grail),
-                            ("Sidebar + Content", crate::templates::sidebar_content),
-                            ("Card Grid", crate::templates::card_grid),
-                            ("Nav Bar", crate::templates::nav_bar),
+                            ("Holy Grail", flexplore::templates::holy_grail),
+                            ("Sidebar + Content", flexplore::templates::sidebar_content),
+                            ("Card Grid", flexplore::templates::card_grid),
+                            ("Nav Bar", flexplore::templates::nav_bar),
                         ];
                         ui.horizontal_wrapped(|ui| {
                             for (name, builder) in templates {
@@ -514,19 +524,29 @@ pub fn panel_system(
                             ui.radio_value(&mut cfg.bg_mode, BackgroundMode::RandomArt, "Generative Art").on_hover_text("Fill leaf nodes with procedurally generated art textures");
                             if cfg.bg_mode != prev { changed = true; }
                         });
-                        let prev_pal = cfg.palette;
+                        let mut hover_palette: Option<ColorPalette> = None;
                         ui.horizontal(|ui| {
                             ui.label("palette");
-                            egui::ComboBox::from_id_salt("palette_sel")
+                            let pal_resp = egui::ComboBox::from_id_salt("palette_sel")
                                 .selected_text(cfg.palette.to_string())
                                 .width(110.0)
                                 .show_ui(ui, |ui| {
                                     for p in ColorPalette::iter() {
-                                        ui.selectable_value(&mut cfg.palette, p, p.to_string());
+                                        let r = ui.selectable_label(cfg.palette == p, p.to_string());
+                                        if r.clicked() { cfg.palette = p; changed = true; }
+                                        else if r.hovered() { hover_palette = Some(p); }
                                     }
                                 });
+                            if pal_resp.inner.is_some() { any_hovered = true; }
                         });
-                        if cfg.palette != prev_pal { changed = true; }
+                        if let Some(p) = hover_palette {
+                            any_hovered = true;
+                            if cfg.palette != p {
+                                if preview.is_none() { *preview = Some(cfg.clone()); }
+                                cfg.palette = p;
+                                cfg.request_rebuild();
+                            }
+                        }
                         if cfg.bg_mode == BackgroundMode::RandomArt {
                             let cur = cfg.art_style.to_string();
                             let mut hover_art: Option<ArtStyle> = None;
@@ -632,6 +652,7 @@ pub fn panel_system(
         *cfg = saved;
         cfg.sanitize_selection();
         cfg.request_rebuild();
+        *applied_theme = None; // force theme re-apply after restoring preview
     }
 
     // ── Toast overlay ────────────────────────────────────────────────────────

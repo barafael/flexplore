@@ -63,8 +63,8 @@ fn emit_flutter_node(
     let is_leaf = node.children.is_empty();
 
     if !node.visible {
-        writeln!(buf, "{pad}Offstage(")?;
-        writeln!(buf, "{pad}  offstage: true,")?;
+        writeln!(buf, "{pad}Opacity(")?;
+        writeln!(buf, "{pad}  opacity: 0.0,")?;
         write!(buf, "{pad}  child: ")?;
         emit_flutter_inner(buf, node, depth + 1, leaf_idx, is_leaf, palette)?;
         writeln!(buf, "{pad})")?;
@@ -173,6 +173,9 @@ fn emit_flutter_inner(
         let ipad = "  ".repeat(inner_depth);
 
         if node.flex_wrap != FlexWrap::NoWrap {
+            if node.flex_wrap == FlexWrap::WrapReverse {
+                writeln!(buf, "{ipad}// NOTE: flex-wrap: WrapReverse — Dart Wrap doesn't support reverse; children appear in normal order")?;
+            }
             writeln!(buf, "{ipad}Wrap(")?;
             writeln!(
                 buf,
@@ -196,6 +199,12 @@ fn emit_flutter_inner(
         let mut children: Vec<&NodeConfig> = node.children.iter().collect();
         children.sort_by_key(|c| c.order);
         if is_reversed {
+            let dir_label = match node.flex_direction {
+                FlexDirection::RowReverse => "RowReverse",
+                FlexDirection::ColumnReverse => "ColumnReverse",
+                _ => unreachable!(),
+            };
+            writeln!(buf, "{ipad}    // NOTE: flex-direction: {dir_label} — children reversed in source to approximate visual order")?;
             children.reverse();
         }
         for child in children {
@@ -263,12 +272,13 @@ mod tests {
     }
 
     #[test]
-    fn emits_offstage_when_hidden() {
+    fn emits_opacity_zero_when_not_visible() {
         let mut node = NodeConfig::new_leaf("A", 80.0, 80.0);
         node.visible = false;
         let mut root = NodeConfig::new_container("root");
         root.children = vec![node];
         let code = emit_flutter(&root, ColorPalette::Pastel1).unwrap();
-        assert!(code.contains("Offstage("));
+        assert!(code.contains("Opacity("), "should use Opacity, not Offstage");
+        assert!(code.contains("opacity: 0.0"), "should set opacity to 0.0");
     }
 }
