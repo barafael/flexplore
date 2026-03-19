@@ -187,11 +187,11 @@ fn emit_swiftui_node(
             )?;
         }
 
-        let children: Vec<&NodeConfig> = if is_reversed {
-            node.children.iter().rev().collect()
-        } else {
-            node.children.iter().collect()
-        };
+        let mut children: Vec<&NodeConfig> = node.children.iter().collect();
+        children.sort_by_key(|c| c.order);
+        if is_reversed {
+            children.reverse();
+        }
         for child in children {
             emit_swiftui_node(buf, child, depth + 1, leaf_idx)?;
         }

@@ -158,7 +158,9 @@ fn emit_react_node(
         writeln!(buf, ">{}</div>", node.label)?;
     } else {
         writeln!(buf, ">")?;
-        for child in &node.children {
+        let mut sorted: Vec<&NodeConfig> = node.children.iter().collect();
+        sorted.sort_by_key(|c| c.order);
+        for child in sorted {
             emit_react_node(buf, child, depth + 1, leaf_idx)?;
         }
         writeln!(buf, "{pad}</div>")?;

@@ -148,7 +148,9 @@ fn emit_node(
         writeln!(buf, "{pad}}});")?;
     } else {
         buf.push_str(".with_children(|parent| {\n");
-        for child in &node.children {
+        let mut sorted: Vec<&NodeConfig> = node.children.iter().collect();
+        sorted.sort_by_key(|c| c.order);
+        for child in sorted {
             emit_node(buf, child, depth + 1, leaf_idx, false)?;
         }
         writeln!(buf, "{pad}}});")?;

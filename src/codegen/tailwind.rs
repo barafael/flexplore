@@ -163,7 +163,9 @@ fn emit_tailwind_node(
         writeln!(buf, "{pad}<div class=\"{cls}\">{}</div>", node.label)?;
     } else {
         writeln!(buf, "{pad}<div class=\"{cls}\">")?;
-        for child in &node.children {
+        let mut sorted: Vec<&NodeConfig> = node.children.iter().collect();
+        sorted.sort_by_key(|c| c.order);
+        for child in sorted {
             emit_tailwind_node(buf, child, depth + 1, leaf_idx)?;
         }
         writeln!(buf, "{pad}</div>")?;

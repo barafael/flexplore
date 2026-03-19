@@ -124,7 +124,11 @@ fn emit_html_node(
     };
 
     writeln!(css, ".{class} {{")?;
-    css.push_str("  display: flex;\n");
+    if node.visible {
+        css.push_str("  display: flex;\n");
+    } else {
+        css.push_str("  display: none;\n");
+    }
     writeln!(
         css,
         "  flex-direction: {};",
@@ -156,9 +160,6 @@ fn emit_html_node(
     writeln!(css, "  max-height: {};", emit_css_value(&node.max_height))?;
     writeln!(css, "  padding: {};", emit_css_value(&node.padding))?;
     writeln!(css, "  margin: {};", emit_css_value(&node.margin))?;
-    if !node.visible {
-        css.push_str("  display: none;\n");
-    }
     if node.order != 0 {
         writeln!(css, "  order: {};", node.order)?;
     }
@@ -178,7 +179,9 @@ fn emit_html_node(
         )?;
     } else {
         writeln!(html, "{pad_html}<div class=\"{class}\">")?;
-        for child in &node.children {
+        let mut sorted: Vec<&NodeConfig> = node.children.iter().collect();
+        sorted.sort_by_key(|c| c.order);
+        for child in sorted {
             emit_html_node(css, html, child, depth + 1, leaf_idx, id_counter)?;
         }
         writeln!(html, "{pad_html}</div>")?;

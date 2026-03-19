@@ -165,12 +165,12 @@ fn emit_flutter_inner(
         }
 
         writeln!(buf, "{pad}  children: [")?;
-        let children: Vec<(usize, &NodeConfig)> = if is_reversed {
-            node.children.iter().enumerate().rev().collect()
-        } else {
-            node.children.iter().enumerate().collect()
-        };
-        for (_, child) in children {
+        let mut children: Vec<&NodeConfig> = node.children.iter().collect();
+        children.sort_by_key(|c| c.order);
+        if is_reversed {
+            children.reverse();
+        }
+        for child in children {
             if child.flex_grow > 0.0 && node.flex_wrap == FlexWrap::NoWrap {
                 writeln!(buf, "{pad}    Expanded(")?;
                 writeln!(buf, "{pad}      flex: {},", child.flex_grow as i32)?;

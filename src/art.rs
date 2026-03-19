@@ -6,7 +6,7 @@ use crate::config::{ART_TEXTURE_SIZE, ArtStyle};
 // ─── RandomArt expression tree ───────────────────────────────────────────────
 
 #[derive(Clone)]
-pub enum Expr {
+enum Expr {
     X,
     Y,
     T,
@@ -302,6 +302,7 @@ impl ArtStyle {
 #[derive(Resource, Default)]
 pub struct ArtState {
     pub exprs: Vec<ArtExpressions>,
+    pub seeds: Vec<u64>,
     pub handles: Vec<Handle<Image>>,
 }
 
