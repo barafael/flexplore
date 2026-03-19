@@ -1,5 +1,6 @@
 use std::fmt::Write;
 
+use anyhow::Result;
 use bevy::prelude::*;
 
 use crate::art::PASTELS;
@@ -80,11 +81,11 @@ fn css_align_self(a: AlignSelf) -> &'static str {
     }
 }
 
-pub fn emit_html_css(root: &NodeConfig) -> String {
+pub fn emit_html_css(root: &NodeConfig) -> Result<String> {
     let mut css = String::new();
     let mut html = String::new();
-    emit_html_node(&mut css, &mut html, root, 0, &mut 0, &mut 0);
-    format!("<style>\n{css}</style>\n\n{html}")
+    emit_html_node(&mut css, &mut html, root, 0, &mut 0, &mut 0)?;
+    Ok(format!("<style>\n{css}</style>\n\n{html}"))
 }
 
 fn emit_html_node(
@@ -94,7 +95,7 @@ fn emit_html_node(
     depth: usize,
     leaf_idx: &mut usize,
     id_counter: &mut usize,
-) {
+) -> Result<()> {
     let id = *id_counter;
     *id_counter += 1;
     let is_leaf = node.children.is_empty();
@@ -114,28 +115,40 @@ fn emit_html_node(
         "rgba(28, 28, 43, 1)".into()
     };
 
-    let _ = writeln!(css, ".{class} {{");
+    writeln!(css, ".{class} {{")?;
     css.push_str("  display: flex;\n");
-    let _ = writeln!(css, "  flex-direction: {};", css_flex_direction(node.flex_direction));
-    let _ = writeln!(css, "  flex-wrap: {};", css_flex_wrap(node.flex_wrap));
-    let _ = writeln!(css, "  justify-content: {};", css_justify_content(node.justify_content));
-    let _ = writeln!(css, "  align-items: {};", css_align_items(node.align_items));
-    let _ = writeln!(css, "  align-content: {};", css_align_content(node.align_content));
-    let _ = writeln!(css, "  row-gap: {};", emit_css_value(&node.row_gap));
-    let _ = writeln!(css, "  column-gap: {};", emit_css_value(&node.column_gap));
-    let _ = writeln!(css, "  flex-grow: {:.1};", node.flex_grow);
-    let _ = writeln!(css, "  flex-shrink: {:.1};", node.flex_shrink);
-    let _ = writeln!(css, "  flex-basis: {};", emit_css_value(&node.flex_basis));
-    let _ = writeln!(css, "  align-self: {};", css_align_self(node.align_self));
-    let _ = writeln!(css, "  width: {};", emit_css_value(&node.width));
-    let _ = writeln!(css, "  height: {};", emit_css_value(&node.height));
-    let _ = writeln!(css, "  min-width: {};", emit_css_value(&node.min_width));
-    let _ = writeln!(css, "  min-height: {};", emit_css_value(&node.min_height));
-    let _ = writeln!(css, "  max-width: {};", emit_css_value(&node.max_width));
-    let _ = writeln!(css, "  max-height: {};", emit_css_value(&node.max_height));
-    let _ = writeln!(css, "  padding: {};", emit_css_value(&node.padding));
-    let _ = writeln!(css, "  margin: {};", emit_css_value(&node.margin));
-    let _ = writeln!(css, "  background: {bg};");
+    writeln!(
+        css,
+        "  flex-direction: {};",
+        css_flex_direction(node.flex_direction)
+    )?;
+    writeln!(css, "  flex-wrap: {};", css_flex_wrap(node.flex_wrap))?;
+    writeln!(
+        css,
+        "  justify-content: {};",
+        css_justify_content(node.justify_content)
+    )?;
+    writeln!(css, "  align-items: {};", css_align_items(node.align_items))?;
+    writeln!(
+        css,
+        "  align-content: {};",
+        css_align_content(node.align_content)
+    )?;
+    writeln!(css, "  row-gap: {};", emit_css_value(&node.row_gap))?;
+    writeln!(css, "  column-gap: {};", emit_css_value(&node.column_gap))?;
+    writeln!(css, "  flex-grow: {:.1};", node.flex_grow)?;
+    writeln!(css, "  flex-shrink: {:.1};", node.flex_shrink)?;
+    writeln!(css, "  flex-basis: {};", emit_css_value(&node.flex_basis))?;
+    writeln!(css, "  align-self: {};", css_align_self(node.align_self))?;
+    writeln!(css, "  width: {};", emit_css_value(&node.width))?;
+    writeln!(css, "  height: {};", emit_css_value(&node.height))?;
+    writeln!(css, "  min-width: {};", emit_css_value(&node.min_width))?;
+    writeln!(css, "  min-height: {};", emit_css_value(&node.min_height))?;
+    writeln!(css, "  max-width: {};", emit_css_value(&node.max_width))?;
+    writeln!(css, "  max-height: {};", emit_css_value(&node.max_height))?;
+    writeln!(css, "  padding: {};", emit_css_value(&node.padding))?;
+    writeln!(css, "  margin: {};", emit_css_value(&node.margin))?;
+    writeln!(css, "  background: {bg};")?;
     css.push_str("  box-sizing: border-box;\n");
     if is_leaf {
         css.push_str("  color: rgba(13, 13, 26, 0.85);\n");
@@ -144,12 +157,17 @@ fn emit_html_node(
     css.push_str("}\n\n");
 
     if is_leaf {
-        let _ = writeln!(html, "{pad_html}<div class=\"{class}\">{}</div>", node.label);
+        writeln!(
+            html,
+            "{pad_html}<div class=\"{class}\">{}</div>",
+            node.label
+        )?;
     } else {
-        let _ = writeln!(html, "{pad_html}<div class=\"{class}\">");
+        writeln!(html, "{pad_html}<div class=\"{class}\">")?;
         for child in &node.children {
-            emit_html_node(css, html, child, depth + 1, leaf_idx, id_counter);
+            emit_html_node(css, html, child, depth + 1, leaf_idx, id_counter)?;
         }
-        let _ = writeln!(html, "{pad_html}</div>");
+        writeln!(html, "{pad_html}</div>")?;
     }
+    Ok(())
 }

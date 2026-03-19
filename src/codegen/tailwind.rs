@@ -1,5 +1,6 @@
 use std::fmt::Write;
 
+use anyhow::Result;
 use bevy::prelude::*;
 
 use crate::art::PASTELS;
@@ -80,13 +81,18 @@ fn tailwind_value(property: &str, v: &ValueConfig) -> String {
     }
 }
 
-pub fn emit_tailwind(root: &NodeConfig) -> String {
+pub fn emit_tailwind(root: &NodeConfig) -> Result<String> {
     let mut buf = String::new();
-    emit_tailwind_node(&mut buf, root, 0, &mut 0);
-    buf
+    emit_tailwind_node(&mut buf, root, 0, &mut 0)?;
+    Ok(buf)
 }
 
-fn emit_tailwind_node(buf: &mut String, node: &NodeConfig, depth: usize, leaf_idx: &mut usize) {
+fn emit_tailwind_node(
+    buf: &mut String,
+    node: &NodeConfig,
+    depth: usize,
+    leaf_idx: &mut usize,
+) -> Result<()> {
     let pad = "  ".repeat(depth);
     let is_leaf = node.children.is_empty();
 
@@ -136,12 +142,13 @@ fn emit_tailwind_node(buf: &mut String, node: &NodeConfig, depth: usize, leaf_id
     let cls = classes.join(" ");
 
     if is_leaf {
-        let _ = writeln!(buf, "{pad}<div class=\"{cls}\">{}</div>", node.label);
+        writeln!(buf, "{pad}<div class=\"{cls}\">{}</div>", node.label)?;
     } else {
-        let _ = writeln!(buf, "{pad}<div class=\"{cls}\">");
+        writeln!(buf, "{pad}<div class=\"{cls}\">")?;
         for child in &node.children {
-            emit_tailwind_node(buf, child, depth + 1, leaf_idx);
+            emit_tailwind_node(buf, child, depth + 1, leaf_idx)?;
         }
-        let _ = writeln!(buf, "{pad}</div>");
+        writeln!(buf, "{pad}</div>")?;
     }
+    Ok(())
 }

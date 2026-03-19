@@ -440,16 +440,16 @@ pub fn panel_system(
                 ui.label("Copy code:");
                 ui.horizontal(|ui| {
                     if ui.button("Bevy").on_hover_text("Copy Bevy/Rust UI code to clipboard").clicked() {
-                        ui.ctx().copy_text(emit_bevy_code(&cfg.root));
+                        ui.ctx().copy_text(emit_bevy_code(&cfg.root).expect("codegen failed"));
                     }
                     if ui.button("HTML/CSS").on_hover_text("Copy HTML + CSS flexbox code to clipboard").clicked() {
-                        ui.ctx().copy_text(emit_html_css(&cfg.root));
+                        ui.ctx().copy_text(emit_html_css(&cfg.root).expect("codegen failed"));
                     }
                     if ui.button("Tailwind").on_hover_text("Copy Tailwind CSS markup to clipboard").clicked() {
-                        ui.ctx().copy_text(emit_tailwind(&cfg.root));
+                        ui.ctx().copy_text(emit_tailwind(&cfg.root).expect("codegen failed"));
                     }
                     if ui.button("SwiftUI").on_hover_text("Copy SwiftUI HStack/VStack code to clipboard").clicked() {
-                        ui.ctx().copy_text(emit_swiftui(&cfg.root));
+                        ui.ctx().copy_text(emit_swiftui(&cfg.root).expect("codegen failed"));
                     }
                 });
             });
