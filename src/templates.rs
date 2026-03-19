@@ -78,15 +78,14 @@ pub fn sidebar_content() -> NodeConfig {
     sidebar.flex_grow = 0.0;
     sidebar.padding = ValueConfig::Px(8.0);
     sidebar.row_gap = ValueConfig::Px(4.0);
-    sidebar.children = vec![
-        NodeConfig::new_leaf("nav-1", 200.0, 44.0),
-        NodeConfig::new_leaf("nav-2", 200.0, 44.0),
-        NodeConfig::new_leaf("nav-3", 200.0, 44.0),
-    ];
-    for child in &mut sidebar.children {
-        child.width = ValueConfig::Auto;
-        child.height = ValueConfig::Px(44.0);
-    }
+    let nav_items: Vec<_> = (1..=3)
+        .map(|i| {
+            let mut n = NodeConfig::new_leaf(format!("nav-{i}"), 100.0, 44.0);
+            n.width = ValueConfig::Auto;
+            n
+        })
+        .collect();
+    sidebar.children = nav_items;
 
     let mut content = NodeConfig::new_leaf("content", 100.0, 100.0);
     content.flex_grow = 1.0;

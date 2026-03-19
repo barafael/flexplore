@@ -212,9 +212,9 @@ impl NodeConfig {
         let min_dim = match (w, h) {
             (Some(w), Some(h)) => w.min(h),
             (Some(v), None) | (None, Some(v)) => v,
-            (None, None) => 80.0,
+            (None, None) => 120.0,
         };
-        (min_dim / 80.0).clamp(0.25, 2.0)
+        (min_dim / 120.0).clamp(0.25, 1.5)
     }
 
     pub fn info(&self) -> String {
