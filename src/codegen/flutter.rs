@@ -3,8 +3,8 @@ use std::fmt::Write;
 use anyhow::Result;
 use bevy::prelude::*;
 
-use crate::art::PASTELS;
-use crate::config::{NodeConfig, ValueConfig};
+use crate::art::palette_color;
+use crate::config::{ColorPalette, NodeConfig, ValueConfig};
 
 fn dart_value(v: &ValueConfig) -> Option<String> {
     match v {
@@ -45,9 +45,9 @@ fn dart_cross_axis(a: AlignItems) -> &'static str {
     }
 }
 
-pub fn emit_flutter(root: &NodeConfig) -> Result<String> {
+pub fn emit_flutter(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
     let mut buf = String::from("Widget build(BuildContext context) {\n  return ");
-    emit_flutter_node(&mut buf, root, 1, &mut 0)?;
+    emit_flutter_node(&mut buf, root, 1, &mut 0, palette)?;
     buf.push_str(";\n}\n");
     Ok(buf)
 }
@@ -57,6 +57,7 @@ fn emit_flutter_node(
     node: &NodeConfig,
     depth: usize,
     leaf_idx: &mut usize,
+    palette: ColorPalette,
 ) -> Result<()> {
     let pad = "  ".repeat(depth);
     let is_leaf = node.children.is_empty();
@@ -65,12 +66,12 @@ fn emit_flutter_node(
         writeln!(buf, "{pad}Offstage(")?;
         writeln!(buf, "{pad}  offstage: true,")?;
         write!(buf, "{pad}  child: ")?;
-        emit_flutter_inner(buf, node, depth + 1, leaf_idx, is_leaf)?;
+        emit_flutter_inner(buf, node, depth + 1, leaf_idx, is_leaf, palette)?;
         writeln!(buf, "{pad})")?;
         return Ok(());
     }
 
-    emit_flutter_inner(buf, node, depth, leaf_idx, is_leaf)
+    emit_flutter_inner(buf, node, depth, leaf_idx, is_leaf, palette)
 }
 
 fn emit_flutter_inner(
@@ -79,11 +80,12 @@ fn emit_flutter_inner(
     depth: usize,
     leaf_idx: &mut usize,
     is_leaf: bool,
+    palette: ColorPalette,
 ) -> Result<()> {
     let pad = "  ".repeat(depth);
 
     if is_leaf {
-        let (r, g, b) = PASTELS[*leaf_idx % PASTELS.len()];
+        let (r, g, b) = palette_color(palette, *leaf_idx);
         *leaf_idx += 1;
 
         writeln!(buf, "{pad}Container(")?;
@@ -201,10 +203,10 @@ fn emit_flutter_inner(
                 writeln!(buf, "{ipad}    Expanded(")?;
                 writeln!(buf, "{ipad}      flex: {},", child.flex_grow.round().max(1.0) as i32)?;
                 write!(buf, "{ipad}      child: ")?;
-                emit_flutter_node(buf, child, inner_depth + 3, leaf_idx)?;
+                emit_flutter_node(buf, child, inner_depth + 3, leaf_idx, palette)?;
                 writeln!(buf, "{ipad}    ),")?;
             } else {
-                emit_flutter_node(buf, child, inner_depth + 2, leaf_idx)?;
+                emit_flutter_node(buf, child, inner_depth + 2, leaf_idx, palette)?;
                 writeln!(buf, "{ipad}    ,")?;
             }
         }
@@ -233,13 +235,13 @@ mod tests {
 
     #[test]
     fn emits_build_function() {
-        let code = emit_flutter(&test_container()).unwrap();
+        let code = emit_flutter(&test_container(), ColorPalette::Pastel1).unwrap();
         assert!(code.contains("Widget build(BuildContext context)"));
     }
 
     #[test]
     fn emits_row_for_row_direction() {
-        let code = emit_flutter(&test_container()).unwrap();
+        let code = emit_flutter(&test_container(), ColorPalette::Pastel1).unwrap();
         // Default is Wrap since NodeConfig::new_container has FlexWrap::Wrap
         assert!(code.contains("Wrap(") || code.contains("Row("));
     }
@@ -249,13 +251,13 @@ mod tests {
         let mut root = test_container();
         root.flex_direction = FlexDirection::Column;
         root.flex_wrap = FlexWrap::NoWrap;
-        let code = emit_flutter(&root).unwrap();
+        let code = emit_flutter(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("Column("));
     }
 
     #[test]
     fn emits_container_for_leaves() {
-        let code = emit_flutter(&test_container()).unwrap();
+        let code = emit_flutter(&test_container(), ColorPalette::Pastel1).unwrap();
         assert!(code.contains("Container("));
         assert!(code.contains("Text('A'"));
     }
@@ -266,7 +268,7 @@ mod tests {
         node.visible = false;
         let mut root = NodeConfig::new_container("root");
         root.children = vec![node];
-        let code = emit_flutter(&root).unwrap();
+        let code = emit_flutter(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("Offstage("));
     }
 }

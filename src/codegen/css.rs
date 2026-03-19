@@ -3,8 +3,8 @@ use std::fmt::Write;
 use anyhow::Result;
 use bevy::prelude::*;
 
-use crate::art::PASTELS;
-use crate::config::{NodeConfig, ValueConfig};
+use crate::art::palette_color;
+use crate::config::{ColorPalette, NodeConfig, ValueConfig};
 
 fn is_zero_or_auto(v: &ValueConfig) -> bool {
     matches!(v, ValueConfig::Auto) || matches!(v, ValueConfig::Px(n) if *n == 0.0)
@@ -105,10 +105,10 @@ fn css_align_self(a: AlignSelf) -> &'static str {
     }
 }
 
-pub fn emit_html_css(root: &NodeConfig) -> Result<String> {
+pub fn emit_html_css(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
     let mut css = String::new();
     let mut html = String::new();
-    emit_html_node(&mut css, &mut html, root, 0, &mut 0, &mut 0)?;
+    emit_html_node(&mut css, &mut html, root, 0, &mut 0, &mut 0, palette)?;
     Ok(format!("<style>\n{css}</style>\n\n{html}"))
 }
 
@@ -119,6 +119,7 @@ fn emit_html_node(
     depth: usize,
     leaf_idx: &mut usize,
     id_counter: &mut usize,
+    palette: ColorPalette,
 ) -> Result<()> {
     let id = *id_counter;
     *id_counter += 1;
@@ -127,7 +128,7 @@ fn emit_html_node(
     let class = format!("node-{id}");
 
     let bg = if is_leaf {
-        let (r, g, b) = PASTELS[*leaf_idx % PASTELS.len()];
+        let (r, g, b) = palette_color(palette, *leaf_idx);
         *leaf_idx += 1;
         format!(
             "rgb({}, {}, {})",
@@ -226,7 +227,7 @@ fn emit_html_node(
         let mut sorted: Vec<&NodeConfig> = node.children.iter().collect();
         sorted.sort_by_key(|c| c.order);
         for child in sorted {
-            emit_html_node(css, html, child, depth + 1, leaf_idx, id_counter)?;
+            emit_html_node(css, html, child, depth + 1, leaf_idx, id_counter, palette)?;
         }
         writeln!(html, "{pad_html}</div>")?;
     }
@@ -248,7 +249,7 @@ mod tests {
 
     #[test]
     fn emits_style_and_html() {
-        let code = emit_html_css(&test_container()).unwrap();
+        let code = emit_html_css(&test_container(), ColorPalette::Pastel1).unwrap();
         assert!(code.contains("<style>"));
         assert!(code.contains("<div class=\"node-"));
     }
@@ -257,7 +258,7 @@ mod tests {
     fn emits_flex_direction() {
         let mut root = test_container();
         root.flex_direction = FlexDirection::Column;
-        let code = emit_html_css(&root).unwrap();
+        let code = emit_html_css(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("flex-direction: column"));
     }
 
@@ -267,7 +268,7 @@ mod tests {
         node.visible = false;
         let mut root = NodeConfig::new_container("root");
         root.children = vec![node];
-        let code = emit_html_css(&root).unwrap();
+        let code = emit_html_css(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("display: none"));
     }
 
@@ -277,7 +278,7 @@ mod tests {
         node.order = 3;
         let mut root = NodeConfig::new_container("root");
         root.children = vec![node];
-        let code = emit_html_css(&root).unwrap();
+        let code = emit_html_css(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("order: 3"));
     }
 
@@ -287,7 +288,7 @@ mod tests {
         leaf.width = ValueConfig::Vw(50.0);
         let mut root = NodeConfig::new_container("root");
         root.children = vec![leaf];
-        let code = emit_html_css(&root).unwrap();
+        let code = emit_html_css(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("50.0vw"));
     }
 }

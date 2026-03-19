@@ -1,9 +1,10 @@
 use std::fmt::Write;
 
 use anyhow::Result;
+use bevy::prelude::*;
 
-use crate::art::PASTELS;
-use crate::config::{NodeConfig, ValueConfig};
+use crate::art::palette_color;
+use crate::config::{ColorPalette, NodeConfig, ValueConfig};
 
 fn emit_bevy_value(v: &ValueConfig) -> String {
     match v {
@@ -15,9 +16,9 @@ fn emit_bevy_value(v: &ValueConfig) -> String {
     }
 }
 
-pub fn emit_bevy_code(root: &NodeConfig) -> Result<String> {
+pub fn emit_bevy_code(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
     let mut buf = String::from("fn spawn_ui(commands: &mut Commands) {\n");
-    emit_node(&mut buf, root, 1, &mut 0, true)?;
+    emit_node(&mut buf, root, 1, &mut 0, true, palette)?;
     buf.push_str("}\n");
     Ok(buf)
 }
@@ -28,12 +29,13 @@ fn emit_node(
     depth: usize,
     leaf_idx: &mut usize,
     is_root: bool,
+    palette: ColorPalette,
 ) -> Result<()> {
     let pad = "    ".repeat(depth);
     let is_leaf = node.children.is_empty();
 
     let bg = if is_leaf {
-        let (r, g, b) = PASTELS[*leaf_idx % PASTELS.len()];
+        let (r, g, b) = palette_color(palette, *leaf_idx);
         *leaf_idx += 1;
         format!("Color::srgb({r:.2}, {g:.2}, {b:.2})")
     } else {
@@ -45,75 +47,69 @@ fn emit_node(
     writeln!(buf, "{pad}{spawner}.spawn((")?;
 
     writeln!(buf, "{pad}    Node {{")?;
-    if node.visible {
-        writeln!(buf, "{pad}        display: Display::Flex,")?;
-    } else {
-        writeln!(buf, "{pad}        display: Display::None,")?;
+    // Only emit non-default fields. Bevy defaults: Display::Flex, Row, NoWrap,
+    // JustifyContent/AlignItems/AlignContent::Default, gaps Px(0), grow 0, shrink 1,
+    // basis/sizes Auto, padding/margin zero.
+    if !node.visible {
+        emit_field(buf, &pad, "display", "Display::None")?;
     }
-    emit_field(
-        buf,
-        &pad,
-        "flex_direction",
-        &format!("FlexDirection::{:?}", node.flex_direction),
-    )?;
-    emit_field(
-        buf,
-        &pad,
-        "flex_wrap",
-        &format!("FlexWrap::{:?}", node.flex_wrap),
-    )?;
-    emit_field(
-        buf,
-        &pad,
-        "justify_content",
-        &format!("JustifyContent::{:?}", node.justify_content),
-    )?;
-    emit_field(
-        buf,
-        &pad,
-        "align_items",
-        &format!("AlignItems::{:?}", node.align_items),
-    )?;
-    emit_field(
-        buf,
-        &pad,
-        "align_content",
-        &format!("AlignContent::{:?}", node.align_content),
-    )?;
-    emit_field(buf, &pad, "row_gap", &emit_bevy_value(&node.row_gap))?;
-    emit_field(buf, &pad, "column_gap", &emit_bevy_value(&node.column_gap))?;
-    emit_field(buf, &pad, "flex_grow", &format!("{:.1}", node.flex_grow))?;
-    emit_field(
-        buf,
-        &pad,
-        "flex_shrink",
-        &format!("{:.1}", node.flex_shrink),
-    )?;
-    emit_field(buf, &pad, "flex_basis", &emit_bevy_value(&node.flex_basis))?;
-    emit_field(
-        buf,
-        &pad,
-        "align_self",
-        &format!("AlignSelf::{:?}", node.align_self),
-    )?;
-    emit_field(buf, &pad, "width", &emit_bevy_value(&node.width))?;
-    emit_field(buf, &pad, "height", &emit_bevy_value(&node.height))?;
-    emit_field(buf, &pad, "min_width", &emit_bevy_value(&node.min_width))?;
-    emit_field(buf, &pad, "min_height", &emit_bevy_value(&node.min_height))?;
-    emit_field(buf, &pad, "max_width", &emit_bevy_value(&node.max_width))?;
-    emit_field(buf, &pad, "max_height", &emit_bevy_value(&node.max_height))?;
-    emit_field(
-        buf,
-        &pad,
-        "padding",
-        &format!("UiRect::all({})", emit_bevy_value(&node.padding)),
-    )?;
-    emit_field(
-        buf,
-        &pad,
-        "margin",
-        &format!("UiRect::all({})", emit_bevy_value(&node.margin)),
-    )?;
+    if node.flex_direction != FlexDirection::Row {
+        emit_field(buf, &pad, "flex_direction", &format!("FlexDirection::{:?}", node.flex_direction))?;
+    }
+    if node.flex_wrap != FlexWrap::NoWrap {
+        emit_field(buf, &pad, "flex_wrap", &format!("FlexWrap::{:?}", node.flex_wrap))?;
+    }
+    if !matches!(node.justify_content, JustifyContent::Default) {
+        emit_field(buf, &pad, "justify_content", &format!("JustifyContent::{:?}", node.justify_content))?;
+    }
+    if !matches!(node.align_items, AlignItems::Default) {
+        emit_field(buf, &pad, "align_items", &format!("AlignItems::{:?}", node.align_items))?;
+    }
+    if !matches!(node.align_content, AlignContent::Default) {
+        emit_field(buf, &pad, "align_content", &format!("AlignContent::{:?}", node.align_content))?;
+    }
+    if !matches!(node.row_gap, ValueConfig::Auto) && !matches!(node.row_gap, ValueConfig::Px(v) if v == 0.0) {
+        emit_field(buf, &pad, "row_gap", &emit_bevy_value(&node.row_gap))?;
+    }
+    if !matches!(node.column_gap, ValueConfig::Auto) && !matches!(node.column_gap, ValueConfig::Px(v) if v == 0.0) {
+        emit_field(buf, &pad, "column_gap", &emit_bevy_value(&node.column_gap))?;
+    }
+    if node.flex_grow != 0.0 {
+        emit_field(buf, &pad, "flex_grow", &format!("{:.1}", node.flex_grow))?;
+    }
+    if node.flex_shrink != 1.0 {
+        emit_field(buf, &pad, "flex_shrink", &format!("{:.1}", node.flex_shrink))?;
+    }
+    if !matches!(node.flex_basis, ValueConfig::Auto) {
+        emit_field(buf, &pad, "flex_basis", &emit_bevy_value(&node.flex_basis))?;
+    }
+    if node.align_self != AlignSelf::Auto {
+        emit_field(buf, &pad, "align_self", &format!("AlignSelf::{:?}", node.align_self))?;
+    }
+    if !matches!(node.width, ValueConfig::Auto) {
+        emit_field(buf, &pad, "width", &emit_bevy_value(&node.width))?;
+    }
+    if !matches!(node.height, ValueConfig::Auto) {
+        emit_field(buf, &pad, "height", &emit_bevy_value(&node.height))?;
+    }
+    if !matches!(node.min_width, ValueConfig::Auto) {
+        emit_field(buf, &pad, "min_width", &emit_bevy_value(&node.min_width))?;
+    }
+    if !matches!(node.min_height, ValueConfig::Auto) && !matches!(node.min_height, ValueConfig::Px(v) if v == 0.0) {
+        emit_field(buf, &pad, "min_height", &emit_bevy_value(&node.min_height))?;
+    }
+    if !matches!(node.max_width, ValueConfig::Auto) {
+        emit_field(buf, &pad, "max_width", &emit_bevy_value(&node.max_width))?;
+    }
+    if !matches!(node.max_height, ValueConfig::Auto) {
+        emit_field(buf, &pad, "max_height", &emit_bevy_value(&node.max_height))?;
+    }
+    if !matches!(node.padding, ValueConfig::Px(v) if v == 0.0) {
+        emit_field(buf, &pad, "padding", &format!("UiRect::all({})", emit_bevy_value(&node.padding)))?;
+    }
+    if !matches!(node.margin, ValueConfig::Px(v) if v == 0.0) {
+        emit_field(buf, &pad, "margin", &format!("UiRect::all({})", emit_bevy_value(&node.margin)))?;
+    }
     if node.order != 0 {
         writeln!(buf, "{pad}        // order: {} (no Bevy equivalent, use entity ordering)", node.order)?;
     }
@@ -151,7 +147,7 @@ fn emit_node(
         let mut sorted: Vec<&NodeConfig> = node.children.iter().collect();
         sorted.sort_by_key(|c| c.order);
         for child in sorted {
-            emit_node(buf, child, depth + 1, leaf_idx, false)?;
+            emit_node(buf, child, depth + 1, leaf_idx, false, palette)?;
         }
         writeln!(buf, "{pad}}});")?;
     }
@@ -166,7 +162,6 @@ fn emit_field(buf: &mut String, pad: &str, name: &str, value: &str) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bevy::prelude::*;
 
     fn test_container() -> NodeConfig {
         let mut root = NodeConfig::new_container("root");
@@ -179,7 +174,7 @@ mod tests {
 
     #[test]
     fn emits_spawn_function() {
-        let code = emit_bevy_code(&test_container()).unwrap();
+        let code = emit_bevy_code(&test_container(), ColorPalette::Pastel1).unwrap();
         assert!(code.contains("fn spawn_ui(commands: &mut Commands)"));
     }
 
@@ -188,13 +183,13 @@ mod tests {
         let mut node = NodeConfig::new_container("root");
         node.flex_direction = FlexDirection::Column;
         node.children = vec![NodeConfig::new_leaf("A", 80.0, 80.0)];
-        let code = emit_bevy_code(&node).unwrap();
+        let code = emit_bevy_code(&node, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("FlexDirection::Column"));
     }
 
     #[test]
     fn emits_leaf_text() {
-        let code = emit_bevy_code(&test_container()).unwrap();
+        let code = emit_bevy_code(&test_container(), ColorPalette::Pastel1).unwrap();
         assert!(code.contains("Text::new(\"A\")"));
         assert!(code.contains("Text::new(\"B\")"));
     }
@@ -205,7 +200,7 @@ mod tests {
         node.visible = false;
         let mut root = NodeConfig::new_container("root");
         root.children = vec![node];
-        let code = emit_bevy_code(&root).unwrap();
+        let code = emit_bevy_code(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("Display::None"));
     }
 
@@ -215,7 +210,7 @@ mod tests {
         leaf.width = ValueConfig::Percent(50.0);
         let mut root = NodeConfig::new_container("root");
         root.children = vec![leaf];
-        let code = emit_bevy_code(&root).unwrap();
+        let code = emit_bevy_code(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("Val::Percent(50.0)"));
     }
 }

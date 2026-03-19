@@ -3,8 +3,8 @@ use std::fmt::Write;
 use anyhow::Result;
 use bevy::prelude::*;
 
-use crate::art::PASTELS;
-use crate::config::{NodeConfig, ValueConfig};
+use crate::art::palette_color;
+use crate::config::{ColorPalette, NodeConfig, ValueConfig};
 
 fn swift_value(v: &ValueConfig) -> String {
     match v {
@@ -63,9 +63,9 @@ fn swift_h_alignment(a: AlignItems) -> &'static str {
     }
 }
 
-pub fn emit_swiftui(root: &NodeConfig) -> Result<String> {
+pub fn emit_swiftui(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
     let mut buf = String::from("struct ContentView: View {\n    var body: some View {\n");
-    emit_swiftui_node(&mut buf, root, 2, &mut 0)?;
+    emit_swiftui_node(&mut buf, root, 2, &mut 0, palette)?;
     buf.push_str("    }\n}\n");
     Ok(buf)
 }
@@ -75,12 +75,13 @@ fn emit_swiftui_node(
     node: &NodeConfig,
     depth: usize,
     leaf_idx: &mut usize,
+    palette: ColorPalette,
 ) -> Result<()> {
     let pad = "    ".repeat(depth);
     let is_leaf = node.children.is_empty();
 
     if is_leaf {
-        let (r, g, b) = PASTELS[*leaf_idx % PASTELS.len()];
+        let (r, g, b) = palette_color(palette, *leaf_idx);
         *leaf_idx += 1;
 
         writeln!(buf, "{pad}Text({:?})", node.label)?;
@@ -193,7 +194,7 @@ fn emit_swiftui_node(
             children.reverse();
         }
         for child in children {
-            emit_swiftui_node(buf, child, depth + 1, leaf_idx)?;
+            emit_swiftui_node(buf, child, depth + 1, leaf_idx, palette)?;
         }
 
         writeln!(buf, "{pad}}}")?;
@@ -254,14 +255,14 @@ mod tests {
 
     #[test]
     fn emits_struct_wrapper() {
-        let code = emit_swiftui(&test_container()).unwrap();
+        let code = emit_swiftui(&test_container(), ColorPalette::Pastel1).unwrap();
         assert!(code.contains("struct ContentView: View"));
         assert!(code.contains("var body: some View"));
     }
 
     #[test]
     fn emits_hstack_for_row() {
-        let code = emit_swiftui(&test_container()).unwrap();
+        let code = emit_swiftui(&test_container(), ColorPalette::Pastel1).unwrap();
         assert!(code.contains("HStack"));
     }
 
@@ -269,13 +270,13 @@ mod tests {
     fn emits_vstack_for_column() {
         let mut root = test_container();
         root.flex_direction = FlexDirection::Column;
-        let code = emit_swiftui(&root).unwrap();
+        let code = emit_swiftui(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("VStack"));
     }
 
     #[test]
     fn emits_text_for_leaves() {
-        let code = emit_swiftui(&test_container()).unwrap();
+        let code = emit_swiftui(&test_container(), ColorPalette::Pastel1).unwrap();
         assert!(code.contains("Text(\"A\")"));
         assert!(code.contains("Text(\"B\")"));
     }
@@ -286,7 +287,7 @@ mod tests {
         node.visible = false;
         let mut root = NodeConfig::new_container("root");
         root.children = vec![node];
-        let code = emit_swiftui(&root).unwrap();
+        let code = emit_swiftui(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains(".hidden()"));
     }
 }

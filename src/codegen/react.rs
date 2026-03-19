@@ -3,8 +3,16 @@ use std::fmt::Write;
 use anyhow::Result;
 use bevy::prelude::*;
 
-use crate::art::PASTELS;
-use crate::config::{NodeConfig, ValueConfig};
+use crate::art::palette_color;
+use crate::config::{ColorPalette, NodeConfig, ValueConfig};
+
+fn format_num(v: f32) -> String {
+    if (v - v.round()).abs() < 0.005 {
+        format!("{}", v as i32)
+    } else {
+        format!("{v:.1}")
+    }
+}
 
 fn css_value(v: &ValueConfig) -> String {
     match v {
@@ -89,9 +97,9 @@ fn camel_align_self(a: AlignSelf) -> &'static str {
     }
 }
 
-pub fn emit_react(root: &NodeConfig) -> Result<String> {
+pub fn emit_react(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
     let mut buf = String::from("export default function FlexLayout() {\n  return (\n");
-    emit_react_node(&mut buf, root, 2, &mut 0)?;
+    emit_react_node(&mut buf, root, 2, &mut 0, palette)?;
     buf.push_str("  );\n}\n");
     Ok(buf)
 }
@@ -101,12 +109,13 @@ fn emit_react_node(
     node: &NodeConfig,
     depth: usize,
     leaf_idx: &mut usize,
+    palette: ColorPalette,
 ) -> Result<()> {
     let pad = "  ".repeat(depth);
     let is_leaf = node.children.is_empty();
 
     let bg = if is_leaf {
-        let (r, g, b) = PASTELS[*leaf_idx % PASTELS.len()];
+        let (r, g, b) = palette_color(palette, *leaf_idx);
         *leaf_idx += 1;
         format!(
             "'rgb({}, {}, {})'",
@@ -119,30 +128,68 @@ fn emit_react_node(
     };
 
     writeln!(buf, "{pad}<div style={{{{")?;
-    if node.visible {
-        writeln!(buf, "{pad}  display: 'flex',")?;
-    } else {
+    if !node.visible {
         writeln!(buf, "{pad}  display: 'none',")?;
+    } else {
+        writeln!(buf, "{pad}  display: 'flex',")?;
     }
-    writeln!(buf, "{pad}  flexDirection: {},", camel_direction(node.flex_direction))?;
-    writeln!(buf, "{pad}  flexWrap: {},", camel_wrap(node.flex_wrap))?;
-    writeln!(buf, "{pad}  justifyContent: {},", camel_justify(node.justify_content))?;
-    writeln!(buf, "{pad}  alignItems: {},", camel_align_items(node.align_items))?;
-    writeln!(buf, "{pad}  alignContent: {},", camel_align_content(node.align_content))?;
-    writeln!(buf, "{pad}  rowGap: {},", css_value(&node.row_gap))?;
-    writeln!(buf, "{pad}  columnGap: {},", css_value(&node.column_gap))?;
-    writeln!(buf, "{pad}  flexGrow: {:.1},", node.flex_grow)?;
-    writeln!(buf, "{pad}  flexShrink: {:.1},", node.flex_shrink)?;
-    writeln!(buf, "{pad}  flexBasis: {},", css_value(&node.flex_basis))?;
-    writeln!(buf, "{pad}  alignSelf: {},", camel_align_self(node.align_self))?;
-    writeln!(buf, "{pad}  width: {},", css_value(&node.width))?;
-    writeln!(buf, "{pad}  height: {},", css_value(&node.height))?;
-    writeln!(buf, "{pad}  minWidth: {},", css_value(&node.min_width))?;
-    writeln!(buf, "{pad}  minHeight: {},", css_value(&node.min_height))?;
-    writeln!(buf, "{pad}  maxWidth: {},", css_value(&node.max_width))?;
-    writeln!(buf, "{pad}  maxHeight: {},", css_value(&node.max_height))?;
-    writeln!(buf, "{pad}  padding: {},", css_value(&node.padding))?;
-    writeln!(buf, "{pad}  margin: {},", css_value(&node.margin))?;
+    if node.flex_direction != FlexDirection::Row {
+        writeln!(buf, "{pad}  flexDirection: {},", camel_direction(node.flex_direction))?;
+    }
+    if node.flex_wrap != FlexWrap::NoWrap {
+        writeln!(buf, "{pad}  flexWrap: {},", camel_wrap(node.flex_wrap))?;
+    }
+    if !matches!(node.justify_content, JustifyContent::Default | JustifyContent::FlexStart | JustifyContent::Start) {
+        writeln!(buf, "{pad}  justifyContent: {},", camel_justify(node.justify_content))?;
+    }
+    if !matches!(node.align_items, AlignItems::Default | AlignItems::Stretch) {
+        writeln!(buf, "{pad}  alignItems: {},", camel_align_items(node.align_items))?;
+    }
+    if !matches!(node.align_content, AlignContent::Default | AlignContent::Stretch) {
+        writeln!(buf, "{pad}  alignContent: {},", camel_align_content(node.align_content))?;
+    }
+    if !matches!(node.row_gap, ValueConfig::Auto) && !matches!(node.row_gap, ValueConfig::Px(v) if v == 0.0) {
+        writeln!(buf, "{pad}  rowGap: {},", css_value(&node.row_gap))?;
+    }
+    if !matches!(node.column_gap, ValueConfig::Auto) && !matches!(node.column_gap, ValueConfig::Px(v) if v == 0.0) {
+        writeln!(buf, "{pad}  columnGap: {},", css_value(&node.column_gap))?;
+    }
+    if node.flex_grow != 0.0 {
+        writeln!(buf, "{pad}  flexGrow: {},", format_num(node.flex_grow))?;
+    }
+    if node.flex_shrink != 1.0 {
+        writeln!(buf, "{pad}  flexShrink: {},", format_num(node.flex_shrink))?;
+    }
+    if !matches!(node.flex_basis, ValueConfig::Auto) {
+        writeln!(buf, "{pad}  flexBasis: {},", css_value(&node.flex_basis))?;
+    }
+    if node.align_self != AlignSelf::Auto {
+        writeln!(buf, "{pad}  alignSelf: {},", camel_align_self(node.align_self))?;
+    }
+    if !matches!(node.width, ValueConfig::Auto) {
+        writeln!(buf, "{pad}  width: {},", css_value(&node.width))?;
+    }
+    if !matches!(node.height, ValueConfig::Auto) {
+        writeln!(buf, "{pad}  height: {},", css_value(&node.height))?;
+    }
+    if !matches!(node.min_width, ValueConfig::Auto) {
+        writeln!(buf, "{pad}  minWidth: {},", css_value(&node.min_width))?;
+    }
+    if !matches!(node.min_height, ValueConfig::Auto) && !matches!(node.min_height, ValueConfig::Px(v) if v == 0.0) {
+        writeln!(buf, "{pad}  minHeight: {},", css_value(&node.min_height))?;
+    }
+    if !matches!(node.max_width, ValueConfig::Auto) {
+        writeln!(buf, "{pad}  maxWidth: {},", css_value(&node.max_width))?;
+    }
+    if !matches!(node.max_height, ValueConfig::Auto) {
+        writeln!(buf, "{pad}  maxHeight: {},", css_value(&node.max_height))?;
+    }
+    if !matches!(node.padding, ValueConfig::Px(v) if v == 0.0) {
+        writeln!(buf, "{pad}  padding: {},", css_value(&node.padding))?;
+    }
+    if !matches!(node.margin, ValueConfig::Px(v) if v == 0.0) {
+        writeln!(buf, "{pad}  margin: {},", css_value(&node.margin))?;
+    }
     if node.order != 0 {
         writeln!(buf, "{pad}  order: {},", node.order)?;
     }
@@ -161,7 +208,7 @@ fn emit_react_node(
         let mut sorted: Vec<&NodeConfig> = node.children.iter().collect();
         sorted.sort_by_key(|c| c.order);
         for child in sorted {
-            emit_react_node(buf, child, depth + 1, leaf_idx)?;
+            emit_react_node(buf, child, depth + 1, leaf_idx, palette)?;
         }
         writeln!(buf, "{pad}</div>")?;
     }
@@ -183,15 +230,15 @@ mod tests {
 
     #[test]
     fn emits_function_component() {
-        let code = emit_react(&test_container()).unwrap();
+        let code = emit_react(&test_container(), ColorPalette::Pastel1).unwrap();
         assert!(code.contains("export default function FlexLayout()"));
     }
 
     #[test]
     fn emits_inline_styles() {
-        let code = emit_react(&test_container()).unwrap();
-        assert!(code.contains("flexDirection:"));
-        assert!(code.contains("justifyContent:"));
+        let code = emit_react(&test_container(), ColorPalette::Pastel1).unwrap();
+        assert!(code.contains("display: 'flex'"));
+        assert!(code.contains("style={{"));
     }
 
     #[test]
@@ -200,7 +247,7 @@ mod tests {
         node.visible = false;
         let mut root = NodeConfig::new_container("root");
         root.children = vec![node];
-        let code = emit_react(&root).unwrap();
+        let code = emit_react(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("display: 'none'"));
     }
 
@@ -210,13 +257,13 @@ mod tests {
         node.order = 5;
         let mut root = NodeConfig::new_container("root");
         root.children = vec![node];
-        let code = emit_react(&root).unwrap();
+        let code = emit_react(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("order: 5"));
     }
 
     #[test]
     fn emits_leaf_label() {
-        let code = emit_react(&test_container()).unwrap();
+        let code = emit_react(&test_container(), ColorPalette::Pastel1).unwrap();
         assert!(code.contains(">A</div>"));
     }
 }

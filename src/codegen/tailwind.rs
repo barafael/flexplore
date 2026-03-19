@@ -3,8 +3,8 @@ use std::fmt::Write;
 use anyhow::Result;
 use bevy::prelude::*;
 
-use crate::art::PASTELS;
-use crate::config::{NodeConfig, ValueConfig};
+use crate::art::palette_color;
+use crate::config::{ColorPalette, NodeConfig, ValueConfig};
 
 fn tailwind_flex_direction(d: FlexDirection) -> &'static str {
     match d {
@@ -96,9 +96,9 @@ fn tailwind_value(property: &str, v: &ValueConfig) -> String {
     }
 }
 
-pub fn emit_tailwind(root: &NodeConfig) -> Result<String> {
+pub fn emit_tailwind(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
     let mut buf = String::new();
-    emit_tailwind_node(&mut buf, root, 0, &mut 0)?;
+    emit_tailwind_node(&mut buf, root, 0, &mut 0, palette)?;
     Ok(buf)
 }
 
@@ -107,12 +107,13 @@ fn emit_tailwind_node(
     node: &NodeConfig,
     depth: usize,
     leaf_idx: &mut usize,
+    palette: ColorPalette,
 ) -> Result<()> {
     let pad = "  ".repeat(depth);
     let is_leaf = node.children.is_empty();
 
     let bg = if is_leaf {
-        let (r, g, b) = PASTELS[*leaf_idx % PASTELS.len()];
+        let (r, g, b) = palette_color(palette, *leaf_idx);
         *leaf_idx += 1;
         format!(
             "bg-[rgb({},{},{})]",
@@ -124,30 +125,68 @@ fn emit_tailwind_node(
         "bg-[rgba(28,28,43,1)]".into()
     };
 
-    let mut classes = vec![
+    let mut classes: Vec<String> = vec![
         (if node.visible { "flex" } else { "hidden" }).into(),
-        tailwind_flex_direction(node.flex_direction).into(),
-        tailwind_flex_wrap(node.flex_wrap).into(),
-        tailwind_justify_content(node.justify_content).into(),
-        tailwind_align_items(node.align_items).into(),
-        tailwind_align_content(node.align_content).into(),
-        tailwind_value("gap-x", &node.column_gap),
-        tailwind_value("gap-y", &node.row_gap),
-        format!("grow-[{:.1}]", node.flex_grow),
-        format!("shrink-[{:.1}]", node.flex_shrink),
-        tailwind_value("basis", &node.flex_basis),
-        tailwind_align_self(node.align_self).into(),
-        tailwind_value("w", &node.width),
-        tailwind_value("h", &node.height),
-        tailwind_value("min-w", &node.min_width),
-        tailwind_value("min-h", &node.min_height),
-        tailwind_value("max-w", &node.max_width),
-        tailwind_value("max-h", &node.max_height),
-        tailwind_value("p", &node.padding),
-        tailwind_value("m", &node.margin),
-        bg,
-        "box-border".into(),
     ];
+    if node.flex_direction != FlexDirection::Row {
+        classes.push(tailwind_flex_direction(node.flex_direction).into());
+    }
+    if node.flex_wrap != FlexWrap::NoWrap {
+        classes.push(tailwind_flex_wrap(node.flex_wrap).into());
+    }
+    if !matches!(node.justify_content, JustifyContent::Default | JustifyContent::FlexStart | JustifyContent::Start) {
+        classes.push(tailwind_justify_content(node.justify_content).into());
+    }
+    if !matches!(node.align_items, AlignItems::Default | AlignItems::Stretch) {
+        classes.push(tailwind_align_items(node.align_items).into());
+    }
+    if !matches!(node.align_content, AlignContent::Default | AlignContent::Stretch) {
+        classes.push(tailwind_align_content(node.align_content).into());
+    }
+    if !matches!(node.column_gap, ValueConfig::Auto) && !matches!(node.column_gap, ValueConfig::Px(v) if v == 0.0) {
+        classes.push(tailwind_value("gap-x", &node.column_gap));
+    }
+    if !matches!(node.row_gap, ValueConfig::Auto) && !matches!(node.row_gap, ValueConfig::Px(v) if v == 0.0) {
+        classes.push(tailwind_value("gap-y", &node.row_gap));
+    }
+    if node.flex_grow != 0.0 {
+        classes.push(format!("grow-[{}]", node.flex_grow));
+    }
+    if node.flex_shrink != 1.0 {
+        classes.push(format!("shrink-[{}]", node.flex_shrink));
+    }
+    if !matches!(node.flex_basis, ValueConfig::Auto) {
+        classes.push(tailwind_value("basis", &node.flex_basis));
+    }
+    if node.align_self != AlignSelf::Auto {
+        classes.push(tailwind_align_self(node.align_self).into());
+    }
+    if !matches!(node.width, ValueConfig::Auto) {
+        classes.push(tailwind_value("w", &node.width));
+    }
+    if !matches!(node.height, ValueConfig::Auto) {
+        classes.push(tailwind_value("h", &node.height));
+    }
+    if !matches!(node.min_width, ValueConfig::Auto) {
+        classes.push(tailwind_value("min-w", &node.min_width));
+    }
+    if !matches!(node.min_height, ValueConfig::Auto) && !matches!(node.min_height, ValueConfig::Px(v) if v == 0.0) {
+        classes.push(tailwind_value("min-h", &node.min_height));
+    }
+    if !matches!(node.max_width, ValueConfig::Auto) {
+        classes.push(tailwind_value("max-w", &node.max_width));
+    }
+    if !matches!(node.max_height, ValueConfig::Auto) {
+        classes.push(tailwind_value("max-h", &node.max_height));
+    }
+    if !matches!(node.padding, ValueConfig::Px(v) if v == 0.0) {
+        classes.push(tailwind_value("p", &node.padding));
+    }
+    if !matches!(node.margin, ValueConfig::Px(v) if v == 0.0) {
+        classes.push(tailwind_value("m", &node.margin));
+    }
+    classes.push(bg);
+    classes.push("box-border".into());
     if node.order != 0 {
         classes.push(format!("order-[{}]", node.order));
     }
@@ -166,7 +205,7 @@ fn emit_tailwind_node(
         let mut sorted: Vec<&NodeConfig> = node.children.iter().collect();
         sorted.sort_by_key(|c| c.order);
         for child in sorted {
-            emit_tailwind_node(buf, child, depth + 1, leaf_idx)?;
+            emit_tailwind_node(buf, child, depth + 1, leaf_idx, palette)?;
         }
         writeln!(buf, "{pad}</div>")?;
     }
@@ -188,16 +227,17 @@ mod tests {
 
     #[test]
     fn emits_flex_classes() {
-        let code = emit_tailwind(&test_container()).unwrap();
+        let code = emit_tailwind(&test_container(), ColorPalette::Pastel1).unwrap();
         assert!(code.contains("flex"));
-        assert!(code.contains("flex-row"));
+        // flex-row is the default and should be omitted
+        assert!(!code.contains("flex-row"));
     }
 
     #[test]
     fn emits_column_direction() {
         let mut root = test_container();
         root.flex_direction = FlexDirection::Column;
-        let code = emit_tailwind(&root).unwrap();
+        let code = emit_tailwind(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("flex-col"));
     }
 
@@ -207,7 +247,7 @@ mod tests {
         node.visible = false;
         let mut root = NodeConfig::new_container("root");
         root.children = vec![node];
-        let code = emit_tailwind(&root).unwrap();
+        let code = emit_tailwind(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("hidden"));
     }
 
@@ -217,13 +257,13 @@ mod tests {
         node.order = -2;
         let mut root = NodeConfig::new_container("root");
         root.children = vec![node];
-        let code = emit_tailwind(&root).unwrap();
+        let code = emit_tailwind(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("order-[-2]"));
     }
 
     #[test]
     fn emits_leaf_label() {
-        let code = emit_tailwind(&test_container()).unwrap();
+        let code = emit_tailwind(&test_container(), ColorPalette::Pastel1).unwrap();
         assert!(code.contains(">A</div>"));
         assert!(code.contains(">B</div>"));
     }
