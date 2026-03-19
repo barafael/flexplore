@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
 use strum::IntoEnumIterator;
 
-use crate::codegen::{emit_bevy_code, emit_html_css, emit_swiftui, emit_tailwind};
+use crate::codegen::{emit_bevy_code, emit_flutter, emit_html_css, emit_react, emit_swiftui, emit_tailwind};
 use crate::config::*;
 use crate::history::UndoHistory;
 
@@ -595,7 +595,9 @@ pub fn panel_system(
                         ("Bevy", |r| emit_bevy_code(r)),
                         ("HTML/CSS", |r| emit_html_css(r)),
                         ("Tailwind", |r| emit_tailwind(r)),
+                        ("React", |r| emit_react(r)),
                         ("SwiftUI", |r| emit_swiftui(r)),
+                        ("Flutter", |r| emit_flutter(r)),
                     ];
                     for (name, emitter) in copy_targets {
                         if ui.button(*name).on_hover_text(format!("Copy {name} code to clipboard")).clicked() {
