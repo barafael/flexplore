@@ -31,6 +31,9 @@ fn tailwind_justify_content(j: JustifyContent) -> &'static str {
         JustifyContent::SpaceBetween => "justify-between",
         JustifyContent::SpaceAround => "justify-around",
         JustifyContent::SpaceEvenly => "justify-evenly",
+        JustifyContent::Stretch => "justify-stretch",
+        JustifyContent::Start => "justify-start",
+        JustifyContent::End => "justify-end",
         _ => "justify-start",
     }
 }
@@ -42,6 +45,8 @@ fn tailwind_align_items(a: AlignItems) -> &'static str {
         AlignItems::Center => "items-center",
         AlignItems::Baseline => "items-baseline",
         AlignItems::Stretch => "items-stretch",
+        AlignItems::Start => "items-start",
+        AlignItems::End => "items-end",
         _ => "items-stretch",
     }
 }
@@ -55,6 +60,8 @@ fn tailwind_align_content(a: AlignContent) -> &'static str {
         AlignContent::SpaceAround => "content-around",
         AlignContent::SpaceEvenly => "content-evenly",
         AlignContent::Stretch => "content-stretch",
+        AlignContent::Start => "content-start",
+        AlignContent::End => "content-end",
         _ => "content-stretch",
     }
 }
@@ -67,13 +74,21 @@ fn tailwind_align_self(a: AlignSelf) -> &'static str {
         AlignSelf::Center => "self-center",
         AlignSelf::Baseline => "self-baseline",
         AlignSelf::Stretch => "self-stretch",
-        _ => "self-auto",
+        AlignSelf::Start => "self-start",
+        AlignSelf::End => "self-end",
     }
 }
 
 fn tailwind_value(property: &str, v: &ValueConfig) -> String {
     match v {
-        ValueConfig::Auto => format!("{property}-auto"),
+        ValueConfig::Auto => {
+            match property {
+                "w" | "h" | "basis" | "m" => format!("{property}-auto"),
+                "max-w" | "max-h" => format!("{property}-none"),
+                "p" | "gap-x" | "gap-y" | "min-w" | "min-h" => format!("{property}-0"),
+                _ => format!("{property}-auto"),
+            }
+        }
         ValueConfig::Px(n) => format!("{property}-[{n:.1}px]"),
         ValueConfig::Percent(n) => format!("{property}-[{n:.1}%]"),
         ValueConfig::Vw(n) => format!("{property}-[{n:.1}vw]"),
@@ -110,7 +125,7 @@ fn emit_tailwind_node(
     };
 
     let mut classes = vec![
-        "flex".into(),
+        (if node.visible { "flex" } else { "hidden" }).into(),
         tailwind_flex_direction(node.flex_direction).into(),
         tailwind_flex_wrap(node.flex_wrap).into(),
         tailwind_justify_content(node.justify_content).into(),
@@ -133,6 +148,9 @@ fn emit_tailwind_node(
         bg,
         "box-border".into(),
     ];
+    if node.order != 0 {
+        classes.push(format!("order-[{}]", node.order));
+    }
 
     if is_leaf {
         classes.push("text-[26px]".into());

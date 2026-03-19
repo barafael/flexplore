@@ -105,7 +105,14 @@ pub struct NodeConfig {
     pub max_height: ValueConfig,
     pub padding: ValueConfig,
     pub margin: ValueConfig,
+    pub order: i32,
+    #[serde(default = "default_true")]
+    pub visible: bool,
     pub children: Vec<NodeConfig>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl NodeConfig {
@@ -131,6 +138,8 @@ impl NodeConfig {
             max_height: ValueConfig::Auto,
             padding: ValueConfig::Px(8.0),
             margin: ValueConfig::Px(0.0),
+            order: 0,
+            visible: true,
             children: vec![],
         }
     }
@@ -157,6 +166,8 @@ impl NodeConfig {
             max_height: ValueConfig::Auto,
             padding: ValueConfig::Px(12.0),
             margin: ValueConfig::Px(0.0),
+            order: 0,
+            visible: true,
             children: vec![],
         }
     }
@@ -212,7 +223,9 @@ impl NodeConfig {
         let basis = self.flex_basis.kind();
         let w = self.width.display_short();
         let h = self.height.display_short();
-        format!("g:{g} s:{s}\nbasis:{basis} w:{w} h:{h}",)
+        let o = self.order;
+        let vis = if self.visible { "" } else { " [hidden]" };
+        format!("g:{g} s:{s}\nbasis:{basis} w:{w} h:{h}\norder:{o}{vis}")
     }
 }
 

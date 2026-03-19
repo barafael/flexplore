@@ -45,7 +45,11 @@ fn emit_node(
     writeln!(buf, "{pad}{spawner}.spawn((")?;
 
     writeln!(buf, "{pad}    Node {{")?;
-    writeln!(buf, "{pad}        display: Display::Flex,")?;
+    if node.visible {
+        writeln!(buf, "{pad}        display: Display::Flex,")?;
+    } else {
+        writeln!(buf, "{pad}        display: Display::None,")?;
+    }
     emit_field(
         buf,
         &pad,
@@ -110,6 +114,9 @@ fn emit_node(
         "margin",
         &format!("UiRect::all({})", emit_bevy_value(&node.margin)),
     )?;
+    if node.order != 0 {
+        writeln!(buf, "{pad}        // order: {} (no Bevy equivalent, use entity ordering)", node.order)?;
+    }
     writeln!(buf, "{pad}        ..default()")?;
     writeln!(buf, "{pad}    }},")?;
 
@@ -118,7 +125,16 @@ fn emit_node(
 
     if is_leaf {
         buf.push_str(".with_children(|parent| {\n");
-        writeln!(buf, "{pad}    parent.spawn((")?;
+        writeln!(buf, "{pad}    parent.spawn(Node {{")?;
+        writeln!(buf, "{pad}        position_type: PositionType::Absolute,")?;
+        writeln!(buf, "{pad}        top: Val::Px(0.0),")?;
+        writeln!(buf, "{pad}        left: Val::Px(0.0),")?;
+        writeln!(buf, "{pad}        right: Val::Px(0.0),")?;
+        writeln!(buf, "{pad}        bottom: Val::Px(0.0),")?;
+        writeln!(buf, "{pad}        justify_content: JustifyContent::Center,")?;
+        writeln!(buf, "{pad}        align_items: AlignItems::Center,")?;
+        writeln!(buf, "{pad}        ..default()")?;
+        writeln!(buf, "{pad}    }}).with_child((")?;
         writeln!(buf, "{pad}        Text::new({:?}),", node.label)?;
         writeln!(
             buf,
@@ -130,8 +146,6 @@ fn emit_node(
         )?;
         writeln!(buf, "{pad}    ));")?;
         writeln!(buf, "{pad}}});")?;
-    } else if node.children.is_empty() {
-        buf.push_str(";\n");
     } else {
         buf.push_str(".with_children(|parent| {\n");
         for child in &node.children {

@@ -25,10 +25,28 @@ fn swift_optional_value(v: &ValueConfig) -> Option<String> {
     }
 }
 
+fn swift_spacing_value(v: &ValueConfig) -> Option<String> {
+    match v {
+        ValueConfig::Px(n) => Some(format!("{n:.1}")),
+        ValueConfig::Vw(n) => Some(format!(
+            "UIScreen.main.bounds.width * {:.3}",
+            n / 100.0
+        )),
+        ValueConfig::Vh(n) => Some(format!(
+            "UIScreen.main.bounds.height * {:.3}",
+            n / 100.0
+        )),
+        ValueConfig::Percent(n) => Some(format!(
+            "{n:.1} /* {n:.1}% — no direct SwiftUI equivalent for percentage spacing */"
+        )),
+        ValueConfig::Auto => None,
+    }
+}
+
 fn swift_alignment(a: AlignItems) -> &'static str {
     match a {
-        AlignItems::FlexStart => ".top",
-        AlignItems::FlexEnd => ".bottom",
+        AlignItems::FlexStart | AlignItems::Start => ".top",
+        AlignItems::FlexEnd | AlignItems::End => ".bottom",
         AlignItems::Center => ".center",
         AlignItems::Baseline => ".firstTextBaseline",
         AlignItems::Stretch => ".center",
@@ -38,8 +56,8 @@ fn swift_alignment(a: AlignItems) -> &'static str {
 
 fn swift_h_alignment(a: AlignItems) -> &'static str {
     match a {
-        AlignItems::FlexStart => ".leading",
-        AlignItems::FlexEnd => ".trailing",
+        AlignItems::FlexStart | AlignItems::Start => ".leading",
+        AlignItems::FlexEnd | AlignItems::End => ".trailing",
         AlignItems::Center => ".center",
         _ => ".center",
     }
@@ -96,23 +114,51 @@ fn emit_swiftui_node(
         if let Some(p) = swift_optional_value(&node.padding) {
             writeln!(buf, "{pad}    .padding({p})")?;
         }
+        if let Some(m) = swift_optional_value(&node.margin) {
+            writeln!(buf, "{pad}    .padding({m}) /* margin */",)?;
+        }
+        if node.align_self != AlignSelf::Auto {
+            writeln!(
+                buf,
+                "{pad}    /* align-self: {:?} — override manually with .alignmentGuide() */",
+                node.align_self
+            )?;
+        }
+        if node.flex_grow > 0.0 {
+            writeln!(
+                buf,
+                "{pad}    .layoutPriority({:.1}) /* flex-grow */",
+                node.flex_grow
+            )?;
+        }
         writeln!(
             buf,
             "{pad}    .background(Color(red: {r:.2}, green: {g:.2}, blue: {b:.2}))"
         )?;
+        if !node.visible {
+            writeln!(buf, "{pad}    .hidden()")?;
+        }
+        if node.order != 0 {
+            writeln!(buf, "{pad}    // order: {} (no SwiftUI equivalent)", node.order)?;
+        }
     } else {
         let is_row = matches!(
             node.flex_direction,
             FlexDirection::Row | FlexDirection::RowReverse
         );
+        let is_reversed = matches!(
+            node.flex_direction,
+            FlexDirection::RowReverse | FlexDirection::ColumnReverse
+        );
 
-        let spacing = match &node.column_gap {
-            ValueConfig::Px(n) if is_row => format!(", spacing: {n:.1}"),
-            _ => match &node.row_gap {
-                ValueConfig::Px(n) if !is_row => format!(", spacing: {n:.1}"),
-                _ => String::new(),
-            },
+        let gap = if is_row {
+            &node.column_gap
+        } else {
+            &node.row_gap
         };
+        let spacing = swift_spacing_value(gap)
+            .map(|s| format!(", spacing: {s}"))
+            .unwrap_or_default();
 
         let alignment = if is_row {
             swift_alignment(node.align_items)
@@ -123,7 +169,30 @@ fn emit_swiftui_node(
         let stack = if is_row { "HStack" } else { "VStack" };
         writeln!(buf, "{pad}{stack}(alignment: {alignment}{spacing}) {{")?;
 
-        for child in &node.children {
+        if node.flex_wrap != FlexWrap::NoWrap {
+            writeln!(
+                buf,
+                "{pad}    // NOTE: flex-wrap: {:?} — SwiftUI stacks don't wrap; consider a custom Layout",
+                node.flex_wrap
+            )?;
+        }
+        if !matches!(
+            node.justify_content,
+            JustifyContent::Default | JustifyContent::FlexStart | JustifyContent::Start
+        ) {
+            writeln!(
+                buf,
+                "{pad}    // NOTE: justify-content: {:?} — use Spacer() or custom Layout to replicate",
+                node.justify_content
+            )?;
+        }
+
+        let children: Vec<&NodeConfig> = if is_reversed {
+            node.children.iter().rev().collect()
+        } else {
+            node.children.iter().collect()
+        };
+        for child in children {
             emit_swiftui_node(buf, child, depth + 1, leaf_idx)?;
         }
 
@@ -153,10 +222,19 @@ fn emit_swiftui_node(
         if let Some(p) = swift_optional_value(&node.padding) {
             writeln!(buf, "{pad}.padding({p})")?;
         }
+        if let Some(m) = swift_optional_value(&node.margin) {
+            writeln!(buf, "{pad}.padding({m}) /* margin */")?;
+        }
         writeln!(
             buf,
             "{pad}.background(Color(red: 0.11, green: 0.11, blue: 0.17))"
         )?;
+        if !node.visible {
+            writeln!(buf, "{pad}.hidden()")?;
+        }
+        if node.order != 0 {
+            writeln!(buf, "{pad}// order: {} (no SwiftUI equivalent)", node.order)?;
+        }
     }
     Ok(())
 }

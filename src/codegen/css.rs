@@ -41,6 +41,9 @@ fn css_justify_content(j: JustifyContent) -> &'static str {
         JustifyContent::SpaceBetween => "space-between",
         JustifyContent::SpaceAround => "space-around",
         JustifyContent::SpaceEvenly => "space-evenly",
+        JustifyContent::Stretch => "stretch",
+        JustifyContent::Start => "start",
+        JustifyContent::End => "end",
         _ => "flex-start",
     }
 }
@@ -52,6 +55,8 @@ fn css_align_items(a: AlignItems) -> &'static str {
         AlignItems::Center => "center",
         AlignItems::Baseline => "baseline",
         AlignItems::Stretch => "stretch",
+        AlignItems::Start => "start",
+        AlignItems::End => "end",
         _ => "stretch",
     }
 }
@@ -65,6 +70,8 @@ fn css_align_content(a: AlignContent) -> &'static str {
         AlignContent::SpaceAround => "space-around",
         AlignContent::SpaceEvenly => "space-evenly",
         AlignContent::Stretch => "stretch",
+        AlignContent::Start => "start",
+        AlignContent::End => "end",
         _ => "stretch",
     }
 }
@@ -77,7 +84,8 @@ fn css_align_self(a: AlignSelf) -> &'static str {
         AlignSelf::Center => "center",
         AlignSelf::Baseline => "baseline",
         AlignSelf::Stretch => "stretch",
-        _ => "auto",
+        AlignSelf::Start => "start",
+        AlignSelf::End => "end",
     }
 }
 
@@ -148,6 +156,12 @@ fn emit_html_node(
     writeln!(css, "  max-height: {};", emit_css_value(&node.max_height))?;
     writeln!(css, "  padding: {};", emit_css_value(&node.padding))?;
     writeln!(css, "  margin: {};", emit_css_value(&node.margin))?;
+    if !node.visible {
+        css.push_str("  display: none;\n");
+    }
+    if node.order != 0 {
+        writeln!(css, "  order: {};", node.order)?;
+    }
     writeln!(css, "  background: {bg};")?;
     css.push_str("  box-sizing: border-box;\n");
     if is_leaf {

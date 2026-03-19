@@ -14,10 +14,6 @@ use crate::config::*;
 pub struct VizRoot;
 
 #[derive(Component)]
-#[allow(dead_code)]
-pub struct ArtItemNode(usize);
-
-#[derive(Component)]
 pub struct VizNodePath(pub Vec<usize>);
 
 #[derive(Component)]
@@ -35,14 +31,14 @@ pub fn rebuild_viz(
     mut art: ResMut<ArtState>,
     roots: Query<Entity, With<VizRoot>>,
 ) {
-    if !cfg.needs_rebuild {
+    if !cfg.take_rebuild() {
         return;
     }
-    cfg.needs_rebuild = false;
     for e in &roots {
         commands.entity(e).despawn();
     }
     art.exprs.clear();
+    art.seeds.clear();
     art.handles.clear();
     if cfg.bg_mode == BackgroundMode::RandomArt {
         let n = cfg.root.count_leaves();
@@ -63,6 +59,7 @@ pub fn rebuild_viz(
                 RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
             );
             art.handles.push(images.add(image));
+            art.seeds.push(iseed);
             art.exprs.push(exprs);
         }
     }
@@ -108,7 +105,7 @@ fn spawn_viz(commands: &mut Commands, cfg: &FlexConfig, art: &ArtState) {
         &cfg.root,
         cfg,
         art,
-        &cfg.selected,
+        cfg.selected(),
         &[],
         &mut leaf_idx,
     );
@@ -144,7 +141,7 @@ fn spawn_node(
     };
 
     let node_bevy = Node {
-        display: Display::Flex,
+        display: if node.visible { Display::Flex } else { Display::None },
         flex_direction: node.flex_direction,
         flex_wrap: node.flex_wrap,
         justify_content: node.justify_content,
@@ -174,7 +171,6 @@ fn spawn_node(
         *leaf_idx += 1;
         let entity = commands
             .spawn((
-                ArtItemNode(my_idx),
                 node_bevy,
                 BackgroundColor(bg_color),
                 BorderColor::all(border_color),
@@ -241,7 +237,11 @@ fn spawn_node(
             .id();
         commands.entity(entity).add_child(lbl);
         commands.entity(parent_entity).add_child(entity);
-        for (i, child) in node.children.iter().enumerate() {
+        // Sort children by order for visual display, preserving original indices for paths.
+        let mut sorted_indices: Vec<usize> = (0..node.children.len()).collect();
+        sorted_indices.sort_by_key(|&i| node.children[i].order);
+        for i in sorted_indices {
+            let child = &node.children[i];
             let mut child_path = current_path.to_vec();
             child_path.push(i);
             spawn_node(
@@ -355,9 +355,8 @@ pub fn viz_click(
         }
     }
     if let Some(path) = best {
-        if cfg.selected != *path {
-            cfg.selected = path.clone();
-            cfg.needs_rebuild = true;
+        if cfg.selected() != *path {
+            cfg.select(path.clone());
         }
     }
 }
@@ -379,9 +378,9 @@ pub fn animate_art(
         return;
     }
     *last_t = t;
-    for (exprs, handle) in art.exprs.iter().zip(art.handles.iter()) {
+    for ((exprs, handle), seed) in art.exprs.iter().zip(art.handles.iter()).zip(art.seeds.iter()) {
         if let Some(image) = images.get_mut(handle) {
-            image.data = Some(exprs.render(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, t));
+            image.data = Some(cfg.art_style.render(exprs, *seed, t));
         }
     }
 }

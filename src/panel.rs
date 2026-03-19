@@ -28,6 +28,12 @@ fn draw_tree_ui(
         // Drag source: this row can be dragged (except root).
         let draw_row = |ui: &mut egui::Ui| {
             ui.add_space(path.len() as f32 * 14.0);
+            // Visibility toggle
+            let vis_icon = if node.visible { "\u{25C9}" } else { "\u{25CE}" };
+            if ui.small_button(vis_icon).on_hover_text("Toggle visibility").clicked() {
+                node.visible = !node.visible;
+                *changed = true;
+            }
             let icon = if node.children.is_empty() { "□" } else { "▣" };
             if is_selected {
                 let _ = ui.selectable_label(true, icon);
@@ -483,6 +489,9 @@ pub fn panel_system(
                                     ui.end_row();
                                     label_with_help(ui, "margin", "Space outside this node's border, pushing it away from siblings");
                                     hover_margin = val_row(ui, "im", &mut n.margin, &mut changed, &mut any_hovered);
+                                    ui.end_row();
+                                    label_with_help(ui, "order", "Controls visual ordering of flex items (lower values appear first)");
+                                    changed |= ui.add(egui::Slider::new(&mut n.order, -10..=10)).changed();
                                     ui.end_row();
                                 }
                             });
