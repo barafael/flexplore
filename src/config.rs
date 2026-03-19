@@ -236,6 +236,12 @@ pub enum ArtStyle {
     OpArt,
 }
 
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+pub enum Theme {
+    Dark,
+    Light,
+}
+
 // ─── Main resource ────────────────────────────────────────────────────────────
 
 #[derive(Resource, Clone, Serialize, Deserialize)]
@@ -248,6 +254,7 @@ pub struct FlexConfig {
     pub art_seed: u64,
     pub art_depth: u32,
     pub art_anim: f32,
+    pub theme: Theme,
     #[serde(skip)]
     needs_rebuild: bool,
 }
@@ -298,9 +305,42 @@ impl Default for FlexConfig {
             art_seed: 137,
             art_depth: 5,
             art_anim: 0.0,
+            theme: Theme::Dark,
             needs_rebuild: true,
         }
     }
+}
+
+/// Move a node from `from` path to become a child at `to` parent path.
+/// Returns true if the move was performed.
+pub fn move_node(root: &mut NodeConfig, from: &[usize], to_parent: &[usize], to_idx: usize) -> bool {
+    // Don't move a node into itself or its descendants.
+    if to_parent.starts_with(from) {
+        return false;
+    }
+    if from.is_empty() {
+        return false;
+    }
+
+    // Remove the node from its current location.
+    let from_parent = &from[..from.len() - 1];
+    let from_idx = from[from.len() - 1];
+    let Some(parent) = root.get_mut(from_parent) else { return false };
+    if from_idx >= parent.children.len() {
+        return false;
+    }
+    let node = parent.children.remove(from_idx);
+
+    // Adjust the target index if removing from the same parent shifted it.
+    let mut adj_idx = to_idx;
+    if from_parent == to_parent && from_idx < to_idx {
+        adj_idx = adj_idx.saturating_sub(1);
+    }
+
+    let Some(target) = root.get_mut(to_parent) else { return false };
+    let insert_at = adj_idx.min(target.children.len());
+    target.children.insert(insert_at, node);
+    true
 }
 
 fn format_float(v: f32) -> String {

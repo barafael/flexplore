@@ -8,43 +8,68 @@ use crate::history::UndoHistory;
 
 // ─── Tree UI helper ───────────────────────────────────────────────────────────
 
+/// Return type: (clicked path, remove requested, drag-drop move request (from, to_parent, to_idx))
 fn draw_tree_ui(
     ui: &mut egui::Ui,
     node: &mut NodeConfig,
     path: &mut Vec<usize>,
     selected: &[usize],
     changed: &mut bool,
-) -> (Option<Vec<usize>>, bool) {
+) -> (Option<Vec<usize>>, bool, Option<(Vec<usize>, Vec<usize>, usize)>) {
     let mut clicked = None;
     let mut remove = false;
+    let mut dnd_move = None;
     let is_selected = path.as_slice() == selected;
     let is_root = path.is_empty();
-    ui.horizontal(|ui| {
-        ui.add_space(path.len() as f32 * 14.0);
-        let icon = if node.children.is_empty() {
-            "□"
-        } else {
-            "▣"
+    let row_id = egui::Id::new("tree_dnd").with(&*path);
+
+    // Drop target: this row accepts drops *above* it (insert at this index).
+    let (_inner, drop_payload) = ui.dnd_drop_zone::<Vec<usize>, ()>(egui::Frame::NONE, |ui| {
+        // Drag source: this row can be dragged (except root).
+        let draw_row = |ui: &mut egui::Ui| {
+            ui.add_space(path.len() as f32 * 14.0);
+            let icon = if node.children.is_empty() { "□" } else { "▣" };
+            if is_selected {
+                let _ = ui.selectable_label(true, icon);
+                let r = ui.add(egui::TextEdit::singleline(&mut node.label).desired_width(80.0));
+                if r.changed() {
+                    *changed = true;
+                }
+                if !is_root && ui.small_button("x").clicked() {
+                    remove = true;
+                }
+            } else if ui
+                .selectable_label(false, format!("{} {}", icon, node.label))
+                .clicked()
+            {
+                clicked = Some(path.clone());
+            }
         };
-        if is_selected {
-            let _ = ui.selectable_label(true, icon);
-            let r = ui.add(egui::TextEdit::singleline(&mut node.label).desired_width(80.0));
-            if r.changed() {
-                *changed = true;
-            }
-            if !is_root && ui.small_button("x").clicked() {
-                remove = true;
-            }
-        } else if ui
-            .selectable_label(false, format!("{} {}", icon, node.label))
-            .clicked()
-        {
-            clicked = Some(path.clone());
+
+        if is_root {
+            ui.horizontal(draw_row);
+        } else {
+            ui.dnd_drag_source(row_id, path.clone(), |ui| {
+                ui.horizontal(draw_row);
+            });
         }
     });
+
+    // Check if something was dropped on this row.
+    if let Some(dragged) = drop_payload {
+        if !is_root {
+            let parent_path = path[..path.len() - 1].to_vec();
+            let idx = path[path.len() - 1];
+            dnd_move = Some(((*dragged).clone(), parent_path, idx));
+        } else {
+            // Dropped on root => append as child at position 0.
+            dnd_move = Some(((*dragged).clone(), vec![], 0));
+        }
+    }
+
     for i in 0..node.children.len() {
         path.push(i);
-        let (r, rem) = draw_tree_ui(ui, &mut node.children[i], path, selected, changed);
+        let (r, rem, mv) = draw_tree_ui(ui, &mut node.children[i], path, selected, changed);
         path.pop();
         if r.is_some() {
             clicked = r;
@@ -52,8 +77,11 @@ fn draw_tree_ui(
         if rem {
             remove = true;
         }
+        if mv.is_some() {
+            dnd_move = mv;
+        }
     }
-    (clicked, remove)
+    (clicked, remove, dnd_move)
 }
 
 // ─── Hover preview ────────────────────────────────────────────────────────────
@@ -88,8 +116,9 @@ pub fn panel_system(
     mut cfg: ResMut<FlexConfig>,
     mut history: ResMut<UndoHistory>,
     mut preview: Local<Option<FlexConfig>>,
-    mut style_done: Local<bool>,
+    mut applied_theme: Local<Option<Theme>>,
     mut import_buf: Local<String>,
+    mut toast: Local<Option<(String, f64)>>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
 
@@ -117,52 +146,17 @@ pub fn panel_system(
         }
     }
 
-    if !*style_done {
-        const BG: egui::Color32 = egui::Color32::from_rgb(0x10, 0x10, 0x14);
-        const MID: egui::Color32 = egui::Color32::from_rgb(0x2a, 0x2a, 0x30);
-        const FG: egui::Color32 = egui::Color32::from_rgb(0xe8, 0xe4, 0xd8);
-        let mut v = egui::Visuals::dark();
-        v.panel_fill = BG;
-        v.window_fill = BG;
-        v.extreme_bg_color = BG;
-        v.widgets.inactive.bg_fill = MID;
-        v.widgets.inactive.weak_bg_fill = MID;
-        v.widgets.inactive.bg_stroke =
-            egui::Stroke::new(1.0, egui::Color32::from_rgb(0x3a, 0x3a, 0x42));
-        v.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, FG);
-        v.widgets.hovered.bg_fill = egui::Color32::from_rgb(0x38, 0x38, 0x42);
-        v.widgets.hovered.weak_bg_fill = egui::Color32::from_rgb(0x38, 0x38, 0x42);
-        v.widgets.hovered.bg_stroke =
-            egui::Stroke::new(1.0, egui::Color32::from_rgb(0x88, 0x88, 0x98));
-        v.widgets.hovered.fg_stroke = egui::Stroke::new(1.5, FG);
-        v.widgets.active.bg_fill = FG;
-        v.widgets.active.weak_bg_fill = FG;
-        v.widgets.active.fg_stroke = egui::Stroke::new(1.5, BG);
-        v.widgets.open.bg_fill = MID;
-        v.widgets.open.fg_stroke = egui::Stroke::new(1.0, FG);
-        v.widgets.noninteractive.bg_fill = BG;
-        v.widgets.noninteractive.fg_stroke =
-            egui::Stroke::new(1.0, egui::Color32::from_rgb(0x70, 0x6e, 0x66));
-        v.widgets.noninteractive.bg_stroke =
-            egui::Stroke::new(1.0, egui::Color32::from_rgb(0x34, 0x34, 0x3a));
-        v.override_text_color = Some(FG);
-        v.window_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(0x3a, 0x3a, 0x42));
-        v.selection.bg_fill = egui::Color32::from_rgb(0x40, 0x40, 0x52);
-        let no_rounding = egui::CornerRadius::ZERO;
-        v.window_corner_radius = no_rounding;
-        v.menu_corner_radius = no_rounding;
-        v.widgets.inactive.corner_radius = no_rounding;
-        v.widgets.hovered.corner_radius = no_rounding;
-        v.widgets.active.corner_radius = no_rounding;
-        v.widgets.open.corner_radius = no_rounding;
-        v.widgets.noninteractive.corner_radius = no_rounding;
-        ctx.set_visuals(v);
-        let mut style = (*ctx.style()).clone();
-        style.spacing.item_spacing = egui::vec2(6.0, 3.0);
-        style.spacing.button_padding = egui::vec2(6.0, 2.0);
-        style.spacing.slider_width = 110.0;
-        ctx.set_style(style);
-        *style_done = true;
+    // ── Tree navigation shortcuts ────────────────────────────────────────────
+    let key_add_child = ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Enter));
+    let key_add_sibling = ctx.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::Enter));
+    let key_delete = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete));
+    let key_parent = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
+    let key_next = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown));
+    let key_prev = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp));
+
+    if *applied_theme != Some(cfg.theme) {
+        apply_theme(ctx, cfg.theme);
+        *applied_theme = Some(cfg.theme);
     }
 
     let mut changed = false;
@@ -189,6 +183,61 @@ pub fn panel_system(
     let mut sel_path = cfg.selected().to_vec();
     let mut is_root = sel_path.is_empty();
 
+    // ── Apply tree navigation shortcuts ──────────────────────────────────────
+    // Only handle when no text edit is focused.
+    if !ctx.wants_keyboard_input() {
+        if key_add_child {
+            let n = cfg.root.count_leaves();
+            let lbl = format!("node{}", n + 1);
+            if let Some(node) = cfg.root.get_mut(&sel_path) {
+                node.children.push(NodeConfig::new_leaf(&lbl, 80.0, 80.0));
+                changed = true;
+            }
+        }
+        if key_add_sibling && !is_root {
+            let pidx = sel_path.len() - 1;
+            let n = cfg.root.count_leaves();
+            let lbl = format!("node{}", n + 1);
+            if let Some(parent) = cfg.root.get_mut(&sel_path[..pidx]) {
+                parent.children.push(NodeConfig::new_leaf(&lbl, 80.0, 80.0));
+                changed = true;
+            }
+        }
+        if key_delete && !is_root {
+            let pidx = sel_path.len() - 1;
+            let idx = sel_path[pidx];
+            if let Some(parent) = cfg.root.get_mut(&sel_path[..pidx]) {
+                parent.children.remove(idx);
+            }
+            sel_path.truncate(pidx);
+            is_root = sel_path.is_empty();
+            cfg.select(sel_path.clone());
+            changed = true;
+        }
+        if key_parent && !is_root {
+            sel_path.pop();
+            is_root = sel_path.is_empty();
+            cfg.select(sel_path.clone());
+        }
+        if key_next && !is_root {
+            let pidx = sel_path.len() - 1;
+            let idx = sel_path[pidx];
+            let sibling_count = cfg.root.get(&sel_path[..pidx]).map_or(0, |p| p.children.len());
+            if idx + 1 < sibling_count {
+                sel_path[pidx] = idx + 1;
+                cfg.select(sel_path.clone());
+            }
+        }
+        if key_prev && !is_root {
+            let pidx = sel_path.len() - 1;
+            let idx = sel_path[pidx];
+            if idx > 0 {
+                sel_path[pidx] = idx - 1;
+                cfg.select(sel_path.clone());
+            }
+        }
+    }
+
     egui::SidePanel::left("flex_panel")
         .exact_width(PANEL_WIDTH)
         .resizable(false)
@@ -196,8 +245,13 @@ pub fn panel_system(
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.add_space(4.0);
 
-                // ── Undo / Redo buttons ──────────────────────────────────────────
+                // ── Toolbar ───────────────────────────────────────────────────────
                 ui.horizontal(|ui| {
+                    if ui.button(match cfg.theme { Theme::Dark => "Light mode", Theme::Light => "Dark mode" }).clicked() {
+                        cfg.theme = match cfg.theme { Theme::Dark => Theme::Light, Theme::Light => Theme::Dark };
+                        changed = true;
+                    }
+                    ui.separator();
                     if ui.add_enabled(history.can_undo(), egui::Button::new("⟲ Undo")).clicked() {
                         if let Some(snapshot) = history.undo() {
                             *cfg = snapshot.clone();
@@ -240,7 +294,13 @@ pub fn panel_system(
                         });
                         ui.add_space(2.0);
                         let sel_snapshot = cfg.selected().to_vec();
-                        let (clicked, remove_req) = draw_tree_ui(ui, &mut cfg.root, &mut vec![], &sel_snapshot, &mut changed);
+                        let (clicked, remove_req, dnd_req) = draw_tree_ui(ui, &mut cfg.root, &mut vec![], &sel_snapshot, &mut changed);
+                        if let Some((from, to_parent, to_idx)) = dnd_req {
+                            if crate::config::move_node(&mut cfg.root, &from, &to_parent, to_idx) {
+                                cfg.sanitize_selection();
+                                changed = true;
+                            }
+                        }
                         if remove_req && !sel_path.is_empty() {
                             let pidx = sel_path.len() - 1;
                             let idx = sel_path[pidx];
@@ -522,17 +582,26 @@ pub fn panel_system(
                 ui.add_space(4.0);
                 ui.label("Copy code:");
                 ui.horizontal(|ui| {
-                    if ui.button("Bevy").on_hover_text("Copy Bevy/Rust UI code to clipboard").clicked() {
-                        ui.ctx().copy_text(emit_bevy_code(&cfg.root).expect("codegen failed"));
-                    }
-                    if ui.button("HTML/CSS").on_hover_text("Copy HTML + CSS flexbox code to clipboard").clicked() {
-                        ui.ctx().copy_text(emit_html_css(&cfg.root).expect("codegen failed"));
-                    }
-                    if ui.button("Tailwind").on_hover_text("Copy Tailwind CSS markup to clipboard").clicked() {
-                        ui.ctx().copy_text(emit_tailwind(&cfg.root).expect("codegen failed"));
-                    }
-                    if ui.button("SwiftUI").on_hover_text("Copy SwiftUI HStack/VStack code to clipboard").clicked() {
-                        ui.ctx().copy_text(emit_swiftui(&cfg.root).expect("codegen failed"));
+                    let copy_targets: &[(&str, fn(&NodeConfig) -> anyhow::Result<String>)] = &[
+                        ("Bevy", |r| emit_bevy_code(r)),
+                        ("HTML/CSS", |r| emit_html_css(r)),
+                        ("Tailwind", |r| emit_tailwind(r)),
+                        ("SwiftUI", |r| emit_swiftui(r)),
+                    ];
+                    for (name, emitter) in copy_targets {
+                        if ui.button(*name).on_hover_text(format!("Copy {name} code to clipboard")).clicked() {
+                            match emitter(&cfg.root) {
+                                Ok(code) => {
+                                    ui.ctx().copy_text(code);
+                                    let now = ui.ctx().input(|i| i.time);
+                                    *toast = Some((format!("Copied {name}!"), now + 2.0));
+                                }
+                                Err(e) => {
+                                    let now = ui.ctx().input(|i| i.time);
+                                    *toast = Some((format!("Error: {e}"), now + 3.0));
+                                }
+                            }
+                        }
                     }
                 });
             });
@@ -547,7 +616,118 @@ pub fn panel_system(
         cfg.sanitize_selection();
         cfg.request_rebuild();
     }
+
+    // ── Toast overlay ────────────────────────────────────────────────────────
+    if let Some((msg, expiry)) = &*toast {
+        let now = ctx.input(|i| i.time);
+        if now < *expiry {
+            egui::Area::new(egui::Id::new("toast"))
+                .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -16.0))
+                .show(ctx, |ui| {
+                    egui::Frame::new()
+                        .fill(egui::Color32::from_rgb(0x30, 0x80, 0x40))
+                        .corner_radius(4.0)
+                        .inner_margin(egui::Margin::same(10))
+                        .show(ui, |ui| {
+                            ui.colored_label(egui::Color32::WHITE, msg);
+                        });
+                });
+            ctx.request_repaint();
+        } else {
+            *toast = None;
+        }
+    }
+
     Ok(())
+}
+
+// ─── Theme ───────────────────────────────────────────────────────────────────
+
+fn apply_theme(ctx: &egui::Context, theme: Theme) {
+    let no_rounding = egui::CornerRadius::ZERO;
+    let mut v = match theme {
+        Theme::Dark => {
+            const BG: egui::Color32 = egui::Color32::from_rgb(0x10, 0x10, 0x14);
+            const MID: egui::Color32 = egui::Color32::from_rgb(0x2a, 0x2a, 0x30);
+            const FG: egui::Color32 = egui::Color32::from_rgb(0xe8, 0xe4, 0xd8);
+            let mut v = egui::Visuals::dark();
+            v.panel_fill = BG;
+            v.window_fill = BG;
+            v.extreme_bg_color = BG;
+            v.widgets.inactive.bg_fill = MID;
+            v.widgets.inactive.weak_bg_fill = MID;
+            v.widgets.inactive.bg_stroke =
+                egui::Stroke::new(1.0, egui::Color32::from_rgb(0x3a, 0x3a, 0x42));
+            v.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, FG);
+            v.widgets.hovered.bg_fill = egui::Color32::from_rgb(0x38, 0x38, 0x42);
+            v.widgets.hovered.weak_bg_fill = egui::Color32::from_rgb(0x38, 0x38, 0x42);
+            v.widgets.hovered.bg_stroke =
+                egui::Stroke::new(1.0, egui::Color32::from_rgb(0x88, 0x88, 0x98));
+            v.widgets.hovered.fg_stroke = egui::Stroke::new(1.5, FG);
+            v.widgets.active.bg_fill = FG;
+            v.widgets.active.weak_bg_fill = FG;
+            v.widgets.active.fg_stroke = egui::Stroke::new(1.5, BG);
+            v.widgets.open.bg_fill = MID;
+            v.widgets.open.fg_stroke = egui::Stroke::new(1.0, FG);
+            v.widgets.noninteractive.bg_fill = BG;
+            v.widgets.noninteractive.fg_stroke =
+                egui::Stroke::new(1.0, egui::Color32::from_rgb(0x70, 0x6e, 0x66));
+            v.widgets.noninteractive.bg_stroke =
+                egui::Stroke::new(1.0, egui::Color32::from_rgb(0x34, 0x34, 0x3a));
+            v.override_text_color = Some(FG);
+            v.window_stroke =
+                egui::Stroke::new(1.0, egui::Color32::from_rgb(0x3a, 0x3a, 0x42));
+            v.selection.bg_fill = egui::Color32::from_rgb(0x40, 0x40, 0x52);
+            v
+        }
+        Theme::Light => {
+            const BG: egui::Color32 = egui::Color32::from_rgb(0xf4, 0xf2, 0xee);
+            const MID: egui::Color32 = egui::Color32::from_rgb(0xe0, 0xde, 0xd8);
+            const FG: egui::Color32 = egui::Color32::from_rgb(0x20, 0x20, 0x24);
+            let mut v = egui::Visuals::light();
+            v.panel_fill = BG;
+            v.window_fill = BG;
+            v.extreme_bg_color = egui::Color32::WHITE;
+            v.widgets.inactive.bg_fill = MID;
+            v.widgets.inactive.weak_bg_fill = MID;
+            v.widgets.inactive.bg_stroke =
+                egui::Stroke::new(1.0, egui::Color32::from_rgb(0xc0, 0xbe, 0xb8));
+            v.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, FG);
+            v.widgets.hovered.bg_fill = egui::Color32::from_rgb(0xd4, 0xd2, 0xcc);
+            v.widgets.hovered.weak_bg_fill = egui::Color32::from_rgb(0xd4, 0xd2, 0xcc);
+            v.widgets.hovered.bg_stroke =
+                egui::Stroke::new(1.0, egui::Color32::from_rgb(0x88, 0x88, 0x90));
+            v.widgets.hovered.fg_stroke = egui::Stroke::new(1.5, FG);
+            v.widgets.active.bg_fill = FG;
+            v.widgets.active.weak_bg_fill = FG;
+            v.widgets.active.fg_stroke = egui::Stroke::new(1.5, BG);
+            v.widgets.open.bg_fill = MID;
+            v.widgets.open.fg_stroke = egui::Stroke::new(1.0, FG);
+            v.widgets.noninteractive.bg_fill = BG;
+            v.widgets.noninteractive.fg_stroke =
+                egui::Stroke::new(1.0, egui::Color32::from_rgb(0x60, 0x5e, 0x58));
+            v.widgets.noninteractive.bg_stroke =
+                egui::Stroke::new(1.0, egui::Color32::from_rgb(0xc4, 0xc2, 0xbc));
+            v.override_text_color = Some(FG);
+            v.window_stroke =
+                egui::Stroke::new(1.0, egui::Color32::from_rgb(0xc0, 0xbe, 0xb8));
+            v.selection.bg_fill = egui::Color32::from_rgb(0xc0, 0xd0, 0xe8);
+            v
+        }
+    };
+    v.window_corner_radius = no_rounding;
+    v.menu_corner_radius = no_rounding;
+    v.widgets.inactive.corner_radius = no_rounding;
+    v.widgets.hovered.corner_radius = no_rounding;
+    v.widgets.active.corner_radius = no_rounding;
+    v.widgets.open.corner_radius = no_rounding;
+    v.widgets.noninteractive.corner_radius = no_rounding;
+    ctx.set_visuals(v);
+    let mut style = (*ctx.style()).clone();
+    style.spacing.item_spacing = egui::vec2(6.0, 3.0);
+    style.spacing.button_padding = egui::vec2(6.0, 2.0);
+    style.spacing.slider_width = 110.0;
+    ctx.set_style(style);
 }
 
 // ─── egui helpers ─────────────────────────────────────────────────────────────
