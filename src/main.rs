@@ -6,6 +6,7 @@ mod config;
 mod history;
 mod panel;
 mod persist;
+mod templates;
 mod viz;
 
 use bevy::prelude::*;

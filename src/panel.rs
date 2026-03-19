@@ -514,6 +514,29 @@ pub fn panel_system(
 
                 } // end if path_valid
 
+                egui::CollapsingHeader::new("Templates")
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        let templates: &[(&str, fn() -> NodeConfig)] = &[
+                            ("Holy Grail", crate::templates::holy_grail),
+                            ("Sidebar + Content", crate::templates::sidebar_content),
+                            ("Card Grid", crate::templates::card_grid),
+                            ("Nav Bar", crate::templates::nav_bar),
+                        ];
+                        ui.horizontal_wrapped(|ui| {
+                            for (name, builder) in templates {
+                                if ui.button(*name).clicked() {
+                                    cfg.root = builder();
+                                    cfg.select(vec![]);
+                                    *preview = None;
+                                    changed = true;
+                                }
+                            }
+                        });
+                    });
+
+                ui.add_space(6.0);
+
                 egui::CollapsingHeader::new("Background")
                     .default_open(true)
                     .show(ui, |ui| {
