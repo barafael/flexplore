@@ -8,11 +8,11 @@ use bevy::{
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, egui};
 use rand::{Rng, SeedableRng, rngs::StdRng};
 
-const PANEL_W: f32 = 390.0;
-const ART_SZ: u32 = 128;
+const PANEL_WIDTH: f32 = 390.0;
+const ART_TEXTURE_SIZE: u32 = 128;
 
 #[derive(Clone, PartialEq, Debug)]
-enum ValCfg {
+enum ValueConfig {
     Auto,
     Px(f32),
     Percent(f32),
@@ -20,45 +20,45 @@ enum ValCfg {
     Vh(f32),
 }
 
-impl ValCfg {
+impl ValueConfig {
     fn to_val(&self) -> Val {
         match self {
-            ValCfg::Auto => Val::Auto,
-            ValCfg::Px(v) => Val::Px(*v),
-            ValCfg::Percent(v) => Val::Percent(*v),
-            ValCfg::Vw(v) => Val::Vw(*v),
-            ValCfg::Vh(v) => Val::Vh(*v),
+            ValueConfig::Auto => Val::Auto,
+            ValueConfig::Px(v) => Val::Px(*v),
+            ValueConfig::Percent(v) => Val::Percent(*v),
+            ValueConfig::Vw(v) => Val::Vw(*v),
+            ValueConfig::Vh(v) => Val::Vh(*v),
         }
     }
     fn variant(&self) -> &'static str {
         match self {
-            ValCfg::Auto => "Auto",
-            ValCfg::Px(_) => "Px",
-            ValCfg::Percent(_) => "Percent",
-            ValCfg::Vw(_) => "Vw",
-            ValCfg::Vh(_) => "Vh",
+            ValueConfig::Auto => "Auto",
+            ValueConfig::Px(_) => "Px",
+            ValueConfig::Percent(_) => "Percent",
+            ValueConfig::Vw(_) => "Vw",
+            ValueConfig::Vh(_) => "Vh",
         }
     }
     fn num(&self) -> Option<f32> {
         match self {
-            ValCfg::Auto => None,
-            ValCfg::Px(v) | ValCfg::Percent(v) | ValCfg::Vw(v) | ValCfg::Vh(v) => Some(*v),
+            ValueConfig::Auto => None,
+            ValueConfig::Px(v) | ValueConfig::Percent(v) | ValueConfig::Vw(v) | ValueConfig::Vh(v) => Some(*v),
         }
     }
     fn set_num(&mut self, n: f32) {
         match self {
-            ValCfg::Px(v) | ValCfg::Percent(v) | ValCfg::Vw(v) | ValCfg::Vh(v) => *v = n,
+            ValueConfig::Px(v) | ValueConfig::Percent(v) | ValueConfig::Vw(v) | ValueConfig::Vh(v) => *v = n,
             _ => {}
         }
     }
     fn cast(&self, variant: &str) -> Self {
         let n = self.num().unwrap_or(100.0);
         match variant {
-            "Px" => ValCfg::Px(n),
-            "Percent" => ValCfg::Percent(n),
-            "Vw" => ValCfg::Vw(n),
-            "Vh" => ValCfg::Vh(n),
-            _ => ValCfg::Auto,
+            "Px" => ValueConfig::Px(n),
+            "Percent" => ValueConfig::Percent(n),
+            "Vw" => ValueConfig::Vw(n),
+            "Vh" => ValueConfig::Vh(n),
+            _ => ValueConfig::Auto,
         }
     }
 }
@@ -66,7 +66,7 @@ impl ValCfg {
 // ─── Node config (recursive tree) ────────────────────────────────────────────
 
 #[derive(Clone)]
-struct NodeCfg {
+struct NodeConfig {
     label: String,
     // flex container props (how children are arranged)
     flex_direction: FlexDirection,
@@ -74,26 +74,26 @@ struct NodeCfg {
     justify_content: JustifyContent,
     align_items: AlignItems,
     align_content: AlignContent,
-    row_gap: ValCfg,
-    column_gap: ValCfg,
+    row_gap: ValueConfig,
+    column_gap: ValueConfig,
     // flex item + sizing props (how this node fits in its parent)
     flex_grow: f32,
     flex_shrink: f32,
-    flex_basis: ValCfg,
+    flex_basis: ValueConfig,
     align_self: AlignSelf,
-    width: ValCfg,
-    height: ValCfg,
-    min_width: ValCfg,
-    min_height: ValCfg,
-    max_width: ValCfg,
-    max_height: ValCfg,
-    padding: ValCfg,
-    margin: ValCfg,
+    width: ValueConfig,
+    height: ValueConfig,
+    min_width: ValueConfig,
+    min_height: ValueConfig,
+    max_width: ValueConfig,
+    max_height: ValueConfig,
+    padding: ValueConfig,
+    margin: ValueConfig,
     // children
-    children: Vec<NodeCfg>,
+    children: Vec<NodeConfig>,
 }
 
-impl NodeCfg {
+impl NodeConfig {
     fn new_leaf(label: impl Into<String>, w: f32, h: f32) -> Self {
         Self {
             label: label.into(),
@@ -102,20 +102,20 @@ impl NodeCfg {
             justify_content: JustifyContent::Center,
             align_items: AlignItems::Center,
             align_content: AlignContent::FlexStart,
-            row_gap: ValCfg::Px(4.0),
-            column_gap: ValCfg::Px(4.0),
+            row_gap: ValueConfig::Px(4.0),
+            column_gap: ValueConfig::Px(4.0),
             flex_grow: 0.0,
             flex_shrink: 1.0,
-            flex_basis: ValCfg::Auto,
+            flex_basis: ValueConfig::Auto,
             align_self: AlignSelf::Auto,
-            width: ValCfg::Px(w),
-            height: ValCfg::Px(h),
-            min_width: ValCfg::Auto,
-            min_height: ValCfg::Auto,
-            max_width: ValCfg::Auto,
-            max_height: ValCfg::Auto,
-            padding: ValCfg::Px(8.0),
-            margin: ValCfg::Px(0.0),
+            width: ValueConfig::Px(w),
+            height: ValueConfig::Px(h),
+            min_width: ValueConfig::Auto,
+            min_height: ValueConfig::Auto,
+            max_width: ValueConfig::Auto,
+            max_height: ValueConfig::Auto,
+            padding: ValueConfig::Px(8.0),
+            margin: ValueConfig::Px(0.0),
             children: vec![],
         }
     }
@@ -128,47 +128,47 @@ impl NodeCfg {
             justify_content: JustifyContent::FlexStart,
             align_items: AlignItems::FlexStart,
             align_content: AlignContent::FlexStart,
-            row_gap: ValCfg::Px(8.0),
-            column_gap: ValCfg::Px(8.0),
+            row_gap: ValueConfig::Px(8.0),
+            column_gap: ValueConfig::Px(8.0),
             flex_grow: 1.0,
             flex_shrink: 1.0,
-            flex_basis: ValCfg::Auto,
+            flex_basis: ValueConfig::Auto,
             align_self: AlignSelf::Auto,
-            width: ValCfg::Percent(100.0),
-            height: ValCfg::Auto,
-            min_width: ValCfg::Auto,
-            min_height: ValCfg::Px(0.0),
-            max_width: ValCfg::Auto,
-            max_height: ValCfg::Auto,
-            padding: ValCfg::Px(12.0),
-            margin: ValCfg::Px(0.0),
+            width: ValueConfig::Percent(100.0),
+            height: ValueConfig::Auto,
+            min_width: ValueConfig::Auto,
+            min_height: ValueConfig::Px(0.0),
+            max_width: ValueConfig::Auto,
+            max_height: ValueConfig::Auto,
+            padding: ValueConfig::Px(12.0),
+            margin: ValueConfig::Px(0.0),
             children: vec![],
         }
     }
 }
 
-fn get_node<'a>(root: &'a NodeCfg, path: &[usize]) -> &'a NodeCfg {
+fn get_node<'a>(root: &'a NodeConfig, path: &[usize]) -> &'a NodeConfig {
     if path.is_empty() { root } else { get_node(&root.children[path[0]], &path[1..]) }
 }
 
-fn get_node_mut<'a>(root: &'a mut NodeCfg, path: &[usize]) -> &'a mut NodeCfg {
+fn get_node_mut<'a>(root: &'a mut NodeConfig, path: &[usize]) -> &'a mut NodeConfig {
     if path.is_empty() { root } else { get_node_mut(&mut root.children[path[0]], &path[1..]) }
 }
 
-fn path_valid(root: &NodeCfg, path: &[usize]) -> bool {
+fn path_valid(root: &NodeConfig, path: &[usize]) -> bool {
     if path.is_empty() { return true; }
     if path[0] >= root.children.len() { return false; }
     path_valid(&root.children[path[0]], &path[1..])
 }
 
-fn count_leaves(node: &NodeCfg) -> usize {
+fn count_leaves(node: &NodeConfig) -> usize {
     if node.children.is_empty() { 1 } else { node.children.iter().map(count_leaves).sum() }
 }
 
 // ─── Background mode + art style ─────────────────────────────────────────────
 
 #[derive(Clone, PartialEq, Debug)]
-enum BgMode {
+enum BackgroundMode {
     Pastel,
     RandomArt,
 }
@@ -195,10 +195,10 @@ impl ArtStyle {
 // ─── Main resource ────────────────────────────────────────────────────────────
 
 #[derive(Resource, Clone)]
-struct FlexCfg {
-    root: NodeCfg,
+struct FlexConfig {
+    root: NodeConfig,
     selected: Vec<usize>, // path to selected node; empty = root
-    bg_mode: BgMode,
+    bg_mode: BackgroundMode,
     art_style: ArtStyle,
     art_seed: u64,
     art_depth: u32,
@@ -206,20 +206,20 @@ struct FlexCfg {
     needs_rebuild: bool,
 }
 
-impl Default for FlexCfg {
+impl Default for FlexConfig {
     fn default() -> Self {
-        let mut root = NodeCfg::new_container("root");
-        root.min_height = ValCfg::Px(200.0);
+        let mut root = NodeConfig::new_container("root");
+        root.min_height = ValueConfig::Px(200.0);
         root.children = vec![
-            NodeCfg::new_leaf("A", 80.0, 80.0),
-            NodeCfg::new_leaf("B", 120.0, 100.0),
-            NodeCfg::new_leaf("C", 60.0, 60.0),
-            NodeCfg::new_leaf("D", 100.0, 80.0),
+            NodeConfig::new_leaf("A", 80.0, 80.0),
+            NodeConfig::new_leaf("B", 120.0, 100.0),
+            NodeConfig::new_leaf("C", 60.0, 60.0),
+            NodeConfig::new_leaf("D", 100.0, 80.0),
         ];
         Self {
             root,
             selected: vec![],
-            bg_mode: BgMode::Pastel,
+            bg_mode: BackgroundMode::Pastel,
             art_style: ArtStyle::ExprTree,
             art_seed: 137,
             art_depth: 5,
@@ -305,12 +305,12 @@ impl Expr {
     }
 }
 
-fn art_ch(v: f32) -> u8 {
+fn color_channel_to_byte(v: f32) -> u8 {
     (((v + 1.0) * 0.5).clamp(0.0, 1.0) * 255.0) as u8
 }
 
-struct ArtExprs { r: Expr, g: Expr, b: Expr }
-impl ArtExprs {
+struct ArtExpressions { r: Expr, g: Expr, b: Expr }
+impl ArtExpressions {
     fn generate(seed: u64, depth: u32) -> Self {
         let mut rng = StdRng::seed_from_u64(seed);
         Self {
@@ -325,9 +325,9 @@ impl ArtExprs {
             let i = i as u32;
             let py = (i / w) as f32 / h as f32 * 2.0 - 1.0;
             let px = (i % w) as f32 / w as f32 * 2.0 - 1.0;
-            ch[0] = art_ch(self.r.eval(px, py, t));
-            ch[1] = art_ch(self.g.eval(px, py, t));
-            ch[2] = art_ch(self.b.eval(px, py, t));
+            ch[0] = color_channel_to_byte(self.r.eval(px, py, t));
+            ch[1] = color_channel_to_byte(self.g.eval(px, py, t));
+            ch[2] = color_channel_to_byte(self.b.eval(px, py, t));
         }
         pix
     }
@@ -335,20 +335,20 @@ impl ArtExprs {
 
 // ─── CPU generative backgrounds ───────────────────────────────────────────────
 
-fn hash2(ix: i32, iy: i32, seed: u64) -> f32 {
+fn hash_2d(ix: i32, iy: i32, seed: u64) -> f32 {
     let h = (ix as u64)
         .wrapping_mul(2654435761)
         .wrapping_add((iy as u64).wrapping_mul(2246822519))
         .wrapping_add(seed.wrapping_mul(0x9e3779b97f4a7c15));
     (h >> 32) as f32 / u32::MAX as f32
 }
-fn snoise(x: f32, y: f32, seed: u64) -> f32 {
+fn smooth_noise(x: f32, y: f32, seed: u64) -> f32 {
     let (ix, iy) = (x.floor() as i32, y.floor() as i32);
     let (fx, fy) = (x - x.floor(), y - y.floor());
     let (ux, uy) = (fx * fx * (3.0 - 2.0 * fx), fy * fy * (3.0 - 2.0 * fy));
     let (a, b, c, d) = (
-        hash2(ix, iy, seed), hash2(ix + 1, iy, seed),
-        hash2(ix, iy + 1, seed), hash2(ix + 1, iy + 1, seed),
+        hash_2d(ix, iy, seed), hash_2d(ix + 1, iy, seed),
+        hash_2d(ix, iy + 1, seed), hash_2d(ix + 1, iy + 1, seed),
     );
     a * (1.0 - ux) * (1.0 - uy) + b * ux * (1.0 - uy) + c * (1.0 - ux) * uy + d * ux * uy
 }
@@ -364,8 +364,8 @@ fn render_voronoi(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
         for dy in -2..=2i32 {
             for dx in -2..=2i32 {
                 let (cx, cy) = (sx + dx, sy + dy);
-                let fx = (cx as f32 + hash2(cx, cy, seed)) / scale - px;
-                let fy = (cy as f32 + hash2(cx, cy, seed.wrapping_add(999))) / scale - py;
+                let fx = (cx as f32 + hash_2d(cx, cy, seed)) / scale - px;
+                let fy = (cy as f32 + hash_2d(cx, cy, seed.wrapping_add(999))) / scale - py;
                 let d = (fx * fx + fy * fy).sqrt();
                 if d < d1 { d2 = d1; d1 = d; cid = (cx as u64).wrapping_mul(1000003).wrapping_add(cy as u64); }
                 else if d < d2 { d2 = d; }
@@ -373,9 +373,9 @@ fn render_voronoi(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
         }
         let e = ((d2 - d1) / (d1 + d2 + 0.001)).clamp(0.0, 1.0);
         let ef = (e * 8.0).clamp(0.0, 1.0);
-        ch[0] = ((hash2(cid as i32, 0, seed) * 0.5 + 0.5) * ef * 255.0) as u8;
-        ch[1] = ((hash2(cid as i32, 1, seed) * 0.5 + 0.5) * ef * 255.0) as u8;
-        ch[2] = ((hash2(cid as i32, 2, seed) * 0.5 + 0.5) * ef * 255.0) as u8;
+        ch[0] = ((hash_2d(cid as i32, 0, seed) * 0.5 + 0.5) * ef * 255.0) as u8;
+        ch[1] = ((hash_2d(cid as i32, 1, seed) * 0.5 + 0.5) * ef * 255.0) as u8;
+        ch[2] = ((hash_2d(cid as i32, 2, seed) * 0.5 + 0.5) * ef * 255.0) as u8;
     }
     pix
 }
@@ -383,19 +383,19 @@ fn render_voronoi(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
 fn render_flow_field(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
     let mut pix = vec![225u8; (w * h * 4) as usize];
     for ch in pix.chunks_mut(4) { ch[0] = 225; ch[1] = 235; ch[2] = 250; ch[3] = 255; }
-    let freq = 3.5 + snoise(0.1, 0.2, seed) * 2.0;
+    let freq = 3.5 + smooth_noise(0.1, 0.2, seed) * 2.0;
     let warp = 0.6 + t * 0.2;
-    let lr = (hash2(seed as i32, 0, seed.wrapping_add(7)) * 100.0 + 30.0) as u8;
-    let lg = (hash2(seed as i32, 1, seed.wrapping_add(7)) * 100.0 + 30.0) as u8;
-    let lb = (hash2(seed as i32, 2, seed.wrapping_add(7)) * 100.0 + 100.0) as u8;
+    let lr = (hash_2d(seed as i32, 0, seed.wrapping_add(7)) * 100.0 + 30.0) as u8;
+    let lg = (hash_2d(seed as i32, 1, seed.wrapping_add(7)) * 100.0 + 30.0) as u8;
+    let lb = (hash_2d(seed as i32, 2, seed.wrapping_add(7)) * 100.0 + 100.0) as u8;
     for li in 0..20usize {
         let (mut px, mut py) = (
-            hash2(li as i32, 0, seed.wrapping_add(li as u64 * 17)),
-            hash2(li as i32, 1, seed.wrapping_add(li as u64 * 17)),
+            hash_2d(li as i32, 0, seed.wrapping_add(li as u64 * 17)),
+            hash_2d(li as i32, 1, seed.wrapping_add(li as u64 * 17)),
         );
         for _ in 0..60 {
-            let nx = snoise(px * freq, py * freq, seed);
-            let ny = snoise(px * freq + 13.7, py * freq + 7.3, seed);
+            let nx = smooth_noise(px * freq, py * freq, seed);
+            let ny = smooth_noise(px * freq + 13.7, py * freq + 7.3, seed);
             let angle = (nx * 2.0 - 1.0 + warp * (ny * 2.0 - 1.0)) * std::f32::consts::TAU;
             let (xi, yi) = ((px * w as f32) as i32, (py * h as f32) as i32);
             for ddy in -1i32..=1 {
@@ -416,7 +416,7 @@ fn render_flow_field(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
 
 fn render_crackle(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
     let mut pix = vec![255u8; (w * h * 4) as usize];
-    let scale = 4.0 + snoise(0.0, 0.0, seed) * 3.0;
+    let scale = 4.0 + smooth_noise(0.0, 0.0, seed) * 3.0;
     let jitter = 0.8 + t * 0.1;
     let (bg, crack) = ([0.93f32, 0.97, 0.99], [0.05f32, 0.18, 0.28]);
     for (i, ch) in pix.chunks_mut(4).enumerate() {
@@ -427,8 +427,8 @@ fn render_crackle(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
         for dy in -2..=2i32 {
             for dx in -2..=2i32 {
                 let (cx, cy) = (sx + dx, sy + dy);
-                let rx = (hash2(cx, cy, seed) * 2.0 - 1.0) * jitter;
-                let ry = (hash2(cx, cy, seed.wrapping_add(777)) * 2.0 - 1.0) * jitter;
+                let rx = (hash_2d(cx, cy, seed) * 2.0 - 1.0) * jitter;
+                let ry = (hash_2d(cx, cy, seed.wrapping_add(777)) * 2.0 - 1.0) * jitter;
                 let fx = (cx as f32 + 0.5 + rx) / scale - px;
                 let fy = (cy as f32 + 0.5 + ry) / scale - py;
                 let d = (fx * fx + fy * fy).sqrt();
@@ -445,15 +445,15 @@ fn render_crackle(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
 
 fn render_op_art(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
     let mut pix = vec![255u8; (w * h * 4) as usize];
-    let rings = 6.0 + snoise(0.1, 0.1, seed) * 4.0;
-    let warp  = 0.3 + snoise(0.2, 0.3, seed) * 0.4;
-    let freq  = 2.0 + snoise(0.3, 0.4, seed) * 2.0;
-    let twist = snoise(0.4, 0.5, seed) * 1.5;
-    let fg = [hash2(seed as i32, 0, seed), hash2(seed as i32, 1, seed), hash2(seed as i32, 2, seed)];
+    let rings = 6.0 + smooth_noise(0.1, 0.1, seed) * 4.0;
+    let warp  = 0.3 + smooth_noise(0.2, 0.3, seed) * 0.4;
+    let freq  = 2.0 + smooth_noise(0.3, 0.4, seed) * 2.0;
+    let twist = smooth_noise(0.4, 0.5, seed) * 1.5;
+    let fg = [hash_2d(seed as i32, 0, seed), hash_2d(seed as i32, 1, seed), hash_2d(seed as i32, 2, seed)];
     let bg = [
-        hash2(seed as i32, 3, seed) * 0.3 + 0.7,
-        hash2(seed as i32, 4, seed) * 0.3 + 0.7,
-        hash2(seed as i32, 5, seed) * 0.3 + 0.7,
+        hash_2d(seed as i32, 3, seed) * 0.3 + 0.7,
+        hash_2d(seed as i32, 4, seed) * 0.3 + 0.7,
+        hash_2d(seed as i32, 5, seed) * 0.3 + 0.7,
     ];
     for (i, ch) in pix.chunks_mut(4).enumerate() {
         let i = i as u32;
@@ -461,8 +461,8 @@ fn render_op_art(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
             (i % w) as f32 / w as f32 * 2.0 - 1.0,
             (i / w) as f32 / h as f32 * 2.0 - 1.0,
         );
-        let wx = warp * (snoise(px * freq + 0.1, py * freq + 0.1, seed) * 2.0 - 1.0);
-        let wy = warp * (snoise(px * freq + 5.7, py * freq + 3.2, seed) * 2.0 - 1.0);
+        let wx = warp * (smooth_noise(px * freq + 0.1, py * freq + 0.1, seed) * 2.0 - 1.0);
+        let wy = warp * (smooth_noise(px * freq + 5.7, py * freq + 3.2, seed) * 2.0 - 1.0);
         let r = ((px + wx) * (px + wx) + (py + wy) * (py + wy)).sqrt();
         let angle = (py + wy).atan2(px + wx);
         let v = (r * rings + angle * twist + t * std::f32::consts::TAU).sin();
@@ -474,13 +474,13 @@ fn render_op_art(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
     pix
 }
 
-fn render_art(style: &ArtStyle, exprs: &ArtExprs, seed: u64, t: f32) -> Vec<u8> {
+fn render_art(style: &ArtStyle, exprs: &ArtExpressions, seed: u64, t: f32) -> Vec<u8> {
     match style {
-        ArtStyle::ExprTree  => exprs.render(ART_SZ, ART_SZ, t),
-        ArtStyle::Voronoi   => render_voronoi(ART_SZ, ART_SZ, seed, t),
-        ArtStyle::FlowField => render_flow_field(ART_SZ, ART_SZ, seed, t),
-        ArtStyle::Crackle   => render_crackle(ART_SZ, ART_SZ, seed, t),
-        ArtStyle::OpArt     => render_op_art(ART_SZ, ART_SZ, seed, t),
+        ArtStyle::ExprTree  => exprs.render(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, t),
+        ArtStyle::Voronoi   => render_voronoi(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, seed, t),
+        ArtStyle::FlowField => render_flow_field(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, seed, t),
+        ArtStyle::Crackle   => render_crackle(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, seed, t),
+        ArtStyle::OpArt     => render_op_art(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, seed, t),
     }
 }
 
@@ -488,7 +488,7 @@ fn render_art(style: &ArtStyle, exprs: &ArtExprs, seed: u64, t: f32) -> Vec<u8> 
 
 #[derive(Resource, Default)]
 struct ArtState {
-    exprs: Vec<ArtExprs>,
+    exprs: Vec<ArtExpressions>,
     handles: Vec<Handle<Image>>,
 }
 
@@ -514,6 +514,14 @@ struct VizRoot;
 #[allow(dead_code)]
 struct ArtItemNode(usize);
 
+#[derive(Component)]
+struct VizNodePath(Vec<usize>);
+
+#[derive(Component)]
+struct VizNodeInfo(String);
+
+#[derive(Component)]
+struct VizTooltip;
 
 // ─── App ─────────────────────────────────────────────────────────────────────
 
@@ -530,11 +538,11 @@ fn main() {
             }),
             EguiPlugin::default(),
         ))
-        .init_resource::<FlexCfg>()
+        .init_resource::<FlexConfig>()
         .init_resource::<ArtState>()
         .add_systems(Startup, setup)
         .add_systems(EguiPrimaryContextPass, panel_system)
-        .add_systems(Update, (rebuild_viz, animate_art).chain())
+        .add_systems(Update, (viz_click, viz_tooltip, rebuild_viz, animate_art).chain())
         .run();
 }
 
@@ -547,7 +555,7 @@ fn setup(mut commands: Commands) {
 /// Returns (clicked_path, remove_requested)
 fn draw_tree_ui(
     ui: &mut egui::Ui,
-    node: &mut NodeCfg,
+    node: &mut NodeConfig,
     path: &mut Vec<usize>,
     selected: &[usize],
     changed: &mut bool,
@@ -582,13 +590,13 @@ fn draw_tree_ui(
 
 /// Estimate a text scale factor from a node's configured dimensions.
 /// Returns a multiplier relative to the "base" 80px node size, capped at 2x.
-fn text_scale(node: &NodeCfg) -> f32 {
-    fn approx_px(v: &ValCfg) -> Option<f32> {
+fn text_scale(node: &NodeConfig) -> f32 {
+    fn approx_px(v: &ValueConfig) -> Option<f32> {
         match v {
-            ValCfg::Px(n) => Some(*n),
-            ValCfg::Percent(n) => Some(n / 100.0 * 600.0), // assume ~600px reference
-            ValCfg::Vw(n) | ValCfg::Vh(n) => Some(n / 100.0 * 800.0),
-            ValCfg::Auto => None,
+            ValueConfig::Px(n) => Some(*n),
+            ValueConfig::Percent(n) => Some(n / 100.0 * 600.0), // assume ~600px reference
+            ValueConfig::Vw(n) | ValueConfig::Vh(n) => Some(n / 100.0 * 800.0),
+            ValueConfig::Auto => None,
         }
     }
     let w = approx_px(&node.width);
@@ -605,24 +613,24 @@ fn text_scale(node: &NodeCfg) -> f32 {
 
 // ─── Code generation ─────────────────────────────────────────────────────────
 
-fn emit_val(v: &ValCfg) -> String {
+fn emit_bevy_value(v: &ValueConfig) -> String {
     match v {
-        ValCfg::Auto => "Val::Auto".into(),
-        ValCfg::Px(n) => format!("Val::Px({n:.1})"),
-        ValCfg::Percent(n) => format!("Val::Percent({n:.1})"),
-        ValCfg::Vw(n) => format!("Val::Vw({n:.1})"),
-        ValCfg::Vh(n) => format!("Val::Vh({n:.1})"),
+        ValueConfig::Auto => "Val::Auto".into(),
+        ValueConfig::Px(n) => format!("Val::Px({n:.1})"),
+        ValueConfig::Percent(n) => format!("Val::Percent({n:.1})"),
+        ValueConfig::Vw(n) => format!("Val::Vw({n:.1})"),
+        ValueConfig::Vh(n) => format!("Val::Vh({n:.1})"),
     }
 }
 
-fn emit_bevy_code(root: &NodeCfg) -> String {
+fn emit_bevy_code(root: &NodeConfig) -> String {
     let mut buf = String::from("fn spawn_ui(commands: &mut Commands) {\n");
     emit_node(&mut buf, root, 1, &mut 0, true);
     buf.push_str("}\n");
     buf
 }
 
-fn emit_node(buf: &mut String, node: &NodeCfg, depth: usize, leaf_idx: &mut usize, is_root: bool) {
+fn emit_node(buf: &mut String, node: &NodeConfig, depth: usize, leaf_idx: &mut usize, is_root: bool) {
     let pad = "    ".repeat(depth);
     let is_leaf = node.children.is_empty();
 
@@ -646,20 +654,20 @@ fn emit_node(buf: &mut String, node: &NodeCfg, depth: usize, leaf_idx: &mut usiz
     emit_field(buf, &pad, "justify_content", &format!("JustifyContent::{:?}", node.justify_content));
     emit_field(buf, &pad, "align_items", &format!("AlignItems::{:?}", node.align_items));
     emit_field(buf, &pad, "align_content", &format!("AlignContent::{:?}", node.align_content));
-    emit_field(buf, &pad, "row_gap", &emit_val(&node.row_gap));
-    emit_field(buf, &pad, "column_gap", &emit_val(&node.column_gap));
+    emit_field(buf, &pad, "row_gap", &emit_bevy_value(&node.row_gap));
+    emit_field(buf, &pad, "column_gap", &emit_bevy_value(&node.column_gap));
     emit_field(buf, &pad, "flex_grow", &format!("{:.1}", node.flex_grow));
     emit_field(buf, &pad, "flex_shrink", &format!("{:.1}", node.flex_shrink));
-    emit_field(buf, &pad, "flex_basis", &emit_val(&node.flex_basis));
+    emit_field(buf, &pad, "flex_basis", &emit_bevy_value(&node.flex_basis));
     emit_field(buf, &pad, "align_self", &format!("AlignSelf::{:?}", node.align_self));
-    emit_field(buf, &pad, "width", &emit_val(&node.width));
-    emit_field(buf, &pad, "height", &emit_val(&node.height));
-    emit_field(buf, &pad, "min_width", &emit_val(&node.min_width));
-    emit_field(buf, &pad, "min_height", &emit_val(&node.min_height));
-    emit_field(buf, &pad, "max_width", &emit_val(&node.max_width));
-    emit_field(buf, &pad, "max_height", &emit_val(&node.max_height));
-    emit_field(buf, &pad, "padding", &format!("UiRect::all({})", emit_val(&node.padding)));
-    emit_field(buf, &pad, "margin", &format!("UiRect::all({})", emit_val(&node.margin)));
+    emit_field(buf, &pad, "width", &emit_bevy_value(&node.width));
+    emit_field(buf, &pad, "height", &emit_bevy_value(&node.height));
+    emit_field(buf, &pad, "min_width", &emit_bevy_value(&node.min_width));
+    emit_field(buf, &pad, "min_height", &emit_bevy_value(&node.min_height));
+    emit_field(buf, &pad, "max_width", &emit_bevy_value(&node.max_width));
+    emit_field(buf, &pad, "max_height", &emit_bevy_value(&node.max_height));
+    emit_field(buf, &pad, "padding", &format!("UiRect::all({})", emit_bevy_value(&node.padding)));
+    emit_field(buf, &pad, "margin", &format!("UiRect::all({})", emit_bevy_value(&node.margin)));
     buf.push_str(&format!("{pad}        ..default()\n"));
     buf.push_str(&format!("{pad}    }},\n"));
 
@@ -693,13 +701,13 @@ fn emit_field(buf: &mut String, pad: &str, name: &str, value: &str) {
 
 // ─── HTML/CSS code generation ────────────────────────────────────────────────
 
-fn emit_css_val(v: &ValCfg) -> String {
+fn emit_css_value(v: &ValueConfig) -> String {
     match v {
-        ValCfg::Auto => "auto".into(),
-        ValCfg::Px(n) => format!("{n:.1}px"),
-        ValCfg::Percent(n) => format!("{n:.1}%"),
-        ValCfg::Vw(n) => format!("{n:.1}vw"),
-        ValCfg::Vh(n) => format!("{n:.1}vh"),
+        ValueConfig::Auto => "auto".into(),
+        ValueConfig::Px(n) => format!("{n:.1}px"),
+        ValueConfig::Percent(n) => format!("{n:.1}%"),
+        ValueConfig::Vw(n) => format!("{n:.1}vw"),
+        ValueConfig::Vh(n) => format!("{n:.1}vh"),
     }
 }
 
@@ -768,7 +776,7 @@ fn css_align_self(a: AlignSelf) -> &'static str {
     }
 }
 
-fn emit_html_css(root: &NodeCfg) -> String {
+fn emit_html_css(root: &NodeConfig) -> String {
     let mut css = String::new();
     let mut html = String::new();
     emit_html_node(&mut css, &mut html, root, 0, &mut 0, &mut 0);
@@ -780,7 +788,7 @@ fn emit_html_css(root: &NodeCfg) -> String {
 fn emit_html_node(
     css: &mut String,
     html: &mut String,
-    node: &NodeCfg,
+    node: &NodeConfig,
     depth: usize,
     leaf_idx: &mut usize,
     id_counter: &mut usize,
@@ -812,20 +820,20 @@ fn emit_html_node(
     css.push_str(&format!("  justify-content: {};\n", css_justify_content(node.justify_content)));
     css.push_str(&format!("  align-items: {};\n", css_align_items(node.align_items)));
     css.push_str(&format!("  align-content: {};\n", css_align_content(node.align_content)));
-    css.push_str(&format!("  row-gap: {};\n", emit_css_val(&node.row_gap)));
-    css.push_str(&format!("  column-gap: {};\n", emit_css_val(&node.column_gap)));
+    css.push_str(&format!("  row-gap: {};\n", emit_css_value(&node.row_gap)));
+    css.push_str(&format!("  column-gap: {};\n", emit_css_value(&node.column_gap)));
     css.push_str(&format!("  flex-grow: {:.1};\n", node.flex_grow));
     css.push_str(&format!("  flex-shrink: {:.1};\n", node.flex_shrink));
-    css.push_str(&format!("  flex-basis: {};\n", emit_css_val(&node.flex_basis)));
+    css.push_str(&format!("  flex-basis: {};\n", emit_css_value(&node.flex_basis)));
     css.push_str(&format!("  align-self: {};\n", css_align_self(node.align_self)));
-    css.push_str(&format!("  width: {};\n", emit_css_val(&node.width)));
-    css.push_str(&format!("  height: {};\n", emit_css_val(&node.height)));
-    css.push_str(&format!("  min-width: {};\n", emit_css_val(&node.min_width)));
-    css.push_str(&format!("  min-height: {};\n", emit_css_val(&node.min_height)));
-    css.push_str(&format!("  max-width: {};\n", emit_css_val(&node.max_width)));
-    css.push_str(&format!("  max-height: {};\n", emit_css_val(&node.max_height)));
-    css.push_str(&format!("  padding: {};\n", emit_css_val(&node.padding)));
-    css.push_str(&format!("  margin: {};\n", emit_css_val(&node.margin)));
+    css.push_str(&format!("  width: {};\n", emit_css_value(&node.width)));
+    css.push_str(&format!("  height: {};\n", emit_css_value(&node.height)));
+    css.push_str(&format!("  min-width: {};\n", emit_css_value(&node.min_width)));
+    css.push_str(&format!("  min-height: {};\n", emit_css_value(&node.min_height)));
+    css.push_str(&format!("  max-width: {};\n", emit_css_value(&node.max_width)));
+    css.push_str(&format!("  max-height: {};\n", emit_css_value(&node.max_height)));
+    css.push_str(&format!("  padding: {};\n", emit_css_value(&node.padding)));
+    css.push_str(&format!("  margin: {};\n", emit_css_value(&node.margin)));
     css.push_str(&format!("  background: {bg};\n"));
     css.push_str(&format!("  box-sizing: border-box;\n"));
     if is_leaf {
@@ -851,7 +859,7 @@ fn emit_html_node(
 
 // ─── Tailwind HTML code generation ───────────────────────────────────────────
 
-fn tw_flex_direction(d: FlexDirection) -> &'static str {
+fn tailwind_flex_direction(d: FlexDirection) -> &'static str {
     match d {
         FlexDirection::Row => "flex-row",
         FlexDirection::Column => "flex-col",
@@ -860,7 +868,7 @@ fn tw_flex_direction(d: FlexDirection) -> &'static str {
     }
 }
 
-fn tw_flex_wrap(w: FlexWrap) -> &'static str {
+fn tailwind_flex_wrap(w: FlexWrap) -> &'static str {
     match w {
         FlexWrap::NoWrap => "flex-nowrap",
         FlexWrap::Wrap => "flex-wrap",
@@ -868,7 +876,7 @@ fn tw_flex_wrap(w: FlexWrap) -> &'static str {
     }
 }
 
-fn tw_justify_content(j: JustifyContent) -> &'static str {
+fn tailwind_justify_content(j: JustifyContent) -> &'static str {
     match j {
         JustifyContent::FlexStart => "justify-start",
         JustifyContent::FlexEnd => "justify-end",
@@ -880,7 +888,7 @@ fn tw_justify_content(j: JustifyContent) -> &'static str {
     }
 }
 
-fn tw_align_items(a: AlignItems) -> &'static str {
+fn tailwind_align_items(a: AlignItems) -> &'static str {
     match a {
         AlignItems::FlexStart => "items-start",
         AlignItems::FlexEnd => "items-end",
@@ -891,7 +899,7 @@ fn tw_align_items(a: AlignItems) -> &'static str {
     }
 }
 
-fn tw_align_content(a: AlignContent) -> &'static str {
+fn tailwind_align_content(a: AlignContent) -> &'static str {
     match a {
         AlignContent::FlexStart => "content-start",
         AlignContent::FlexEnd => "content-end",
@@ -904,7 +912,7 @@ fn tw_align_content(a: AlignContent) -> &'static str {
     }
 }
 
-fn tw_align_self(a: AlignSelf) -> &'static str {
+fn tailwind_align_self(a: AlignSelf) -> &'static str {
     match a {
         AlignSelf::Auto => "self-auto",
         AlignSelf::FlexStart => "self-start",
@@ -916,23 +924,23 @@ fn tw_align_self(a: AlignSelf) -> &'static str {
     }
 }
 
-fn tw_val(property: &str, v: &ValCfg) -> String {
+fn tailwind_value(property: &str, v: &ValueConfig) -> String {
     match v {
-        ValCfg::Auto => format!("{property}-auto"),
-        ValCfg::Px(n) => format!("{property}-[{n:.1}px]"),
-        ValCfg::Percent(n) => format!("{property}-[{n:.1}%]"),
-        ValCfg::Vw(n) => format!("{property}-[{n:.1}vw]"),
-        ValCfg::Vh(n) => format!("{property}-[{n:.1}vh]"),
+        ValueConfig::Auto => format!("{property}-auto"),
+        ValueConfig::Px(n) => format!("{property}-[{n:.1}px]"),
+        ValueConfig::Percent(n) => format!("{property}-[{n:.1}%]"),
+        ValueConfig::Vw(n) => format!("{property}-[{n:.1}vw]"),
+        ValueConfig::Vh(n) => format!("{property}-[{n:.1}vh]"),
     }
 }
 
-fn emit_tailwind(root: &NodeCfg) -> String {
+fn emit_tailwind(root: &NodeConfig) -> String {
     let mut buf = String::new();
     emit_tailwind_node(&mut buf, root, 0, &mut 0);
     buf
 }
 
-fn emit_tailwind_node(buf: &mut String, node: &NodeCfg, depth: usize, leaf_idx: &mut usize) {
+fn emit_tailwind_node(buf: &mut String, node: &NodeConfig, depth: usize, leaf_idx: &mut usize) {
     let pad = "  ".repeat(depth);
     let is_leaf = node.children.is_empty();
 
@@ -951,25 +959,25 @@ fn emit_tailwind_node(buf: &mut String, node: &NodeCfg, depth: usize, leaf_idx: 
 
     let mut classes = vec![
         "flex".into(),
-        tw_flex_direction(node.flex_direction).into(),
-        tw_flex_wrap(node.flex_wrap).into(),
-        tw_justify_content(node.justify_content).into(),
-        tw_align_items(node.align_items).into(),
-        tw_align_content(node.align_content).into(),
-        tw_val("gap-x", &node.column_gap),
-        tw_val("gap-y", &node.row_gap),
+        tailwind_flex_direction(node.flex_direction).into(),
+        tailwind_flex_wrap(node.flex_wrap).into(),
+        tailwind_justify_content(node.justify_content).into(),
+        tailwind_align_items(node.align_items).into(),
+        tailwind_align_content(node.align_content).into(),
+        tailwind_value("gap-x", &node.column_gap),
+        tailwind_value("gap-y", &node.row_gap),
         format!("grow-[{:.1}]", node.flex_grow),
         format!("shrink-[{:.1}]", node.flex_shrink),
-        tw_val("basis", &node.flex_basis),
-        tw_align_self(node.align_self).into(),
-        tw_val("w", &node.width),
-        tw_val("h", &node.height),
-        tw_val("min-w", &node.min_width),
-        tw_val("min-h", &node.min_height),
-        tw_val("max-w", &node.max_width),
-        tw_val("max-h", &node.max_height),
-        tw_val("p", &node.padding),
-        tw_val("m", &node.margin),
+        tailwind_value("basis", &node.flex_basis),
+        tailwind_align_self(node.align_self).into(),
+        tailwind_value("w", &node.width),
+        tailwind_value("h", &node.height),
+        tailwind_value("min-w", &node.min_width),
+        tailwind_value("min-h", &node.min_height),
+        tailwind_value("max-w", &node.max_width),
+        tailwind_value("max-h", &node.max_height),
+        tailwind_value("p", &node.padding),
+        tailwind_value("m", &node.margin),
         bg,
         "box-border".into(),
     ];
@@ -994,20 +1002,20 @@ fn emit_tailwind_node(buf: &mut String, node: &NodeCfg, depth: usize, leaf_idx: 
 
 // ─── SwiftUI code generation ─────────────────────────────────────────────────
 
-fn swift_val(v: &ValCfg) -> String {
+fn swift_value(v: &ValueConfig) -> String {
     match v {
-        ValCfg::Auto => ".infinity".into(),
-        ValCfg::Px(n) => format!("{n:.1}"),
-        ValCfg::Percent(n) => format!("{n:.1} /* {n:.1}% — use GeometryReader for relative sizing */"),
-        ValCfg::Vw(n) => format!("UIScreen.main.bounds.width * {:.3}", n / 100.0),
-        ValCfg::Vh(n) => format!("UIScreen.main.bounds.height * {:.3}", n / 100.0),
+        ValueConfig::Auto => ".infinity".into(),
+        ValueConfig::Px(n) => format!("{n:.1}"),
+        ValueConfig::Percent(n) => format!("{n:.1} /* {n:.1}% — use GeometryReader for relative sizing */"),
+        ValueConfig::Vw(n) => format!("UIScreen.main.bounds.width * {:.3}", n / 100.0),
+        ValueConfig::Vh(n) => format!("UIScreen.main.bounds.height * {:.3}", n / 100.0),
     }
 }
 
-fn swift_optional_val(v: &ValCfg) -> Option<String> {
+fn swift_optional_value(v: &ValueConfig) -> Option<String> {
     match v {
-        ValCfg::Auto => None,
-        _ => Some(swift_val(v)),
+        ValueConfig::Auto => None,
+        _ => Some(swift_value(v)),
     }
 }
 
@@ -1031,14 +1039,14 @@ fn swift_h_alignment(a: AlignItems) -> &'static str {
     }
 }
 
-fn emit_swiftui(root: &NodeCfg) -> String {
+fn emit_swiftui(root: &NodeConfig) -> String {
     let mut buf = String::from("struct ContentView: View {\n    var body: some View {\n");
     emit_swiftui_node(&mut buf, root, 2, &mut 0);
     buf.push_str("    }\n}\n");
     buf
 }
 
-fn emit_swiftui_node(buf: &mut String, node: &NodeCfg, depth: usize, leaf_idx: &mut usize) {
+fn emit_swiftui_node(buf: &mut String, node: &NodeConfig, depth: usize, leaf_idx: &mut usize) {
     let pad = "    ".repeat(depth);
     let is_leaf = node.children.is_empty();
 
@@ -1053,18 +1061,18 @@ fn emit_swiftui_node(buf: &mut String, node: &NodeCfg, depth: usize, leaf_idx: &
         ));
 
         // Frame
-        let w = swift_optional_val(&node.width);
-        let h = swift_optional_val(&node.height);
+        let w = swift_optional_value(&node.width);
+        let h = swift_optional_value(&node.height);
         if w.is_some() || h.is_some() {
             let w_str = w.as_deref().unwrap_or("nil");
             let h_str = h.as_deref().unwrap_or("nil");
             buf.push_str(&format!("{pad}    .frame(width: {w_str}, height: {h_str})\n"));
         }
         // Min/max frame
-        let min_w = swift_optional_val(&node.min_width);
-        let min_h = swift_optional_val(&node.min_height);
-        let max_w = swift_optional_val(&node.max_width);
-        let max_h = swift_optional_val(&node.max_height);
+        let min_w = swift_optional_value(&node.min_width);
+        let min_h = swift_optional_value(&node.min_height);
+        let max_w = swift_optional_value(&node.max_width);
+        let max_h = swift_optional_value(&node.max_height);
         if min_w.is_some() || min_h.is_some() || max_w.is_some() || max_h.is_some() {
             buf.push_str(&format!(
                 "{pad}    .frame(minWidth: {}, minHeight: {}, maxWidth: {}, maxHeight: {})\n",
@@ -1074,7 +1082,7 @@ fn emit_swiftui_node(buf: &mut String, node: &NodeCfg, depth: usize, leaf_idx: &
                 max_h.as_deref().unwrap_or("nil"),
             ));
         }
-        if let Some(p) = swift_optional_val(&node.padding) {
+        if let Some(p) = swift_optional_value(&node.padding) {
             buf.push_str(&format!("{pad}    .padding({p})\n"));
         }
         buf.push_str(&format!(
@@ -1088,9 +1096,9 @@ fn emit_swiftui_node(buf: &mut String, node: &NodeCfg, depth: usize, leaf_idx: &
         );
 
         let spacing = match &node.column_gap {
-            ValCfg::Px(n) if is_row => format!(", spacing: {n:.1}"),
+            ValueConfig::Px(n) if is_row => format!(", spacing: {n:.1}"),
             _ => match &node.row_gap {
-                ValCfg::Px(n) if !is_row => format!(", spacing: {n:.1}"),
+                ValueConfig::Px(n) if !is_row => format!(", spacing: {n:.1}"),
                 _ => String::new(),
             },
         };
@@ -1111,17 +1119,17 @@ fn emit_swiftui_node(buf: &mut String, node: &NodeCfg, depth: usize, leaf_idx: &
         buf.push_str(&format!("{pad}}}\n"));
 
         // Frame modifiers on the container
-        let w = swift_optional_val(&node.width);
-        let h = swift_optional_val(&node.height);
+        let w = swift_optional_value(&node.width);
+        let h = swift_optional_value(&node.height);
         if w.is_some() || h.is_some() {
             let w_str = w.as_deref().unwrap_or("nil");
             let h_str = h.as_deref().unwrap_or("nil");
             buf.push_str(&format!("{pad}.frame(width: {w_str}, height: {h_str})\n"));
         }
-        let min_w = swift_optional_val(&node.min_width);
-        let min_h = swift_optional_val(&node.min_height);
-        let max_w = swift_optional_val(&node.max_width);
-        let max_h = swift_optional_val(&node.max_height);
+        let min_w = swift_optional_value(&node.min_width);
+        let min_h = swift_optional_value(&node.min_height);
+        let max_w = swift_optional_value(&node.max_width);
+        let max_h = swift_optional_value(&node.max_height);
         if min_w.is_some() || min_h.is_some() || max_w.is_some() || max_h.is_some() {
             buf.push_str(&format!(
                 "{pad}.frame(minWidth: {}, minHeight: {}, maxWidth: {}, maxHeight: {})\n",
@@ -1131,7 +1139,7 @@ fn emit_swiftui_node(buf: &mut String, node: &NodeCfg, depth: usize, leaf_idx: &
                 max_h.as_deref().unwrap_or("nil"),
             ));
         }
-        if let Some(p) = swift_optional_val(&node.padding) {
+        if let Some(p) = swift_optional_value(&node.padding) {
             buf.push_str(&format!("{pad}.padding({p})\n"));
         }
         buf.push_str(&format!(
@@ -1142,11 +1150,11 @@ fn emit_swiftui_node(buf: &mut String, node: &NodeCfg, depth: usize, leaf_idx: &
 
 fn apply_hover<T: PartialEq + Clone>(
     opt: Option<T>,
-    cfg: &mut FlexCfg,
-    preview: &mut Option<FlexCfg>,
+    cfg: &mut FlexConfig,
+    preview: &mut Option<FlexConfig>,
     path: &[usize],
-    get: impl Fn(&NodeCfg) -> T,
-    set: impl FnOnce(&mut NodeCfg, T),
+    get: impl Fn(&NodeConfig) -> T,
+    set: impl FnOnce(&mut NodeConfig, T),
 ) -> bool {
     let Some(v) = opt else { return false };
     if get(get_node(&cfg.root, path)) != v {
@@ -1162,8 +1170,8 @@ fn apply_hover<T: PartialEq + Clone>(
 
 fn panel_system(
     mut contexts: EguiContexts,
-    mut cfg: ResMut<FlexCfg>,
-    mut preview: Local<Option<FlexCfg>>,
+    mut cfg: ResMut<FlexConfig>,
+    mut preview: Local<Option<FlexConfig>>,
     mut style_done: Local<bool>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
@@ -1213,29 +1221,29 @@ fn panel_system(
     let mut any_hovered = false;
 
     // Hover vars collected inside borrow blocks, applied after the block ends.
-    let mut hc_dir: Option<FlexDirection> = None;
-    let mut hc_wrap: Option<FlexWrap> = None;
-    let mut hc_justify: Option<JustifyContent> = None;
-    let mut hc_ai: Option<AlignItems> = None;
-    let mut hc_ac: Option<AlignContent> = None;
-    let mut hc_rg: Option<ValCfg> = None;
-    let mut hc_cgap: Option<ValCfg> = None;
-    let mut hs_w: Option<ValCfg> = None;
-    let mut hs_h: Option<ValCfg> = None;
-    let mut hs_minw: Option<ValCfg> = None;
-    let mut hs_minh: Option<ValCfg> = None;
-    let mut hs_maxw: Option<ValCfg> = None;
-    let mut hs_maxh: Option<ValCfg> = None;
-    let mut hs_pad: Option<ValCfg> = None;
-    let mut hi_basis: Option<ValCfg> = None;
-    let mut hi_as: Option<AlignSelf> = None;
-    let mut hi_margin: Option<ValCfg> = None;
+    let mut hover_direction: Option<FlexDirection> = None;
+    let mut hover_wrap: Option<FlexWrap> = None;
+    let mut hover_justify: Option<JustifyContent> = None;
+    let mut hover_align_items: Option<AlignItems> = None;
+    let mut hover_align_content: Option<AlignContent> = None;
+    let mut hover_row_gap: Option<ValueConfig> = None;
+    let mut hover_column_gap: Option<ValueConfig> = None;
+    let mut hover_width: Option<ValueConfig> = None;
+    let mut hover_height: Option<ValueConfig> = None;
+    let mut hover_min_width: Option<ValueConfig> = None;
+    let mut hover_min_height: Option<ValueConfig> = None;
+    let mut hover_max_width: Option<ValueConfig> = None;
+    let mut hover_max_height: Option<ValueConfig> = None;
+    let mut hover_padding: Option<ValueConfig> = None;
+    let mut hover_basis: Option<ValueConfig> = None;
+    let mut hover_align_self: Option<AlignSelf> = None;
+    let mut hover_margin: Option<ValueConfig> = None;
 
     let mut sel_path = cfg.selected.clone();
     let mut is_root = sel_path.is_empty();
 
     egui::SidePanel::left("flex_panel")
-        .exact_width(PANEL_W)
+        .exact_width(PANEL_WIDTH)
         .resizable(false)
         .show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
@@ -1246,19 +1254,19 @@ fn panel_system(
                     .default_open(true)
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
-                            if ui.button("+ Child").clicked() {
+                            if ui.button("+ Child").on_hover_text("Add a new child node inside the selected node").clicked() {
                                 let n = count_leaves(&cfg.root);
                                 let lbl = format!("node{}", n + 1);
                                 get_node_mut(&mut cfg.root, &sel_path)
-                                    .children.push(NodeCfg::new_leaf(&lbl, 80.0, 80.0));
+                                    .children.push(NodeConfig::new_leaf(&lbl, 80.0, 80.0));
                                 changed = true;
                             }
-                            if !is_root && ui.button("+ Sibling").clicked() {
+                            if !is_root && ui.button("+ Sibling").on_hover_text("Add a new node next to the selected node (same parent)").clicked() {
                                 let pidx = sel_path.len() - 1;
                                 let n = count_leaves(&cfg.root);
                                 let lbl = format!("node{}", n + 1);
                                 get_node_mut(&mut cfg.root, &sel_path[..pidx])
-                                    .children.push(NodeCfg::new_leaf(&lbl, 80.0, 80.0));
+                                    .children.push(NodeConfig::new_leaf(&lbl, 80.0, 80.0));
                                 changed = true;
                             }
                         });
@@ -1297,21 +1305,21 @@ fn panel_system(
                         egui::Grid::new("cg1").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
                             {
                                 let n = get_node_mut(&mut cfg.root, &sel_path);
-                                ui.label("direction");
-                                hc_dir = combo(ui, "fd", &mut n.flex_direction, &[
+                                label_with_help(ui, "direction", "The main axis along which children are laid out (Row = horizontal, Column = vertical)");
+                                hover_direction = combo(ui, "fd", &mut n.flex_direction, &[
                                     ("Row", FlexDirection::Row), ("Column", FlexDirection::Column),
                                     ("RowReverse", FlexDirection::RowReverse),
                                     ("ColumnReverse", FlexDirection::ColumnReverse),
                                 ], &mut changed, &mut any_hovered); ui.end_row();
 
-                                ui.label("wrap");
-                                hc_wrap = combo(ui, "fw", &mut n.flex_wrap, &[
+                                label_with_help(ui, "wrap", "Whether children wrap to new lines when they overflow the container");
+                                hover_wrap = combo(ui, "fw", &mut n.flex_wrap, &[
                                     ("NoWrap", FlexWrap::NoWrap), ("Wrap", FlexWrap::Wrap),
                                     ("WrapReverse", FlexWrap::WrapReverse),
                                 ], &mut changed, &mut any_hovered); ui.end_row();
 
-                                ui.label("justify");
-                                hc_justify = combo(ui, "jc", &mut n.justify_content, &[
+                                label_with_help(ui, "justify", "How children are distributed along the main axis (e.g. centered, spaced evenly)");
+                                hover_justify = combo(ui, "jc", &mut n.justify_content, &[
                                     ("Default", JustifyContent::Default),
                                     ("FlexStart", JustifyContent::FlexStart),
                                     ("FlexEnd", JustifyContent::FlexEnd),
@@ -1323,8 +1331,8 @@ fn panel_system(
                                     ("Start", JustifyContent::Start), ("End", JustifyContent::End),
                                 ], &mut changed, &mut any_hovered); ui.end_row();
 
-                                ui.label("align-items");
-                                hc_ai = combo(ui, "ai", &mut n.align_items, &[
+                                label_with_help(ui, "align-items", "How children are aligned along the cross axis (perpendicular to direction)");
+                                hover_align_items = combo(ui, "ai", &mut n.align_items, &[
                                     ("Default", AlignItems::Default),
                                     ("FlexStart", AlignItems::FlexStart),
                                     ("FlexEnd", AlignItems::FlexEnd),
@@ -1334,8 +1342,8 @@ fn panel_system(
                                     ("Start", AlignItems::Start), ("End", AlignItems::End),
                                 ], &mut changed, &mut any_hovered); ui.end_row();
 
-                                ui.label("align-content");
-                                hc_ac = combo(ui, "ac", &mut n.align_content, &[
+                                label_with_help(ui, "align-content", "How wrapped lines are distributed along the cross axis (only applies when wrapping)");
+                                hover_align_content = combo(ui, "ac", &mut n.align_content, &[
                                     ("Default", AlignContent::Default),
                                     ("FlexStart", AlignContent::FlexStart),
                                     ("FlexEnd", AlignContent::FlexEnd),
@@ -1352,32 +1360,32 @@ fn panel_system(
                         egui::Grid::new("cg2").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
                             {
                                 let n = get_node_mut(&mut cfg.root, &sel_path);
-                                ui.label("row-gap");
-                                hc_rg = val_row(ui, "rg", &mut n.row_gap, &mut changed, &mut any_hovered);
+                                label_with_help(ui, "row-gap", "Spacing between rows of children");
+                                hover_row_gap = val_row(ui, "rg", &mut n.row_gap, &mut changed, &mut any_hovered);
                                 ui.end_row();
-                                ui.label("column-gap");
-                                hc_cgap = val_row(ui, "cgap", &mut n.column_gap, &mut changed, &mut any_hovered);
+                                label_with_help(ui, "column-gap", "Spacing between columns of children");
+                                hover_column_gap = val_row(ui, "cgap", &mut n.column_gap, &mut changed, &mut any_hovered);
                                 ui.end_row();
                             }
                         });
                         ui.add_space(2.0);
 
                         // Apply container hover previews
-                        let has_c = hc_dir.is_some() || hc_wrap.is_some() || hc_justify.is_some()
-                            || hc_ai.is_some() || hc_ac.is_some()
-                            || hc_rg.is_some() || hc_cgap.is_some();
-                        if has_c {
+                        let has_container_hover = hover_direction.is_some() || hover_wrap.is_some() || hover_justify.is_some()
+                            || hover_align_items.is_some() || hover_align_content.is_some()
+                            || hover_row_gap.is_some() || hover_column_gap.is_some();
+                        if has_container_hover {
                             any_hovered = true;
                             let p = &mut *preview; let sp = &sel_path;
-                            let rb =
-                                apply_hover(hc_dir,     &mut cfg, p, sp, |n| n.flex_direction,        |n, v| n.flex_direction  = v) |
-                                apply_hover(hc_wrap,    &mut cfg, p, sp, |n| n.flex_wrap,              |n, v| n.flex_wrap        = v) |
-                                apply_hover(hc_justify, &mut cfg, p, sp, |n| n.justify_content,        |n, v| n.justify_content  = v) |
-                                apply_hover(hc_ai,      &mut cfg, p, sp, |n| n.align_items,            |n, v| n.align_items      = v) |
-                                apply_hover(hc_ac,      &mut cfg, p, sp, |n| n.align_content,          |n, v| n.align_content    = v) |
-                                apply_hover(hc_rg,      &mut cfg, p, sp, |n| n.row_gap.clone(),        |n, v| n.row_gap          = v) |
-                                apply_hover(hc_cgap,    &mut cfg, p, sp, |n| n.column_gap.clone(),     |n, v| n.column_gap       = v);
-                            if rb { cfg.needs_rebuild = true; }
+                            let needs_rebuild =
+                                apply_hover(hover_direction,     &mut cfg, p, sp, |n| n.flex_direction,        |n, v| n.flex_direction  = v) |
+                                apply_hover(hover_wrap,    &mut cfg, p, sp, |n| n.flex_wrap,              |n, v| n.flex_wrap        = v) |
+                                apply_hover(hover_justify, &mut cfg, p, sp, |n| n.justify_content,        |n, v| n.justify_content  = v) |
+                                apply_hover(hover_align_items,      &mut cfg, p, sp, |n| n.align_items,            |n, v| n.align_items      = v) |
+                                apply_hover(hover_align_content,      &mut cfg, p, sp, |n| n.align_content,          |n, v| n.align_content    = v) |
+                                apply_hover(hover_row_gap,      &mut cfg, p, sp, |n| n.row_gap.clone(),        |n, v| n.row_gap          = v) |
+                                apply_hover(hover_column_gap,    &mut cfg, p, sp, |n| n.column_gap.clone(),     |n, v| n.column_gap       = v);
+                            if needs_rebuild { cfg.needs_rebuild = true; }
                         }
                     });
 
@@ -1391,33 +1399,33 @@ fn panel_system(
                         egui::Grid::new("sg").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
                             {
                                 let n = get_node_mut(&mut cfg.root, &sel_path);
-                                ui.label("width");    hs_w    = val_row(ui, "sw",    &mut n.width,      &mut changed, &mut any_hovered); ui.end_row();
-                                ui.label("height");   hs_h    = val_row(ui, "sh",    &mut n.height,     &mut changed, &mut any_hovered); ui.end_row();
-                                ui.label("min-width");  hs_minw = val_row(ui, "sminw", &mut n.min_width,  &mut changed, &mut any_hovered); ui.end_row();
-                                ui.label("min-height"); hs_minh = val_row(ui, "sminh", &mut n.min_height, &mut changed, &mut any_hovered); ui.end_row();
-                                ui.label("max-width");  hs_maxw = val_row(ui, "smaxw", &mut n.max_width,  &mut changed, &mut any_hovered); ui.end_row();
-                                ui.label("max-height"); hs_maxh = val_row(ui, "smaxh", &mut n.max_height, &mut changed, &mut any_hovered); ui.end_row();
-                                ui.label("padding");    hs_pad  = val_row(ui, "spad",  &mut n.padding,    &mut changed, &mut any_hovered); ui.end_row();
+                                label_with_help(ui, "width", "The preferred width of this node");    hover_width    = val_row(ui, "sw",    &mut n.width,      &mut changed, &mut any_hovered); ui.end_row();
+                                label_with_help(ui, "height", "The preferred height of this node");   hover_height    = val_row(ui, "sh",    &mut n.height,     &mut changed, &mut any_hovered); ui.end_row();
+                                label_with_help(ui, "min-width", "The minimum width this node can shrink to");  hover_min_width = val_row(ui, "sminw", &mut n.min_width,  &mut changed, &mut any_hovered); ui.end_row();
+                                label_with_help(ui, "min-height", "The minimum height this node can shrink to"); hover_min_height = val_row(ui, "sminh", &mut n.min_height, &mut changed, &mut any_hovered); ui.end_row();
+                                label_with_help(ui, "max-width", "The maximum width this node can grow to");  hover_max_width = val_row(ui, "smaxw", &mut n.max_width,  &mut changed, &mut any_hovered); ui.end_row();
+                                label_with_help(ui, "max-height", "The maximum height this node can grow to"); hover_max_height = val_row(ui, "smaxh", &mut n.max_height, &mut changed, &mut any_hovered); ui.end_row();
+                                label_with_help(ui, "padding", "Space between this node's border and its children");    hover_padding  = val_row(ui, "spad",  &mut n.padding,    &mut changed, &mut any_hovered); ui.end_row();
                             }
                         });
                         ui.add_space(2.0);
 
                         // Apply sizing hover previews
-                        let has_s = hs_w.is_some() || hs_h.is_some() || hs_minw.is_some()
-                            || hs_minh.is_some() || hs_maxw.is_some() || hs_maxh.is_some()
-                            || hs_pad.is_some();
-                        if has_s {
+                        let has_sizing_hover = hover_width.is_some() || hover_height.is_some() || hover_min_width.is_some()
+                            || hover_min_height.is_some() || hover_max_width.is_some() || hover_max_height.is_some()
+                            || hover_padding.is_some();
+                        if has_sizing_hover {
                             any_hovered = true;
                             let p = &mut *preview; let sp = &sel_path;
-                            let rb =
-                                apply_hover(hs_w,    &mut cfg, p, sp, |n| n.width.clone(),      |n, v| n.width      = v) |
-                                apply_hover(hs_h,    &mut cfg, p, sp, |n| n.height.clone(),     |n, v| n.height     = v) |
-                                apply_hover(hs_minw, &mut cfg, p, sp, |n| n.min_width.clone(),  |n, v| n.min_width  = v) |
-                                apply_hover(hs_minh, &mut cfg, p, sp, |n| n.min_height.clone(), |n, v| n.min_height = v) |
-                                apply_hover(hs_maxw, &mut cfg, p, sp, |n| n.max_width.clone(),  |n, v| n.max_width  = v) |
-                                apply_hover(hs_maxh, &mut cfg, p, sp, |n| n.max_height.clone(), |n, v| n.max_height = v) |
-                                apply_hover(hs_pad,  &mut cfg, p, sp, |n| n.padding.clone(),    |n, v| n.padding    = v);
-                            if rb { cfg.needs_rebuild = true; }
+                            let needs_rebuild =
+                                apply_hover(hover_width,    &mut cfg, p, sp, |n| n.width.clone(),      |n, v| n.width      = v) |
+                                apply_hover(hover_height,    &mut cfg, p, sp, |n| n.height.clone(),     |n, v| n.height     = v) |
+                                apply_hover(hover_min_width, &mut cfg, p, sp, |n| n.min_width.clone(),  |n, v| n.min_width  = v) |
+                                apply_hover(hover_min_height, &mut cfg, p, sp, |n| n.min_height.clone(), |n, v| n.min_height = v) |
+                                apply_hover(hover_max_width, &mut cfg, p, sp, |n| n.max_width.clone(),  |n, v| n.max_width  = v) |
+                                apply_hover(hover_max_height, &mut cfg, p, sp, |n| n.max_height.clone(), |n, v| n.max_height = v) |
+                                apply_hover(hover_padding,  &mut cfg, p, sp, |n| n.padding.clone(),    |n, v| n.padding    = v);
+                            if needs_rebuild { cfg.needs_rebuild = true; }
                         }
                     });
 
@@ -1432,40 +1440,40 @@ fn panel_system(
                             egui::Grid::new("ig").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
                                 {
                                     let n = get_node_mut(&mut cfg.root, &sel_path);
-                                    ui.label("flex-grow");
+                                    label_with_help(ui, "flex-grow", "How much this node grows relative to siblings when there is extra space (0 = don't grow)");
                                     changed |= ui.add(egui::Slider::new(&mut n.flex_grow, 0.0..=5.0).max_decimals(2)).changed();
                                     ui.end_row();
-                                    ui.label("flex-shrink");
+                                    label_with_help(ui, "flex-shrink", "How much this node shrinks relative to siblings when space is tight (0 = don't shrink)");
                                     changed |= ui.add(egui::Slider::new(&mut n.flex_shrink, 0.0..=5.0).max_decimals(2)).changed();
                                     ui.end_row();
-                                    ui.label("flex-basis");
-                                    hi_basis = val_row(ui, "ib", &mut n.flex_basis, &mut changed, &mut any_hovered);
+                                    label_with_help(ui, "flex-basis", "The initial size along the main axis before grow/shrink is applied");
+                                    hover_basis = val_row(ui, "ib", &mut n.flex_basis, &mut changed, &mut any_hovered);
                                     ui.end_row();
-                                    ui.label("align-self");
-                                    hi_as = combo(ui, "ias", &mut n.align_self, &[
+                                    label_with_help(ui, "align-self", "Override the parent's align-items for this specific child");
+                                    hover_align_self = combo(ui, "ias", &mut n.align_self, &[
                                         ("Auto", AlignSelf::Auto), ("FlexStart", AlignSelf::FlexStart),
                                         ("FlexEnd", AlignSelf::FlexEnd), ("Center", AlignSelf::Center),
                                         ("Baseline", AlignSelf::Baseline), ("Stretch", AlignSelf::Stretch),
                                         ("Start", AlignSelf::Start), ("End", AlignSelf::End),
                                     ], &mut changed, &mut any_hovered);
                                     ui.end_row();
-                                    ui.label("margin");
-                                    hi_margin = val_row(ui, "im", &mut n.margin, &mut changed, &mut any_hovered);
+                                    label_with_help(ui, "margin", "Space outside this node's border, pushing it away from siblings");
+                                    hover_margin = val_row(ui, "im", &mut n.margin, &mut changed, &mut any_hovered);
                                     ui.end_row();
                                 }
                             });
                             ui.add_space(2.0);
 
                             // Apply item hover previews
-                            let has_i = hi_basis.is_some() || hi_as.is_some() || hi_margin.is_some();
-                            if has_i {
+                            let has_item_hover = hover_basis.is_some() || hover_align_self.is_some() || hover_margin.is_some();
+                            if has_item_hover {
                                 any_hovered = true;
                                 let p = &mut *preview; let sp = &sel_path;
-                                let rb =
-                                    apply_hover(hi_basis,  &mut cfg, p, sp, |n| n.flex_basis.clone(), |n, v| n.flex_basis = v) |
-                                    apply_hover(hi_as,     &mut cfg, p, sp, |n| n.align_self,         |n, v| n.align_self = v) |
-                                    apply_hover(hi_margin, &mut cfg, p, sp, |n| n.margin.clone(),     |n, v| n.margin     = v);
-                                if rb { cfg.needs_rebuild = true; }
+                                let needs_rebuild =
+                                    apply_hover(hover_basis,  &mut cfg, p, sp, |n| n.flex_basis.clone(), |n, v| n.flex_basis = v) |
+                                    apply_hover(hover_align_self,     &mut cfg, p, sp, |n| n.align_self,         |n, v| n.align_self = v) |
+                                    apply_hover(hover_margin, &mut cfg, p, sp, |n| n.margin.clone(),     |n, v| n.margin     = v);
+                                if needs_rebuild { cfg.needs_rebuild = true; }
                             }
                         });
 
@@ -1480,11 +1488,11 @@ fn panel_system(
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
                             let prev = cfg.bg_mode.clone();
-                            ui.radio_value(&mut cfg.bg_mode, BgMode::Pastel, "Pastel");
-                            ui.radio_value(&mut cfg.bg_mode, BgMode::RandomArt, "Generative Art");
+                            ui.radio_value(&mut cfg.bg_mode, BackgroundMode::Pastel, "Pastel").on_hover_text("Fill leaf nodes with solid pastel colors");
+                            ui.radio_value(&mut cfg.bg_mode, BackgroundMode::RandomArt, "Generative Art").on_hover_text("Fill leaf nodes with procedurally generated art textures");
                             if cfg.bg_mode != prev { changed = true; }
                         });
-                        if cfg.bg_mode == BgMode::RandomArt {
+                        if cfg.bg_mode == BackgroundMode::RandomArt {
                             let cur = ArtStyle::ALL.iter().find(|(_, s)| *s == cfg.art_style)
                                 .map(|(n, _)| *n).unwrap_or("?");
                             let mut hover_art: Option<ArtStyle> = None;
@@ -1506,33 +1514,33 @@ fn panel_system(
                                 }
                             }
                             let pd = cfg.art_depth;
-                            ui.add(egui::Slider::new(&mut cfg.art_depth, 1..=9).text("depth"));
+                            ui.add(egui::Slider::new(&mut cfg.art_depth, 1..=9).text("depth")).on_hover_text("Expression tree depth — higher values produce more complex patterns");
                             if cfg.art_depth != pd { changed = true; }
-                            ui.add(egui::Slider::new(&mut cfg.art_anim, 0.0..=2.0).text("anim speed").step_by(0.05));
+                            ui.add(egui::Slider::new(&mut cfg.art_anim, 0.0..=2.0).text("anim speed").step_by(0.05)).on_hover_text("How fast the generative art animates (0 = static)");
                             ui.horizontal(|ui| {
-                                if ui.button("New seed").clicked() { cfg.art_seed = rand::random::<u64>(); changed = true; }
-                                if ui.button("Regenerate").clicked() { changed = true; }
+                                if ui.button("New seed").on_hover_text("Randomize the seed for a completely different pattern").clicked() { cfg.art_seed = rand::random::<u64>(); changed = true; }
+                                if ui.button("Regenerate").on_hover_text("Re-render art with the current settings").clicked() { changed = true; }
                             });
                         }
                     });
 
                 ui.add_space(6.0);
-                if ui.button("Reset to defaults").clicked() {
-                    *cfg = FlexCfg::default(); *preview = None;
+                if ui.button("Reset to defaults").on_hover_text("Restore all settings and the node tree to the initial state").clicked() {
+                    *cfg = FlexConfig::default(); *preview = None;
                 }
                 ui.add_space(4.0);
                 ui.label("Copy code:");
                 ui.horizontal(|ui| {
-                    if ui.button("Bevy").clicked() {
+                    if ui.button("Bevy").on_hover_text("Copy Bevy/Rust UI code to clipboard").clicked() {
                         ui.ctx().copy_text(emit_bevy_code(&cfg.root));
                     }
-                    if ui.button("HTML/CSS").clicked() {
+                    if ui.button("HTML/CSS").on_hover_text("Copy HTML + CSS flexbox code to clipboard").clicked() {
                         ui.ctx().copy_text(emit_html_css(&cfg.root));
                     }
-                    if ui.button("Tailwind").clicked() {
+                    if ui.button("Tailwind").on_hover_text("Copy Tailwind CSS markup to clipboard").clicked() {
                         ui.ctx().copy_text(emit_tailwind(&cfg.root));
                     }
-                    if ui.button("SwiftUI").clicked() {
+                    if ui.button("SwiftUI").on_hover_text("Copy SwiftUI HStack/VStack code to clipboard").clicked() {
                         ui.ctx().copy_text(emit_swiftui(&cfg.root));
                     }
                 });
@@ -1558,7 +1566,7 @@ fn panel_system(
 fn rebuild_viz(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
-    mut cfg: ResMut<FlexCfg>,
+    mut cfg: ResMut<FlexConfig>,
     mut art: ResMut<ArtState>,
     roots: Query<Entity, With<VizRoot>>,
 ) {
@@ -1567,15 +1575,15 @@ fn rebuild_viz(
     for e in &roots { commands.entity(e).despawn(); }
     art.exprs.clear();
     art.handles.clear();
-    if cfg.bg_mode == BgMode::RandomArt {
+    if cfg.bg_mode == BackgroundMode::RandomArt {
         let n = count_leaves(&cfg.root);
         let (base, depth, style) = (cfg.art_seed, cfg.art_depth, cfg.art_style.clone());
         for i in 0..n {
             let iseed = base.wrapping_add((i as u64).wrapping_mul(0x9e3779b97f4a7c15));
-            let exprs = ArtExprs::generate(iseed, depth);
+            let exprs = ArtExpressions::generate(iseed, depth);
             let pixels = render_art(&style, &exprs, iseed, 0.0);
             let image = Image::new(
-                Extent3d { width: ART_SZ, height: ART_SZ, depth_or_array_layers: 1 },
+                Extent3d { width: ART_TEXTURE_SIZE, height: ART_TEXTURE_SIZE, depth_or_array_layers: 1 },
                 TextureDimension::D2, pixels, TextureFormat::Rgba8UnormSrgb,
                 RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
             );
@@ -1586,14 +1594,14 @@ fn rebuild_viz(
     spawn_viz(&mut commands, &cfg, &art);
 }
 
-fn spawn_viz(commands: &mut Commands, cfg: &FlexCfg, art: &ArtState) {
+fn spawn_viz(commands: &mut Commands, cfg: &FlexConfig, art: &ArtState) {
     let viz_root = commands.spawn((VizRoot, Node {
         width: Val::Percent(100.0), height: Val::Percent(100.0),
         flex_direction: FlexDirection::Row, align_items: AlignItems::Stretch,
         ..default()
     })).id();
 
-    let spacer = commands.spawn(Node { width: Val::Px(PANEL_W), flex_shrink: 0.0, ..default() }).id();
+    let spacer = commands.spawn(Node { width: Val::Px(PANEL_WIDTH), flex_shrink: 0.0, ..default() }).id();
     let area = commands.spawn(Node {
         flex_grow: 1.0, height: Val::Percent(100.0),
         display: Display::Block,
@@ -1608,8 +1616,8 @@ fn spawn_viz(commands: &mut Commands, cfg: &FlexCfg, art: &ArtState) {
 fn spawn_node(
     commands: &mut Commands,
     parent_entity: Entity,
-    node: &NodeCfg,
-    cfg: &FlexCfg,
+    node: &NodeConfig,
+    cfg: &FlexConfig,
     art: &ArtState,
     selected_path: &[usize],
     current_path: &[usize],
@@ -1618,14 +1626,14 @@ fn spawn_node(
     let is_selected = current_path == selected_path;
     let is_leaf = node.children.is_empty();
 
-    let (bw, bc) = if is_selected {
+    let (border_width, border_color) = if is_selected {
         (3.0, Color::srgba(1.0, 0.85, 0.1, 1.0))
     } else {
         (1.5, Color::srgba(0.0, 0.0, 0.0, 0.35))
     };
 
     let bg_color = if is_leaf {
-        if cfg.bg_mode == BgMode::Pastel { pastel(*leaf_idx) } else { Color::WHITE }
+        if cfg.bg_mode == BackgroundMode::Pastel { pastel(*leaf_idx) } else { Color::WHITE }
     } else {
         Color::srgba(0.11, 0.11, 0.17, 1.0)
     };
@@ -1651,7 +1659,7 @@ fn spawn_node(
         max_height: node.max_height.to_val(),
         padding: UiRect::all(node.padding.to_val()),
         margin: UiRect::all(node.margin.to_val()),
-        border: UiRect::all(Val::Px(bw)),
+        border: UiRect::all(Val::Px(border_width)),
         overflow: Overflow::clip(),
         ..default()
     };
@@ -1659,31 +1667,36 @@ fn spawn_node(
     if is_leaf {
         let my_idx = *leaf_idx;
         *leaf_idx += 1;
-        let info = node_info(node);
         let entity = commands.spawn((
             ArtItemNode(my_idx), node_bevy,
-            BackgroundColor(bg_color), BorderColor::all(bc),
+            BackgroundColor(bg_color), BorderColor::all(border_color),
+            Interaction::None, VizNodePath(current_path.to_vec()),
+            VizNodeInfo(node_info(node)),
         )).id();
-        if cfg.bg_mode == BgMode::RandomArt
+        if cfg.bg_mode == BackgroundMode::RandomArt
             && let Some(h) = art.handles.get(my_idx) {
                 commands.entity(entity).insert(ImageNode::new(h.clone()));
             }
         let scale = text_scale(node);
-        let text_big = commands.spawn((
+        let overlay = commands.spawn(Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(0.0), left: Val::Px(0.0),
+            right: Val::Px(0.0), bottom: Val::Px(0.0),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            ..default()
+        }).with_child((
             Text::new(node.label.clone()),
             TextFont { font_size: (26.0_f32 * scale).clamp(1.0, 52.0), ..default() },
             TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
         )).id();
-        let text_info = commands.spawn((
-            Text::new(info),
-            TextFont { font_size: (9.0_f32 * scale).clamp(1.0, 18.0), ..default() },
-            TextColor(Color::srgba(0.05, 0.05, 0.1, 0.70)),
-        )).id();
-        commands.entity(entity).add_children(&[text_big, text_info]);
+        commands.entity(entity).add_child(overlay);
         commands.entity(parent_entity).add_child(entity);
     } else {
         let entity = commands.spawn((
-            node_bevy, BackgroundColor(bg_color), BorderColor::all(bc),
+            node_bevy, BackgroundColor(bg_color), BorderColor::all(border_color),
+            Interaction::None, VizNodePath(current_path.to_vec()),
+            VizNodeInfo(node_info(node)),
         )).id();
         let cscale = text_scale(node);
         let lbl = commands.spawn((
@@ -1702,27 +1715,89 @@ fn spawn_node(
     }
 }
 
+fn viz_tooltip(
+    mut commands: Commands,
+    windows: Query<&Window>,
+    mut contexts: EguiContexts,
+    nodes: Query<(&Interaction, &VizNodeInfo, &VizNodePath)>,
+    tooltips: Query<Entity, With<VizTooltip>>,
+) {
+    for e in &tooltips { commands.entity(e).despawn(); }
+
+    let egui_owns_pointer = contexts.ctx_mut().map_or(false, |ctx| ctx.is_pointer_over_area());
+    let mut hovered_info = None;
+    if !egui_owns_pointer {
+        for (interaction, info, path) in &nodes {
+            if *interaction == Interaction::Hovered && !path.0.is_empty() {
+                hovered_info = Some(info);
+            }
+        }
+    }
+
+    if let Some(info) = hovered_info {
+        let Ok(window) = windows.single() else { return };
+        let Some(cursor) = window.cursor_position() else { return };
+        commands.spawn((
+            VizTooltip,
+            Node {
+                position_type: PositionType::Absolute,
+                left: Val::Px(cursor.x + 12.0),
+                top: Val::Px(cursor.y + 12.0),
+                padding: UiRect::all(Val::Px(6.0)),
+                border: UiRect::all(Val::Px(1.0)),
+                ..default()
+            },
+            GlobalZIndex(100),
+            BackgroundColor(Color::srgba(0.12, 0.12, 0.18, 0.95)),
+            BorderColor::all(Color::srgba(1.0, 1.0, 1.0, 0.2)),
+        )).with_child((
+            Text::new(info.0.clone()),
+            TextFont { font_size: 11.0, ..default() },
+            TextColor(Color::srgba(0.9, 0.9, 0.9, 1.0)),
+        ));
+    }
+}
+
+fn viz_click(
+    nodes: Query<(&Interaction, &VizNodePath), Changed<Interaction>>,
+    mut cfg: ResMut<FlexConfig>,
+) {
+    for (interaction, path) in &nodes {
+        if *interaction == Interaction::Pressed && cfg.selected != path.0 {
+            cfg.selected = path.0.clone();
+            cfg.needs_rebuild = true;
+        }
+    }
+}
+
 // ─── Animation ────────────────────────────────────────────────────────────────
 
 fn animate_art(
     mut images: ResMut<Assets<Image>>,
     art: Res<ArtState>,
-    cfg: Res<FlexCfg>,
+    cfg: Res<FlexConfig>,
     time: Res<Time>,
     mut last_t: Local<f32>,
 ) {
-    if cfg.art_anim < 1e-4 || cfg.bg_mode != BgMode::RandomArt { return; }
+    if cfg.art_anim < 1e-4 || cfg.bg_mode != BackgroundMode::RandomArt { return; }
     let t = (time.elapsed_secs() * cfg.art_anim).sin();
     if (t - *last_t).abs() < 1e-4 { return; }
     *last_t = t;
     for (exprs, handle) in art.exprs.iter().zip(art.handles.iter()) {
         if let Some(image) = images.get_mut(handle) {
-            image.data = Some(exprs.render(ART_SZ, ART_SZ, t));
+            image.data = Some(exprs.render(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, t));
         }
     }
 }
 
 // ─── egui helpers ─────────────────────────────────────────────────────────────
+
+fn label_with_help(ui: &mut egui::Ui, text: &str, help: &str) {
+    ui.horizontal(|ui| {
+        ui.label(text);
+        ui.weak("?").on_hover_text(help);
+    });
+}
 
 fn combo<T: Copy + PartialEq>(
     ui: &mut egui::Ui,
@@ -1750,10 +1825,10 @@ fn combo<T: Copy + PartialEq>(
 fn val_row(
     ui: &mut egui::Ui,
     id: &str,
-    val: &mut ValCfg,
+    val: &mut ValueConfig,
     changed: &mut bool,
     any_open: &mut bool,
-) -> Option<ValCfg> {
+) -> Option<ValueConfig> {
     const VARIANTS: &[&str] = &["Auto", "Px", "Percent", "Vw", "Vh"];
     let mut hover = None;
     let mut is_open = false;
@@ -1770,7 +1845,7 @@ fn val_row(
         if resp.inner.is_some() { is_open = true; }
         if let Some(n) = val.num() {
             let mut n = n;
-            let (lo, hi) = if matches!(val, ValCfg::Px(_)) { (0.0_f32, 600.0_f32) } else { (0.0_f32, 100.0_f32) };
+            let (lo, hi) = if matches!(val, ValueConfig::Px(_)) { (0.0_f32, 600.0_f32) } else { (0.0_f32, 100.0_f32) };
             if ui.add(egui::Slider::new(&mut n, lo..=hi).max_decimals(0)).changed() {
                 val.set_num(n); *changed = true;
             }
@@ -1782,24 +1857,24 @@ fn val_row(
 
 // ─── Node info ────────────────────────────────────────────────────────────────
 
-fn node_info(node: &NodeCfg) -> String {
+fn node_info(node: &NodeConfig) -> String {
     format!(
         "g:{} s:{}\nbasis:{} w:{} h:{}",
-        ff(node.flex_grow), ff(node.flex_shrink),
-        node.flex_basis.variant(), fv(&node.width), fv(&node.height)
+        format_float(node.flex_grow), format_float(node.flex_shrink),
+        node.flex_basis.variant(), format_value(&node.width), format_value(&node.height)
     )
 }
 
-fn ff(v: f32) -> String {
+fn format_float(v: f32) -> String {
     if (v - v.round()).abs() < 0.005 { format!("{}", v as i32) } else { format!("{v:.1}") }
 }
 
-fn fv(v: &ValCfg) -> String {
+fn format_value(v: &ValueConfig) -> String {
     match v {
-        ValCfg::Auto => "auto".into(),
-        ValCfg::Px(n) => format!("{n:.0}px"),
-        ValCfg::Percent(n) => format!("{n:.0}%"),
-        ValCfg::Vw(n) => format!("{n:.0}vw"),
-        ValCfg::Vh(n) => format!("{n:.0}vh"),
+        ValueConfig::Auto => "auto".into(),
+        ValueConfig::Px(n) => format!("{n:.0}px"),
+        ValueConfig::Percent(n) => format!("{n:.0}%"),
+        ValueConfig::Vw(n) => format!("{n:.0}vw"),
+        ValueConfig::Vh(n) => format!("{n:.0}vh"),
     }
 }
