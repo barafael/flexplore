@@ -70,7 +70,7 @@ pub fn trigger_download(json: &str) {
     blob_parts.push(&wasm_bindgen::JsValue::from_str(json));
 
     let mut opts = web_sys::BlobPropertyBag::new();
-    opts.type_("application/json");
+    opts.set_type("application/json");
 
     let blob = match web_sys::Blob::new_with_str_sequence_and_options(&blob_parts, &opts) {
         Ok(b) => b,

@@ -132,7 +132,7 @@ fn emit_flutter_inner(
             (b * 255.0) as u8,
         )?;
         writeln!(buf, "{pad}  alignment: Alignment.center,")?;
-        writeln!(buf, "{pad}  child: Text('{}'", node.label)?;
+        writeln!(buf, "{pad}  child: Text('{}',", node.label)?;
         writeln!(buf, "{pad}    style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),")?;
         writeln!(buf, "{pad}  ),")?;
         writeln!(buf, "{pad})")?;

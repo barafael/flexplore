@@ -71,6 +71,7 @@ pub fn sidebar_content() -> NodeConfig {
 
     let mut sidebar = NodeConfig::new_container("sidebar");
     sidebar.flex_direction = FlexDirection::Column;
+    sidebar.flex_wrap = FlexWrap::NoWrap;
     sidebar.align_items = AlignItems::Stretch;
     sidebar.width = ValueConfig::Px(250.0);
     sidebar.height = ValueConfig::Auto;

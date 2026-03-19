@@ -11,6 +11,8 @@ getrandom = { version = "0.2", features = ["js"] }
 getrandom_0_3 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
 strum = { version = "0.28.0", features = ["derive"] }
 anyhow = "1.0.102"
+catppuccin = { version = "2", features = ["serde"] }
+colorous = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
