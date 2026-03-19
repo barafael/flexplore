@@ -285,13 +285,15 @@ fn render_op_art(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
     pix
 }
 
-pub fn render_art(style: &ArtStyle, exprs: &ArtExpressions, seed: u64, t: f32) -> Vec<u8> {
-    match style {
-        ArtStyle::ExprTree => exprs.render(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, t),
-        ArtStyle::Voronoi => render_voronoi(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, seed, t),
-        ArtStyle::FlowField => render_flow_field(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, seed, t),
-        ArtStyle::Crackle => render_crackle(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, seed, t),
-        ArtStyle::OpArt => render_op_art(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, seed, t),
+impl ArtStyle {
+    pub fn render(&self, exprs: &ArtExpressions, seed: u64, t: f32) -> Vec<u8> {
+        match self {
+            ArtStyle::ExprTree => exprs.render(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, t),
+            ArtStyle::Voronoi => render_voronoi(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, seed, t),
+            ArtStyle::FlowField => render_flow_field(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, seed, t),
+            ArtStyle::Crackle => render_crackle(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, seed, t),
+            ArtStyle::OpArt => render_op_art(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, seed, t),
+        }
     }
 }
 

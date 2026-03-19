@@ -1,7 +1,17 @@
 use bevy::prelude::*;
+use strum::{Display, EnumIter};
 
 pub const PANEL_WIDTH: f32 = 390.0;
 pub const ART_TEXTURE_SIZE: u32 = 128;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Display, EnumIter)]
+pub enum ValueKind {
+    Auto,
+    Px,
+    Percent,
+    Vw,
+    Vh,
+}
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum ValueConfig {
@@ -22,13 +32,13 @@ impl ValueConfig {
             ValueConfig::Vh(v) => Val::Vh(*v),
         }
     }
-    pub fn variant(&self) -> &'static str {
+    pub fn kind(&self) -> ValueKind {
         match self {
-            ValueConfig::Auto => "Auto",
-            ValueConfig::Px(_) => "Px",
-            ValueConfig::Percent(_) => "Percent",
-            ValueConfig::Vw(_) => "Vw",
-            ValueConfig::Vh(_) => "Vh",
+            ValueConfig::Auto => ValueKind::Auto,
+            ValueConfig::Px(_) => ValueKind::Px,
+            ValueConfig::Percent(_) => ValueKind::Percent,
+            ValueConfig::Vw(_) => ValueKind::Vw,
+            ValueConfig::Vh(_) => ValueKind::Vh,
         }
     }
     pub fn num(&self) -> Option<f32> {
@@ -49,14 +59,23 @@ impl ValueConfig {
             _ => {}
         }
     }
-    pub fn cast(&self, variant: &str) -> Self {
+    pub fn cast(&self, kind: ValueKind) -> Self {
         let n = self.num().unwrap_or(100.0);
-        match variant {
-            "Px" => ValueConfig::Px(n),
-            "Percent" => ValueConfig::Percent(n),
-            "Vw" => ValueConfig::Vw(n),
-            "Vh" => ValueConfig::Vh(n),
-            _ => ValueConfig::Auto,
+        match kind {
+            ValueKind::Px => ValueConfig::Px(n),
+            ValueKind::Percent => ValueConfig::Percent(n),
+            ValueKind::Vw => ValueConfig::Vw(n),
+            ValueKind::Vh => ValueConfig::Vh(n),
+            ValueKind::Auto => ValueConfig::Auto,
+        }
+    }
+    pub fn display_short(&self) -> String {
+        match self {
+            ValueConfig::Auto => "auto".into(),
+            ValueConfig::Px(n) => format!("{n:.0}px"),
+            ValueConfig::Percent(n) => format!("{n:.0}%"),
+            ValueConfig::Vw(n) => format!("{n:.0}vw"),
+            ValueConfig::Vh(n) => format!("{n:.0}vh"),
         }
     }
 }
@@ -142,37 +161,67 @@ impl NodeConfig {
     }
 }
 
-pub fn get_node<'a>(root: &'a NodeConfig, path: &[usize]) -> &'a NodeConfig {
-    if path.is_empty() {
-        root
-    } else {
-        get_node(&root.children[path[0]], &path[1..])
+impl NodeConfig {
+    pub fn get<'a>(&'a self, path: &[usize]) -> &'a NodeConfig {
+        if path.is_empty() {
+            self
+        } else {
+            self.children[path[0]].get(&path[1..])
+        }
     }
-}
 
-pub fn get_node_mut<'a>(root: &'a mut NodeConfig, path: &[usize]) -> &'a mut NodeConfig {
-    if path.is_empty() {
-        root
-    } else {
-        get_node_mut(&mut root.children[path[0]], &path[1..])
+    pub fn get_mut<'a>(&'a mut self, path: &[usize]) -> &'a mut NodeConfig {
+        if path.is_empty() {
+            self
+        } else {
+            self.children[path[0]].get_mut(&path[1..])
+        }
     }
-}
 
-pub fn path_valid(root: &NodeConfig, path: &[usize]) -> bool {
-    if path.is_empty() {
-        return true;
+    pub fn path_valid(&self, path: &[usize]) -> bool {
+        if path.is_empty() {
+            return true;
+        }
+        if path[0] >= self.children.len() {
+            return false;
+        }
+        self.children[path[0]].path_valid(&path[1..])
     }
-    if path[0] >= root.children.len() {
-        return false;
-    }
-    path_valid(&root.children[path[0]], &path[1..])
-}
 
-pub fn count_leaves(node: &NodeConfig) -> usize {
-    if node.children.is_empty() {
-        1
-    } else {
-        node.children.iter().map(count_leaves).sum()
+    pub fn count_leaves(&self) -> usize {
+        if self.children.is_empty() {
+            1
+        } else {
+            self.children.iter().map(|c| c.count_leaves()).sum()
+        }
+    }
+
+    pub fn text_scale(&self) -> f32 {
+        fn approx_px(v: &ValueConfig) -> Option<f32> {
+            match v {
+                ValueConfig::Px(n) => Some(*n),
+                ValueConfig::Percent(n) => Some(n / 100.0 * 600.0),
+                ValueConfig::Vw(n) | ValueConfig::Vh(n) => Some(n / 100.0 * 800.0),
+                ValueConfig::Auto => None,
+            }
+        }
+        let w = approx_px(&self.width);
+        let h = approx_px(&self.height);
+        let min_dim = match (w, h) {
+            (Some(w), Some(h)) => w.min(h),
+            (Some(v), None) | (None, Some(v)) => v,
+            (None, None) => 80.0,
+        };
+        (min_dim / 80.0).clamp(0.25, 2.0)
+    }
+
+    pub fn info(&self) -> String {
+        let g = format_float(self.flex_grow);
+        let s = format_float(self.flex_shrink);
+        let basis = self.flex_basis.kind();
+        let w = self.width.display_short();
+        let h = self.height.display_short();
+        format!("g:{g} s:{s}\nbasis:{basis} w:{w} h:{h}",)
     }
 }
 
@@ -184,23 +233,16 @@ pub enum BackgroundMode {
     RandomArt,
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, Display, EnumIter)]
 pub enum ArtStyle {
+    #[strum(serialize = "Expr Tree")]
     ExprTree,
     Voronoi,
+    #[strum(serialize = "Flow Field")]
     FlowField,
     Crackle,
+    #[strum(serialize = "Op Art")]
     OpArt,
-}
-
-impl ArtStyle {
-    pub const ALL: &'static [(&'static str, ArtStyle)] = &[
-        ("Expr Tree", ArtStyle::ExprTree),
-        ("Voronoi", ArtStyle::Voronoi),
-        ("Flow Field", ArtStyle::FlowField),
-        ("Crackle", ArtStyle::Crackle),
-        ("Op Art", ArtStyle::OpArt),
-    ];
 }
 
 // ─── Main resource ────────────────────────────────────────────────────────────
@@ -240,52 +282,10 @@ impl Default for FlexConfig {
     }
 }
 
-// ─── Display helpers ──────────────────────────────────────────────────────────
-
-pub fn text_scale(node: &NodeConfig) -> f32 {
-    fn approx_px(v: &ValueConfig) -> Option<f32> {
-        match v {
-            ValueConfig::Px(n) => Some(*n),
-            ValueConfig::Percent(n) => Some(n / 100.0 * 600.0),
-            ValueConfig::Vw(n) | ValueConfig::Vh(n) => Some(n / 100.0 * 800.0),
-            ValueConfig::Auto => None,
-        }
-    }
-    let w = approx_px(&node.width);
-    let h = approx_px(&node.height);
-    let min_dim = match (w, h) {
-        (Some(w), Some(h)) => w.min(h),
-        (Some(v), None) | (None, Some(v)) => v,
-        (None, None) => 80.0,
-    };
-    (min_dim / 80.0).clamp(0.25, 2.0)
-}
-
-pub fn node_info(node: &NodeConfig) -> String {
-    format!(
-        "g:{} s:{}\nbasis:{} w:{} h:{}",
-        format_float(node.flex_grow),
-        format_float(node.flex_shrink),
-        node.flex_basis.variant(),
-        format_value(&node.width),
-        format_value(&node.height)
-    )
-}
-
-pub fn format_float(v: f32) -> String {
+fn format_float(v: f32) -> String {
     if (v - v.round()).abs() < 0.005 {
         format!("{}", v as i32)
     } else {
         format!("{v:.1}")
-    }
-}
-
-pub fn format_value(v: &ValueConfig) -> String {
-    match v {
-        ValueConfig::Auto => "auto".into(),
-        ValueConfig::Px(n) => format!("{n:.0}px"),
-        ValueConfig::Percent(n) => format!("{n:.0}%"),
-        ValueConfig::Vw(n) => format!("{n:.0}vw"),
-        ValueConfig::Vh(n) => format!("{n:.0}vh"),
     }
 }

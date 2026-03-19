@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
+use strum::IntoEnumIterator;
 
 use crate::codegen::{emit_bevy_code, emit_html_css, emit_swiftui, emit_tailwind};
 use crate::config::*;
@@ -65,11 +66,11 @@ fn apply_hover<T: PartialEq + Clone>(
     set: impl FnOnce(&mut NodeConfig, T),
 ) -> bool {
     let Some(v) = opt else { return false };
-    if get(get_node(&cfg.root, path)) != v {
+    if get(cfg.root.get(path)) != v {
         if preview.is_none() {
             *preview = Some(cfg.clone());
         }
-        set(get_node_mut(&mut cfg.root, path), v);
+        set(cfg.root.get_mut(path), v);
         true
     } else {
         false
@@ -170,17 +171,17 @@ pub fn panel_system(
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
                             if ui.button("+ Child").on_hover_text("Add a new child node inside the selected node").clicked() {
-                                let n = count_leaves(&cfg.root);
+                                let n = cfg.root.count_leaves();
                                 let lbl = format!("node{}", n + 1);
-                                get_node_mut(&mut cfg.root, &sel_path)
+                                cfg.root.get_mut(&sel_path)
                                     .children.push(NodeConfig::new_leaf(&lbl, 80.0, 80.0));
                                 changed = true;
                             }
                             if !is_root && ui.button("+ Sibling").on_hover_text("Add a new node next to the selected node (same parent)").clicked() {
                                 let pidx = sel_path.len() - 1;
-                                let n = count_leaves(&cfg.root);
+                                let n = cfg.root.count_leaves();
                                 let lbl = format!("node{}", n + 1);
-                                get_node_mut(&mut cfg.root, &sel_path[..pidx])
+                                cfg.root.get_mut(&sel_path[..pidx])
                                     .children.push(NodeConfig::new_leaf(&lbl, 80.0, 80.0));
                                 changed = true;
                             }
@@ -191,7 +192,7 @@ pub fn panel_system(
                         if remove_req && !sel_path.is_empty() {
                             let pidx = sel_path.len() - 1;
                             let idx = sel_path[pidx];
-                            get_node_mut(&mut cfg.root, &sel_path[..pidx]).children.remove(idx);
+                            cfg.root.get_mut(&sel_path[..pidx]).children.remove(idx);
                             let new_path = sel_path[..pidx].to_vec();
                             cfg.selected = new_path.clone();
                             sel_path = new_path;
@@ -209,7 +210,7 @@ pub fn panel_system(
 
                 ui.add_space(6.0);
 
-                if path_valid(&cfg.root, &sel_path) {
+                if cfg.root.path_valid(&sel_path) {
 
                 egui::CollapsingHeader::new("Flex Container")
                     .default_open(true)
@@ -217,7 +218,7 @@ pub fn panel_system(
                         ui.add_space(4.0);
                         egui::Grid::new("cg1").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
                             {
-                                let n = get_node_mut(&mut cfg.root, &sel_path);
+                                let n = cfg.root.get_mut(&sel_path);
                                 label_with_help(ui, "direction", "The main axis along which children are laid out (Row = horizontal, Column = vertical)");
                                 hover_direction = combo(ui, "fd", &mut n.flex_direction, &[
                                     ("Row", FlexDirection::Row), ("Column", FlexDirection::Column),
@@ -272,7 +273,7 @@ pub fn panel_system(
                         ui.add_space(4.0); ui.separator(); ui.add_space(4.0);
                         egui::Grid::new("cg2").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
                             {
-                                let n = get_node_mut(&mut cfg.root, &sel_path);
+                                let n = cfg.root.get_mut(&sel_path);
                                 label_with_help(ui, "row-gap", "Spacing between rows of children");
                                 hover_row_gap = val_row(ui, "rg", &mut n.row_gap, &mut changed, &mut any_hovered);
                                 ui.end_row();
@@ -309,7 +310,7 @@ pub fn panel_system(
                         ui.add_space(4.0);
                         egui::Grid::new("sg").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
                             {
-                                let n = get_node_mut(&mut cfg.root, &sel_path);
+                                let n = cfg.root.get_mut(&sel_path);
                                 label_with_help(ui, "width", "The preferred width of this node");    hover_width    = val_row(ui, "sw",    &mut n.width,      &mut changed, &mut any_hovered); ui.end_row();
                                 label_with_help(ui, "height", "The preferred height of this node");   hover_height    = val_row(ui, "sh",    &mut n.height,     &mut changed, &mut any_hovered); ui.end_row();
                                 label_with_help(ui, "min-width", "The minimum width this node can shrink to");  hover_min_width = val_row(ui, "sminw", &mut n.min_width,  &mut changed, &mut any_hovered); ui.end_row();
@@ -348,7 +349,7 @@ pub fn panel_system(
                             ui.add_space(4.0);
                             egui::Grid::new("ig").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
                                 {
-                                    let n = get_node_mut(&mut cfg.root, &sel_path);
+                                    let n = cfg.root.get_mut(&sel_path);
                                     label_with_help(ui, "flex-grow", "How much this node grows relative to siblings when there is extra space (0 = don't grow)");
                                     changed |= ui.add(egui::Slider::new(&mut n.flex_grow, 0.0..=5.0).max_decimals(2)).changed();
                                     ui.end_row();
@@ -400,14 +401,14 @@ pub fn panel_system(
                             if cfg.bg_mode != prev { changed = true; }
                         });
                         if cfg.bg_mode == BackgroundMode::RandomArt {
-                            let cur = ArtStyle::ALL.iter().find(|(_, s)| *s == cfg.art_style)
-                                .map(|(n, _)| *n).unwrap_or("?");
+                            let cur = cfg.art_style.to_string();
                             let mut hover_art: Option<ArtStyle> = None;
                             let art_resp = egui::ComboBox::from_label("style")
-                                .selected_text(cur)
+                                .selected_text(&cur)
                                 .show_ui(ui, |ui| {
-                                    for (name, style) in ArtStyle::ALL {
-                                        let r = ui.selectable_label(cfg.art_style == *style, *name);
+                                    for style in ArtStyle::iter() {
+                                        let name = style.to_string();
+                                        let r = ui.selectable_label(cfg.art_style == style, &name);
                                         if r.clicked() { cfg.art_style = style.clone(); changed = true; }
                                         else if r.hovered() { hover_art = Some(style.clone()); }
                                     }
@@ -459,7 +460,7 @@ pub fn panel_system(
         cfg.needs_rebuild = true;
     } else if !any_hovered && let Some(saved) = preview.take() {
         *cfg = saved;
-        while !path_valid(&cfg.root, &cfg.selected) && !cfg.selected.is_empty() {
+        while !cfg.root.path_valid(&cfg.selected) && !cfg.selected.is_empty() {
             cfg.selected.pop();
         }
         cfg.needs_rebuild = true;
@@ -517,22 +518,21 @@ fn val_row(
     changed: &mut bool,
     any_open: &mut bool,
 ) -> Option<ValueConfig> {
-    const VARIANTS: &[&str] = &["Auto", "Px", "Percent", "Vw", "Vh"];
     let mut hover = None;
     let mut is_open = false;
     ui.horizontal(|ui| {
-        let cur = val.variant();
+        let cur = val.kind();
         let resp = egui::ComboBox::from_id_salt(id)
             .width(72.0)
-            .selected_text(cur)
+            .selected_text(cur.to_string())
             .show_ui(ui, |ui| {
-                for &v in VARIANTS {
-                    let r = ui.selectable_label(cur == v, v);
+                for kind in ValueKind::iter() {
+                    let r = ui.selectable_label(cur == kind, kind.to_string());
                     if r.clicked() {
-                        *val = val.cast(v);
+                        *val = val.cast(kind);
                         *changed = true;
                     } else if r.hovered() {
-                        hover = Some(val.cast(v));
+                        hover = Some(val.cast(kind));
                     }
                 }
             });
@@ -541,7 +541,7 @@ fn val_row(
         }
         if let Some(n) = val.num() {
             let mut n = n;
-            let (lo, hi) = if matches!(val, ValueConfig::Px(_)) {
+            let (lo, hi) = if val.kind() == ValueKind::Px {
                 (0.0_f32, 600.0_f32)
             } else {
                 (0.0_f32, 100.0_f32)

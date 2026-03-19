@@ -5,7 +5,7 @@ use bevy::{
 };
 use bevy_egui::EguiContexts;
 
-use crate::art::{ArtExpressions, ArtState, pastel, render_art};
+use crate::art::{ArtExpressions, ArtState, pastel};
 use crate::config::*;
 
 // ─── Components ───────────────────────────────────────────────────────────────
@@ -45,12 +45,12 @@ pub fn rebuild_viz(
     art.exprs.clear();
     art.handles.clear();
     if cfg.bg_mode == BackgroundMode::RandomArt {
-        let n = count_leaves(&cfg.root);
+        let n = cfg.root.count_leaves();
         let (base, depth, style) = (cfg.art_seed, cfg.art_depth, cfg.art_style.clone());
         for i in 0..n {
             let iseed = base.wrapping_add((i as u64).wrapping_mul(0x9e3779b97f4a7c15));
             let exprs = ArtExpressions::generate(iseed, depth);
-            let pixels = render_art(&style, &exprs, iseed, 0.0);
+            let pixels = style.render(&exprs, iseed, 0.0);
             let image = Image::new(
                 Extent3d {
                     width: ART_TEXTURE_SIZE,
@@ -180,7 +180,7 @@ fn spawn_node(
                 BorderColor::all(border_color),
                 Interaction::None,
                 VizNodePath(current_path.to_vec()),
-                VizNodeInfo(node_info(node)),
+                VizNodeInfo(node.info()),
             ))
             .id();
         if cfg.bg_mode == BackgroundMode::RandomArt
@@ -188,7 +188,7 @@ fn spawn_node(
         {
             commands.entity(entity).insert(ImageNode::new(h.clone()));
         }
-        let scale = text_scale(node);
+        let scale = node.text_scale();
         let overlay = commands
             .spawn(Node {
                 position_type: PositionType::Absolute,
@@ -219,10 +219,10 @@ fn spawn_node(
                 BorderColor::all(border_color),
                 Interaction::None,
                 VizNodePath(current_path.to_vec()),
-                VizNodeInfo(node_info(node)),
+                VizNodeInfo(node.info()),
             ))
             .id();
-        let cscale = text_scale(node);
+        let cscale = node.text_scale();
         let lbl = commands
             .spawn((
                 Text::new(node.label.clone()),
