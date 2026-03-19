@@ -1720,41 +1720,68 @@ fn viz_tooltip(
     windows: Query<&Window>,
     mut contexts: EguiContexts,
     nodes: Query<(&Interaction, &VizNodeInfo, &VizNodePath)>,
-    tooltips: Query<Entity, With<VizTooltip>>,
+    mut tooltip_entity: Local<Option<Entity>>,
+    mut tooltip_text: Local<Option<Entity>>,
 ) {
-    for e in &tooltips { commands.entity(e).despawn(); }
-
     let egui_owns_pointer = contexts.ctx_mut().map_or(false, |ctx| ctx.is_pointer_over_area());
-    let mut hovered_info = None;
+    let mut hovered_info: Option<&str> = None;
     if !egui_owns_pointer {
         for (interaction, info, path) in &nodes {
             if *interaction == Interaction::Hovered && !path.0.is_empty() {
-                hovered_info = Some(info);
+                hovered_info = Some(&info.0);
             }
         }
     }
 
-    if let Some(info) = hovered_info {
-        let Ok(window) = windows.single() else { return };
-        let Some(cursor) = window.cursor_position() else { return };
-        commands.spawn((
-            VizTooltip,
-            Node {
+    let Ok(window) = windows.single() else { return };
+    let cursor = window.cursor_position();
+
+    if let (Some(info), Some(cursor)) = (hovered_info, cursor) {
+        if let Some(entity) = *tooltip_entity {
+            // Update existing tooltip position and text
+            commands.entity(entity).insert(Node {
                 position_type: PositionType::Absolute,
                 left: Val::Px(cursor.x + 12.0),
                 top: Val::Px(cursor.y + 12.0),
                 padding: UiRect::all(Val::Px(6.0)),
                 border: UiRect::all(Val::Px(1.0)),
+                display: Display::Flex,
                 ..default()
-            },
-            GlobalZIndex(100),
-            BackgroundColor(Color::srgba(0.12, 0.12, 0.18, 0.95)),
-            BorderColor::all(Color::srgba(1.0, 1.0, 1.0, 0.2)),
-        )).with_child((
-            Text::new(info.0.clone()),
-            TextFont { font_size: 11.0, ..default() },
-            TextColor(Color::srgba(0.9, 0.9, 0.9, 1.0)),
-        ));
+            });
+            if let Some(text_entity) = *tooltip_text {
+                commands.entity(text_entity).insert(Text::new(info.to_owned()));
+            }
+        } else {
+            // Spawn tooltip for the first time
+            let text_id = commands.spawn((
+                Text::new(info.to_owned()),
+                TextFont { font_size: 11.0, ..default() },
+                TextColor(Color::srgba(0.9, 0.9, 0.9, 1.0)),
+            )).id();
+            let entity = commands.spawn((
+                VizTooltip,
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(cursor.x + 12.0),
+                    top: Val::Px(cursor.y + 12.0),
+                    padding: UiRect::all(Val::Px(6.0)),
+                    border: UiRect::all(Val::Px(1.0)),
+                    ..default()
+                },
+                GlobalZIndex(100),
+                BackgroundColor(Color::srgba(0.12, 0.12, 0.18, 0.95)),
+                BorderColor::all(Color::srgba(1.0, 1.0, 1.0, 0.2)),
+            )).id();
+            commands.entity(entity).add_child(text_id);
+            *tooltip_entity = Some(entity);
+            *tooltip_text = Some(text_id);
+        }
+    } else if let Some(entity) = *tooltip_entity {
+        // Hide tooltip by setting display to None
+        commands.entity(entity).insert(Node {
+            display: Display::None,
+            ..default()
+        });
     }
 }
 
