@@ -17,8 +17,9 @@ build:
     cargo build
 
 # Update snapshot test data
+[env('FLEXPLORE_UPDATE' , '1')]
 snapshots:
-    FLEXPLORE_UPDATE=1 cargo test snapshot -- --test-threads=1
+    cargo test snapshot -- --test-threads=1
 
 # Render Bevy screenshots (pass case names to filter)
 render-bevy *cases:
