@@ -144,27 +144,53 @@ fn emit_flutter_inner(
             FlexDirection::RowReverse | FlexDirection::ColumnReverse
         );
 
+        let w = dart_value(&node.width);
+        let h = dart_value(&node.height);
+        let p = dart_value(&node.padding);
+        let m = dart_value(&node.margin);
+        let has_container = w.is_some() || h.is_some() || p.is_some() || m.is_some();
+
+        if has_container {
+            writeln!(buf, "{pad}Container(")?;
+            if let Some(v) = &w {
+                writeln!(buf, "{pad}  width: {v},")?;
+            }
+            if let Some(v) = &h {
+                writeln!(buf, "{pad}  height: {v},")?;
+            }
+            if let Some(v) = &p {
+                writeln!(buf, "{pad}  padding: EdgeInsets.all({v}),")?;
+            }
+            if let Some(v) = &m {
+                writeln!(buf, "{pad}  margin: EdgeInsets.all({v}),")?;
+            }
+            write!(buf, "{pad}  child: ")?;
+        }
+
+        let inner_depth = if has_container { depth + 1 } else { depth };
+        let ipad = "  ".repeat(inner_depth);
+
         if node.flex_wrap != FlexWrap::NoWrap {
-            writeln!(buf, "{pad}Wrap(")?;
+            writeln!(buf, "{ipad}Wrap(")?;
             writeln!(
                 buf,
-                "{pad}  direction: {},",
+                "{ipad}  direction: {},",
                 if is_row { "Axis.horizontal" } else { "Axis.vertical" }
             )?;
             if let Some(s) = dart_value(&node.column_gap) {
-                writeln!(buf, "{pad}  spacing: {s},")?;
+                writeln!(buf, "{ipad}  spacing: {s},")?;
             }
             if let Some(s) = dart_value(&node.row_gap) {
-                writeln!(buf, "{pad}  runSpacing: {s},")?;
+                writeln!(buf, "{ipad}  runSpacing: {s},")?;
             }
         } else {
             let widget = if is_row { "Row" } else { "Column" };
-            writeln!(buf, "{pad}{widget}(")?;
-            writeln!(buf, "{pad}  mainAxisAlignment: {},", dart_main_axis(node.justify_content))?;
-            writeln!(buf, "{pad}  crossAxisAlignment: {},", dart_cross_axis(node.align_items))?;
+            writeln!(buf, "{ipad}{widget}(")?;
+            writeln!(buf, "{ipad}  mainAxisAlignment: {},", dart_main_axis(node.justify_content))?;
+            writeln!(buf, "{ipad}  crossAxisAlignment: {},", dart_cross_axis(node.align_items))?;
         }
 
-        writeln!(buf, "{pad}  children: [")?;
+        writeln!(buf, "{ipad}  children: [")?;
         let mut children: Vec<&NodeConfig> = node.children.iter().collect();
         children.sort_by_key(|c| c.order);
         if is_reversed {
@@ -172,26 +198,21 @@ fn emit_flutter_inner(
         }
         for child in children {
             if child.flex_grow > 0.0 && node.flex_wrap == FlexWrap::NoWrap {
-                writeln!(buf, "{pad}    Expanded(")?;
-                writeln!(buf, "{pad}      flex: {},", child.flex_grow as i32)?;
-                write!(buf, "{pad}      child: ")?;
-                emit_flutter_node(buf, child, depth + 3, leaf_idx)?;
-                writeln!(buf, "{pad}    ),")?;
+                writeln!(buf, "{ipad}    Expanded(")?;
+                writeln!(buf, "{ipad}      flex: {},", child.flex_grow.round().max(1.0) as i32)?;
+                write!(buf, "{ipad}      child: ")?;
+                emit_flutter_node(buf, child, inner_depth + 3, leaf_idx)?;
+                writeln!(buf, "{ipad}    ),")?;
             } else {
-                emit_flutter_node(buf, child, depth + 2, leaf_idx)?;
-                write!(buf, "{pad}    ,")?;
-                buf.push('\n');
+                emit_flutter_node(buf, child, inner_depth + 2, leaf_idx)?;
+                writeln!(buf, "{ipad}    ,")?;
             }
         }
-        writeln!(buf, "{pad}  ],")?;
-        writeln!(buf, "{pad})")?;
+        writeln!(buf, "{ipad}  ],")?;
+        writeln!(buf, "{ipad})")?;
 
-        // Container wrapper for sizing/padding/bg
-        let has_sizing = dart_value(&node.width).is_some()
-            || dart_value(&node.height).is_some()
-            || dart_value(&node.padding).is_some();
-        if has_sizing {
-            writeln!(buf, "{pad}// Wrap in Container for sizing/padding if needed")?;
+        if has_container {
+            writeln!(buf, "{pad})")?;
         }
     }
     Ok(())
