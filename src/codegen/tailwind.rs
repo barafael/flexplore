@@ -170,3 +170,59 @@ fn emit_tailwind_node(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_container() -> NodeConfig {
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![
+            NodeConfig::new_leaf("A", 80.0, 80.0),
+            NodeConfig::new_leaf("B", 120.0, 100.0),
+        ];
+        root
+    }
+
+    #[test]
+    fn emits_flex_classes() {
+        let code = emit_tailwind(&test_container()).unwrap();
+        assert!(code.contains("flex"));
+        assert!(code.contains("flex-row"));
+    }
+
+    #[test]
+    fn emits_column_direction() {
+        let mut root = test_container();
+        root.flex_direction = FlexDirection::Column;
+        let code = emit_tailwind(&root).unwrap();
+        assert!(code.contains("flex-col"));
+    }
+
+    #[test]
+    fn emits_hidden_when_not_visible() {
+        let mut node = NodeConfig::new_leaf("A", 80.0, 80.0);
+        node.visible = false;
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![node];
+        let code = emit_tailwind(&root).unwrap();
+        assert!(code.contains("hidden"));
+    }
+
+    #[test]
+    fn emits_order_class() {
+        let mut node = NodeConfig::new_leaf("A", 80.0, 80.0);
+        node.order = -2;
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![node];
+        let code = emit_tailwind(&root).unwrap();
+        assert!(code.contains("order-[-2]"));
+    }
+
+    #[test]
+    fn emits_leaf_label() {
+        let code = emit_tailwind(&test_container()).unwrap();
+        assert!(code.contains(">A</div>"));
+        assert!(code.contains(">B</div>"));
+    }
+}

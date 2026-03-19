@@ -165,3 +165,56 @@ fn emit_react_node(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_container() -> NodeConfig {
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![
+            NodeConfig::new_leaf("A", 80.0, 80.0),
+            NodeConfig::new_leaf("B", 120.0, 100.0),
+        ];
+        root
+    }
+
+    #[test]
+    fn emits_function_component() {
+        let code = emit_react(&test_container()).unwrap();
+        assert!(code.contains("export default function FlexLayout()"));
+    }
+
+    #[test]
+    fn emits_inline_styles() {
+        let code = emit_react(&test_container()).unwrap();
+        assert!(code.contains("flexDirection:"));
+        assert!(code.contains("justifyContent:"));
+    }
+
+    #[test]
+    fn emits_display_none_when_hidden() {
+        let mut node = NodeConfig::new_leaf("A", 80.0, 80.0);
+        node.visible = false;
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![node];
+        let code = emit_react(&root).unwrap();
+        assert!(code.contains("display: 'none'"));
+    }
+
+    #[test]
+    fn emits_order_property() {
+        let mut node = NodeConfig::new_leaf("A", 80.0, 80.0);
+        node.order = 5;
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![node];
+        let code = emit_react(&root).unwrap();
+        assert!(code.contains("order: 5"));
+    }
+
+    #[test]
+    fn emits_leaf_label() {
+        let code = emit_react(&test_container()).unwrap();
+        assert!(code.contains(">A</div>"));
+    }
+}

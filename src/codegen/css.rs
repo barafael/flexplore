@@ -185,3 +185,62 @@ fn emit_html_node(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_container() -> NodeConfig {
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![
+            NodeConfig::new_leaf("A", 80.0, 80.0),
+            NodeConfig::new_leaf("B", 120.0, 100.0),
+        ];
+        root
+    }
+
+    #[test]
+    fn emits_style_and_html() {
+        let code = emit_html_css(&test_container()).unwrap();
+        assert!(code.contains("<style>"));
+        assert!(code.contains("<div class=\"node-"));
+    }
+
+    #[test]
+    fn emits_flex_direction() {
+        let mut root = test_container();
+        root.flex_direction = FlexDirection::Column;
+        let code = emit_html_css(&root).unwrap();
+        assert!(code.contains("flex-direction: column"));
+    }
+
+    #[test]
+    fn emits_display_none_when_hidden() {
+        let mut node = NodeConfig::new_leaf("hidden", 80.0, 80.0);
+        node.visible = false;
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![node];
+        let code = emit_html_css(&root).unwrap();
+        assert!(code.contains("display: none"));
+    }
+
+    #[test]
+    fn emits_order() {
+        let mut node = NodeConfig::new_leaf("A", 80.0, 80.0);
+        node.order = 3;
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![node];
+        let code = emit_html_css(&root).unwrap();
+        assert!(code.contains("order: 3"));
+    }
+
+    #[test]
+    fn emits_css_values() {
+        let mut leaf = NodeConfig::new_leaf("A", 80.0, 80.0);
+        leaf.width = ValueConfig::Vw(50.0);
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![leaf];
+        let code = emit_html_css(&root).unwrap();
+        assert!(code.contains("50.0vw"));
+    }
+}

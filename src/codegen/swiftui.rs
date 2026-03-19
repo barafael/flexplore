@@ -238,3 +238,55 @@ fn emit_swiftui_node(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_container() -> NodeConfig {
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![
+            NodeConfig::new_leaf("A", 80.0, 80.0),
+            NodeConfig::new_leaf("B", 120.0, 100.0),
+        ];
+        root
+    }
+
+    #[test]
+    fn emits_struct_wrapper() {
+        let code = emit_swiftui(&test_container()).unwrap();
+        assert!(code.contains("struct ContentView: View"));
+        assert!(code.contains("var body: some View"));
+    }
+
+    #[test]
+    fn emits_hstack_for_row() {
+        let code = emit_swiftui(&test_container()).unwrap();
+        assert!(code.contains("HStack"));
+    }
+
+    #[test]
+    fn emits_vstack_for_column() {
+        let mut root = test_container();
+        root.flex_direction = FlexDirection::Column;
+        let code = emit_swiftui(&root).unwrap();
+        assert!(code.contains("VStack"));
+    }
+
+    #[test]
+    fn emits_text_for_leaves() {
+        let code = emit_swiftui(&test_container()).unwrap();
+        assert!(code.contains("Text(\"A\")"));
+        assert!(code.contains("Text(\"B\")"));
+    }
+
+    #[test]
+    fn emits_hidden_modifier() {
+        let mut node = NodeConfig::new_leaf("A", 80.0, 80.0);
+        node.visible = false;
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![node];
+        let code = emit_swiftui(&root).unwrap();
+        assert!(code.contains(".hidden()"));
+    }
+}

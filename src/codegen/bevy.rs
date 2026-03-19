@@ -160,3 +160,60 @@ fn emit_field(buf: &mut String, pad: &str, name: &str, value: &str) -> Result<()
     writeln!(buf, "{pad}        {name}: {value},")?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::prelude::*;
+
+    fn test_container() -> NodeConfig {
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![
+            NodeConfig::new_leaf("A", 80.0, 80.0),
+            NodeConfig::new_leaf("B", 120.0, 100.0),
+        ];
+        root
+    }
+
+    #[test]
+    fn emits_spawn_function() {
+        let code = emit_bevy_code(&test_container()).unwrap();
+        assert!(code.contains("fn spawn_ui(commands: &mut Commands)"));
+    }
+
+    #[test]
+    fn emits_flex_direction() {
+        let mut node = NodeConfig::new_container("root");
+        node.flex_direction = FlexDirection::Column;
+        node.children = vec![NodeConfig::new_leaf("A", 80.0, 80.0)];
+        let code = emit_bevy_code(&node).unwrap();
+        assert!(code.contains("FlexDirection::Column"));
+    }
+
+    #[test]
+    fn emits_leaf_text() {
+        let code = emit_bevy_code(&test_container()).unwrap();
+        assert!(code.contains("Text::new(\"A\")"));
+        assert!(code.contains("Text::new(\"B\")"));
+    }
+
+    #[test]
+    fn emits_display_none_when_hidden() {
+        let mut node = NodeConfig::new_leaf("hidden", 80.0, 80.0);
+        node.visible = false;
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![node];
+        let code = emit_bevy_code(&root).unwrap();
+        assert!(code.contains("Display::None"));
+    }
+
+    #[test]
+    fn emits_value_types() {
+        let mut leaf = NodeConfig::new_leaf("A", 80.0, 80.0);
+        leaf.width = ValueConfig::Percent(50.0);
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![leaf];
+        let code = emit_bevy_code(&root).unwrap();
+        assert!(code.contains("Val::Percent(50.0)"));
+    }
+}

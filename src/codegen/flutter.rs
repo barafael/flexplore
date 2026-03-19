@@ -196,3 +196,56 @@ fn emit_flutter_inner(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_container() -> NodeConfig {
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![
+            NodeConfig::new_leaf("A", 80.0, 80.0),
+            NodeConfig::new_leaf("B", 120.0, 100.0),
+        ];
+        root
+    }
+
+    #[test]
+    fn emits_build_function() {
+        let code = emit_flutter(&test_container()).unwrap();
+        assert!(code.contains("Widget build(BuildContext context)"));
+    }
+
+    #[test]
+    fn emits_row_for_row_direction() {
+        let code = emit_flutter(&test_container()).unwrap();
+        // Default is Wrap since NodeConfig::new_container has FlexWrap::Wrap
+        assert!(code.contains("Wrap(") || code.contains("Row("));
+    }
+
+    #[test]
+    fn emits_column_for_column_direction() {
+        let mut root = test_container();
+        root.flex_direction = FlexDirection::Column;
+        root.flex_wrap = FlexWrap::NoWrap;
+        let code = emit_flutter(&root).unwrap();
+        assert!(code.contains("Column("));
+    }
+
+    #[test]
+    fn emits_container_for_leaves() {
+        let code = emit_flutter(&test_container()).unwrap();
+        assert!(code.contains("Container("));
+        assert!(code.contains("Text('A'"));
+    }
+
+    #[test]
+    fn emits_offstage_when_hidden() {
+        let mut node = NodeConfig::new_leaf("A", 80.0, 80.0);
+        node.visible = false;
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![node];
+        let code = emit_flutter(&root).unwrap();
+        assert!(code.contains("Offstage("));
+    }
+}
