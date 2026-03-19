@@ -18,7 +18,6 @@ Interactive flexbox layout explorer. Build node trees, tweak every flexbox prope
 - **Preset templates** — Holy Grail, Sidebar + Content, Card Grid, Nav Bar
 - **Generative art backgrounds** — expression trees, Voronoi, flow fields, crackle, op art
 - **Dark/Light theme**
-- **Drag-and-drop** — reorder nodes in the tree view
 
 ## Keyboard Shortcuts
 

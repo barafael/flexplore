@@ -8,74 +8,45 @@ use crate::history::UndoHistory;
 
 // ─── Tree UI helper ───────────────────────────────────────────────────────────
 
-/// Return type: (clicked path, remove requested, drag-drop move request (from, to_parent, to_idx))
 fn draw_tree_ui(
     ui: &mut egui::Ui,
     node: &mut NodeConfig,
     path: &mut Vec<usize>,
     selected: &[usize],
     changed: &mut bool,
-) -> (Option<Vec<usize>>, bool, Option<(Vec<usize>, Vec<usize>, usize)>) {
+) -> (Option<Vec<usize>>, bool) {
     let mut clicked = None;
     let mut remove = false;
-    let mut dnd_move = None;
     let is_selected = path.as_slice() == selected;
     let is_root = path.is_empty();
-    let row_id = egui::Id::new("tree_dnd").with(&*path);
-
-    // Drop target: this row accepts drops *above* it (insert at this index).
-    let (_inner, drop_payload) = ui.dnd_drop_zone::<Vec<usize>, ()>(egui::Frame::NONE, |ui| {
-        // Drag source: this row can be dragged (except root).
-        let draw_row = |ui: &mut egui::Ui| {
-            ui.add_space(path.len() as f32 * 14.0);
-            // Visibility toggle
-            let vis_icon = if node.visible { "\u{25C9}" } else { "\u{25CE}" };
-            if ui.small_button(vis_icon).on_hover_text("Toggle visibility").clicked() {
-                node.visible = !node.visible;
+    ui.horizontal(|ui| {
+        ui.add_space(path.len() as f32 * 14.0);
+        // Visibility toggle
+        let vis_icon = if node.visible { "\u{25C9}" } else { "\u{25CE}" };
+        if ui.small_button(vis_icon).on_hover_text("Toggle visibility").clicked() {
+            node.visible = !node.visible;
+            *changed = true;
+        }
+        let icon = if node.children.is_empty() { "□" } else { "▣" };
+        if is_selected {
+            let _ = ui.selectable_label(true, icon);
+            let r = ui.add(egui::TextEdit::singleline(&mut node.label).desired_width(80.0));
+            if r.changed() {
                 *changed = true;
             }
-            let icon = if node.children.is_empty() { "□" } else { "▣" };
-            if is_selected {
-                let _ = ui.selectable_label(true, icon);
-                let r = ui.add(egui::TextEdit::singleline(&mut node.label).desired_width(80.0));
-                if r.changed() {
-                    *changed = true;
-                }
-                if !is_root && ui.small_button("x").clicked() {
-                    remove = true;
-                }
-            } else if ui
-                .selectable_label(false, format!("{} {}", icon, node.label))
-                .clicked()
-            {
-                clicked = Some(path.clone());
+            if !is_root && ui.small_button("x").clicked() {
+                remove = true;
             }
-        };
-
-        if is_root {
-            ui.horizontal(draw_row);
-        } else {
-            ui.dnd_drag_source(row_id, path.clone(), |ui| {
-                ui.horizontal(draw_row);
-            });
+        } else if ui
+            .selectable_label(false, format!("{} {}", icon, node.label))
+            .clicked()
+        {
+            clicked = Some(path.clone());
         }
     });
-
-    // Check if something was dropped on this row.
-    if let Some(dragged) = drop_payload {
-        if !is_root {
-            let parent_path = path[..path.len() - 1].to_vec();
-            let idx = path[path.len() - 1];
-            dnd_move = Some(((*dragged).clone(), parent_path, idx));
-        } else {
-            // Dropped on root => append as child at position 0.
-            dnd_move = Some(((*dragged).clone(), vec![], 0));
-        }
-    }
-
     for i in 0..node.children.len() {
         path.push(i);
-        let (r, rem, mv) = draw_tree_ui(ui, &mut node.children[i], path, selected, changed);
+        let (r, rem) = draw_tree_ui(ui, &mut node.children[i], path, selected, changed);
         path.pop();
         if r.is_some() {
             clicked = r;
@@ -83,11 +54,8 @@ fn draw_tree_ui(
         if rem {
             remove = true;
         }
-        if mv.is_some() {
-            dnd_move = mv;
-        }
     }
-    (clicked, remove, dnd_move)
+    (clicked, remove)
 }
 
 // ─── Hover preview ────────────────────────────────────────────────────────────
@@ -300,13 +268,7 @@ pub fn panel_system(
                         });
                         ui.add_space(2.0);
                         let sel_snapshot = cfg.selected().to_vec();
-                        let (clicked, remove_req, dnd_req) = draw_tree_ui(ui, &mut cfg.root, &mut vec![], &sel_snapshot, &mut changed);
-                        if let Some((from, to_parent, to_idx)) = dnd_req {
-                            if crate::config::move_node(&mut cfg.root, &from, &to_parent, to_idx) {
-                                cfg.sanitize_selection();
-                                changed = true;
-                            }
-                        }
+                        let (clicked, remove_req) = draw_tree_ui(ui, &mut cfg.root, &mut vec![], &sel_snapshot, &mut changed);
                         if remove_req && !sel_path.is_empty() {
                             let pidx = sel_path.len() - 1;
                             let idx = sel_path[pidx];
