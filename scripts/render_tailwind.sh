@@ -20,10 +20,15 @@ fi
 
 echo "Will render ${#cases[@]} Tailwind test case(s)" >&2
 
+# Clean up temp files on error/interrupt
+_cleanup_tmp=""
+trap '[ -n "$_cleanup_tmp" ] && rm -f "$_cleanup_tmp"' EXIT
+
 for name in "${cases[@]}"; do
   tw_file="$TESTDATA_DIR/$name/expected.tailwind.html"
   out_file="$TESTDATA_DIR/$name/rendered_tailwind.png"
   tmp_file="$TESTDATA_DIR/$name/_tmp_tailwind.html"
+  _cleanup_tmp="$tmp_file"
 
   if [ ! -f "$tw_file" ]; then
     echo "  SKIP: $tw_file not found" >&2
@@ -38,7 +43,7 @@ for name in "${cases[@]}"; do
 <head>
 <meta charset="UTF-8">
 <script src="https://cdn.tailwindcss.com"></script>
-<style>html,body{margin:0;height:100%}body{display:flex}</style>
+<style>html,body{margin:0;height:100%}body{display:flex;flex-direction:column;align-items:flex-start}</style>
 </head>
 <body>
 HEADER
@@ -60,6 +65,7 @@ FOOTER
     "$file_url" "$out_file" > /dev/null 2>&1
 
   rm -f "$tmp_file"
+  _cleanup_tmp=""
   echo "  Saved: $name/rendered_tailwind.png" >&2
 done
 
