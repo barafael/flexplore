@@ -6,6 +6,14 @@ use bevy::prelude::*;
 use crate::art::palette_color;
 use crate::config::{ColorPalette, NodeConfig, ValueConfig};
 
+fn is_zero_px(v: &ValueConfig) -> bool {
+    matches!(v, ValueConfig::Px(n) if *n == 0.0)
+}
+
+fn is_full_percent(v: &ValueConfig) -> bool {
+    matches!(v, ValueConfig::Percent(n) if *n >= 100.0)
+}
+
 fn swift_value(v: &ValueConfig) -> String {
     match v {
         ValueConfig::Auto => ".infinity".into(),
@@ -65,7 +73,7 @@ fn swift_h_alignment(a: AlignItems) -> &'static str {
 
 pub fn emit_swiftui(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
     let mut buf = String::from("struct ContentView: View {\n    public var body: some View {\n");
-    emit_swiftui_node(&mut buf, root, 2, &mut 0, palette)?;
+    emit_swiftui_node(&mut buf, root, 2, &mut 0, palette, true)?;
     buf.push_str("    }\n}\n");
     Ok(buf)
 }
@@ -76,6 +84,7 @@ fn emit_swiftui_node(
     depth: usize,
     leaf_idx: &mut usize,
     palette: ColorPalette,
+    parent_is_row: bool,
 ) -> Result<()> {
     let pad = "    ".repeat(depth);
     let is_leaf = node.children.is_empty();
@@ -112,15 +121,26 @@ fn emit_swiftui_node(
                 max_h.as_deref().unwrap_or("nil"),
             )?;
         }
-        if let Some(p) = swift_optional_value(&node.padding) {
-            writeln!(buf, "{pad}    .padding({p})")?;
+        if node.flex_grow > 0.0 {
+            if parent_is_row {
+                writeln!(buf, "{pad}    .frame(maxWidth: .infinity)")?;
+            } else {
+                writeln!(buf, "{pad}    .frame(maxHeight: .infinity)")?;
+            }
+        }
+        if !is_zero_px(&node.padding) {
+            if let Some(p) = swift_optional_value(&node.padding) {
+                writeln!(buf, "{pad}    .padding({p})")?;
+            }
         }
         writeln!(
             buf,
             "{pad}    .background(Color(red: {r:.2}, green: {g:.2}, blue: {b:.2}))"
         )?;
-        if let Some(m) = swift_optional_value(&node.margin) {
-            writeln!(buf, "{pad}    .padding({m}) /* margin */",)?;
+        if !is_zero_px(&node.margin) {
+            if let Some(m) = swift_optional_value(&node.margin) {
+                writeln!(buf, "{pad}    .padding({m}) /* margin */",)?;
+            }
         }
         if node.align_self != AlignSelf::Auto {
             writeln!(
@@ -157,9 +177,19 @@ fn emit_swiftui_node(
         } else {
             &node.row_gap
         };
-        let spacing = swift_spacing_value(gap)
-            .map(|s| format!(", spacing: {s}"))
-            .unwrap_or_default();
+
+        let jc = node.justify_content;
+        let uses_zero_spacing = matches!(
+            jc,
+            JustifyContent::SpaceBetween | JustifyContent::SpaceEvenly | JustifyContent::SpaceAround
+        );
+        let spacing = if uses_zero_spacing {
+            ", spacing: 0".to_string()
+        } else {
+            swift_spacing_value(gap)
+                .map(|s| format!(", spacing: {s}"))
+                .unwrap_or_default()
+        };
 
         let alignment = if is_row {
             swift_alignment(node.align_items)
@@ -177,16 +207,6 @@ fn emit_swiftui_node(
                 node.flex_wrap
             )?;
         }
-        if !matches!(
-            node.justify_content,
-            JustifyContent::Default | JustifyContent::FlexStart | JustifyContent::Start
-        ) {
-            writeln!(
-                buf,
-                "{pad}    // NOTE: justify-content: {:?} — use Spacer() or custom Layout to replicate",
-                node.justify_content
-            )?;
-        }
 
         let mut children: Vec<&NodeConfig> = node.children.iter().collect();
         children.sort_by_key(|c| c.order);
@@ -199,42 +219,96 @@ fn emit_swiftui_node(
             writeln!(buf, "{pad}    // NOTE: flex-direction: {dir_label} — children reversed in source to approximate visual order")?;
             children.reverse();
         }
-        for child in children {
-            emit_swiftui_node(buf, child, depth + 1, leaf_idx, palette)?;
+
+        match jc {
+            JustifyContent::SpaceBetween => {
+                for (i, child) in children.iter().enumerate() {
+                    if i > 0 {
+                        writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
+                    }
+                    emit_swiftui_node(buf, child, depth + 1, leaf_idx, palette, is_row)?;
+                }
+            }
+            JustifyContent::Center => {
+                writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
+                for child in children.iter() {
+                    emit_swiftui_node(buf, child, depth + 1, leaf_idx, palette, is_row)?;
+                }
+                writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
+            }
+            JustifyContent::SpaceEvenly | JustifyContent::SpaceAround => {
+                for child in children.iter() {
+                    writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
+                    emit_swiftui_node(buf, child, depth + 1, leaf_idx, palette, is_row)?;
+                }
+                writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
+            }
+            JustifyContent::FlexEnd | JustifyContent::End => {
+                writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
+                for child in children.iter() {
+                    emit_swiftui_node(buf, child, depth + 1, leaf_idx, palette, is_row)?;
+                }
+            }
+            _ => {
+                for child in children.iter() {
+                    emit_swiftui_node(buf, child, depth + 1, leaf_idx, palette, is_row)?;
+                }
+            }
         }
 
         writeln!(buf, "{pad}}}")?;
 
-        let w = swift_optional_value(&node.width);
-        let h = swift_optional_value(&node.height);
+        // Container frame: map Percent(100%) to maxWidth/maxHeight: .infinity
+        let full_w = is_full_percent(&node.width);
+        let full_h = is_full_percent(&node.height);
+        let w = if full_w { None } else { swift_optional_value(&node.width) };
+        let h = if full_h { None } else { swift_optional_value(&node.height) };
+
         if w.is_some() || h.is_some() {
             let w_str = w.as_deref().unwrap_or("nil");
             let h_str = h.as_deref().unwrap_or("nil");
-            writeln!(buf, "{pad}.frame(width: {w_str}, height: {h_str})")?;
+            writeln!(buf, "{pad}.frame(width: {w_str}, height: {h_str}, alignment: .topLeading)")?;
         }
-        let min_w = swift_optional_value(&node.min_width);
-        let min_h = swift_optional_value(&node.min_height);
-        let max_w = swift_optional_value(&node.max_width);
-        let max_h = swift_optional_value(&node.max_height);
+
+        // Min/max constraints — merge 100% dimensions as .infinity, skip zero mins
+        let min_w = if is_zero_px(&node.min_width) { None } else { swift_optional_value(&node.min_width) };
+        let min_h = if is_zero_px(&node.min_height) { None } else { swift_optional_value(&node.min_height) };
+        let max_w = if full_w { Some(".infinity".to_string()) } else { swift_optional_value(&node.max_width) };
+        let max_h = if full_h { Some(".infinity".to_string()) } else { swift_optional_value(&node.max_height) };
+
         if min_w.is_some() || min_h.is_some() || max_w.is_some() || max_h.is_some() {
             writeln!(
                 buf,
-                "{pad}.frame(minWidth: {}, maxWidth: {}, minHeight: {}, maxHeight: {})",
+                "{pad}.frame(minWidth: {}, maxWidth: {}, minHeight: {}, maxHeight: {}, alignment: .topLeading)",
                 min_w.as_deref().unwrap_or("nil"),
                 max_w.as_deref().unwrap_or("nil"),
                 min_h.as_deref().unwrap_or("nil"),
                 max_h.as_deref().unwrap_or("nil"),
             )?;
         }
-        if let Some(p) = swift_optional_value(&node.padding) {
-            writeln!(buf, "{pad}.padding({p})")?;
+
+        // Flex-grow expansion (when not already handled by percent → infinity)
+        if node.flex_grow > 0.0 && !full_w && !full_h {
+            if parent_is_row {
+                writeln!(buf, "{pad}.frame(maxWidth: .infinity, alignment: .topLeading)")?;
+            } else {
+                writeln!(buf, "{pad}.frame(maxHeight: .infinity, alignment: .topLeading)")?;
+            }
+        }
+
+        if !is_zero_px(&node.padding) {
+            if let Some(p) = swift_optional_value(&node.padding) {
+                writeln!(buf, "{pad}.padding({p})")?;
+            }
         }
         writeln!(
             buf,
             "{pad}.background(Color(red: 0.11, green: 0.11, blue: 0.17))"
         )?;
-        if let Some(m) = swift_optional_value(&node.margin) {
-            writeln!(buf, "{pad}.padding({m}) /* margin */")?;
+        if !is_zero_px(&node.margin) {
+            if let Some(m) = swift_optional_value(&node.margin) {
+                writeln!(buf, "{pad}.padding({m}) /* margin */")?;
+            }
         }
         if !node.visible {
             writeln!(buf, "{pad}.hidden()")?;
@@ -295,5 +369,36 @@ mod tests {
         root.children = vec![node];
         let code = emit_swiftui(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains(".hidden()"));
+    }
+
+    #[test]
+    fn percent_100_becomes_infinity() {
+        let code = emit_swiftui(&test_container(), ColorPalette::Pastel1).unwrap();
+        assert!(code.contains("maxWidth: .infinity"), "Percent(100) should map to maxWidth: .infinity");
+        assert!(!code.contains("width: 100.0"), "should not emit width: 100.0 for Percent(100)");
+    }
+
+    #[test]
+    fn skips_zero_margin() {
+        let code = emit_swiftui(&test_container(), ColorPalette::Pastel1).unwrap();
+        assert!(!code.contains(".padding(0.0) /* margin */"), "should not emit zero margin");
+    }
+
+    #[test]
+    fn flex_grow_emits_infinity_frame() {
+        let mut leaf = NodeConfig::new_leaf("A", 80.0, 80.0);
+        leaf.flex_grow = 1.0;
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![leaf];
+        let code = emit_swiftui(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains(".frame(maxWidth: .infinity)"), "flex-grow items should expand");
+    }
+
+    #[test]
+    fn space_between_emits_spacers() {
+        let mut root = test_container();
+        root.justify_content = JustifyContent::SpaceBetween;
+        let code = emit_swiftui(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains("Spacer(minLength: 0)"), "SpaceBetween should use Spacer()");
     }
 }

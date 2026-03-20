@@ -8,7 +8,6 @@ struct ContentView: View {
                 .frame(width: 80.0, height: 80.0)
                 .padding(8.0)
                 .background(Color(red: 0.98, green: 0.71, blue: 0.68))
-                .padding(0.0) /* margin */
                 .hidden()
             Text("B")
                 .font(.system(size: 26))
@@ -16,13 +15,10 @@ struct ContentView: View {
                 .frame(width: 80.0, height: 80.0)
                 .padding(8.0)
                 .background(Color(red: 0.70, green: 0.80, blue: 0.89))
-                .padding(0.0) /* margin */
                 .hidden()
         }
-        .frame(width: 100.0 /* 100.0% — use GeometryReader for relative sizing */, height: nil)
-        .frame(minWidth: nil, maxWidth: nil, minHeight: 0.0, maxHeight: nil)
+        .frame(minWidth: nil, maxWidth: .infinity, minHeight: nil, maxHeight: nil, alignment: .topLeading)
         .padding(12.0)
         .background(Color(red: 0.11, green: 0.11, blue: 0.17))
-        .padding(0.0) /* margin */
     }
 }

@@ -69,7 +69,7 @@ def generate():
         f"""    func test_{name}() {{
         let view = NSHostingController(rootView:
             {snake_to_camel(name)}View()
-                .frame(width: {VIEWPORT_W:.0f}, height: {VIEWPORT_H:.0f})
+                .frame(width: {VIEWPORT_W:.0f}, height: {VIEWPORT_H:.0f}, alignment: .topLeading)
                 .background(Color(red: 0.11, green: 0.11, blue: 0.18))
         )
         assertSnapshot(of: view, as: .image(size: CGSize(width: {VIEWPORT_W:.0f}, height: {VIEWPORT_H:.0f})))

@@ -8,19 +8,15 @@ struct ContentView: View {
                 .frame(width: UIScreen.main.bounds.width * 0.500, height: UIScreen.main.bounds.height * 0.200)
                 .padding(8.0)
                 .background(Color(red: 0.98, green: 0.71, blue: 0.68))
-                .padding(0.0) /* margin */
             Text("75vw x 30vh")
                 .font(.system(size: 26))
                 .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
                 .frame(width: UIScreen.main.bounds.width * 0.750, height: UIScreen.main.bounds.height * 0.300)
                 .padding(8.0)
                 .background(Color(red: 0.70, green: 0.80, blue: 0.89))
-                .padding(0.0) /* margin */
         }
-        .frame(width: 100.0 /* 100.0% — use GeometryReader for relative sizing */, height: nil)
-        .frame(minWidth: nil, maxWidth: nil, minHeight: 0.0, maxHeight: nil)
+        .frame(minWidth: nil, maxWidth: .infinity, minHeight: nil, maxHeight: nil, alignment: .topLeading)
         .padding(12.0)
         .background(Color(red: 0.11, green: 0.11, blue: 0.17))
-        .padding(0.0) /* margin */
     }
 }
