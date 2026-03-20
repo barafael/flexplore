@@ -6,6 +6,14 @@ use bevy::prelude::*;
 use crate::art::palette_color;
 use crate::config::{ColorPalette, NodeConfig, ValueConfig};
 
+fn count_leaves(node: &NodeConfig) -> usize {
+    if node.children.is_empty() {
+        1
+    } else {
+        node.children.iter().map(count_leaves).sum()
+    }
+}
+
 fn is_zero_px(v: &ValueConfig) -> bool {
     matches!(v, ValueConfig::Px(n) if *n == 0.0)
 }
@@ -57,7 +65,7 @@ fn swift_alignment(a: AlignItems) -> &'static str {
         AlignItems::FlexEnd | AlignItems::End => ".bottom",
         AlignItems::Center => ".center",
         AlignItems::Baseline => ".firstTextBaseline",
-        AlignItems::Stretch => ".center",
+        AlignItems::Stretch => ".top",
         _ => ".center",
     }
 }
@@ -67,6 +75,7 @@ fn swift_h_alignment(a: AlignItems) -> &'static str {
         AlignItems::FlexStart | AlignItems::Start => ".leading",
         AlignItems::FlexEnd | AlignItems::End => ".trailing",
         AlignItems::Center => ".center",
+        AlignItems::Stretch => ".leading",
         _ => ".center",
     }
 }
@@ -122,9 +131,9 @@ fn emit_swiftui_node(
             )?;
         }
         if node.flex_grow > 0.0 {
-            if parent_is_row {
+            if parent_is_row && max_w.is_none() {
                 writeln!(buf, "{pad}    .frame(maxWidth: .infinity)")?;
-            } else {
+            } else if !parent_is_row && max_h.is_none() {
                 writeln!(buf, "{pad}    .frame(maxHeight: .infinity)")?;
             }
         }
@@ -207,9 +216,27 @@ fn emit_swiftui_node(
                 node.flex_wrap
             )?;
         }
+        if node.align_items == AlignItems::Stretch {
+            let axis = if is_row { "maxHeight" } else { "maxWidth" };
+            writeln!(
+                buf,
+                "{pad}    // NOTE: align-items: Stretch — add .frame({axis}: .infinity) to children",
+            )?;
+        }
 
         let mut children: Vec<&NodeConfig> = node.children.iter().collect();
         children.sort_by_key(|c| c.order);
+
+        // Pre-compute leaf_idx start for each child in sorted order,
+        // so colors track with their original nodes even when reversed.
+        let mut starts = Vec::with_capacity(children.len());
+        let mut acc = *leaf_idx;
+        for child in &children {
+            starts.push(acc);
+            acc += count_leaves(child);
+        }
+        *leaf_idx = acc;
+
         if is_reversed {
             let dir_label = match node.flex_direction {
                 FlexDirection::RowReverse => "RowReverse",
@@ -218,40 +245,46 @@ fn emit_swiftui_node(
             };
             writeln!(buf, "{pad}    // NOTE: flex-direction: {dir_label} — children reversed in source to approximate visual order")?;
             children.reverse();
+            starts.reverse();
         }
 
         match jc {
             JustifyContent::SpaceBetween => {
-                for (i, child) in children.iter().enumerate() {
+                for (i, (child, start)) in children.iter().zip(starts.iter()).enumerate() {
                     if i > 0 {
                         writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
                     }
-                    emit_swiftui_node(buf, child, depth + 1, leaf_idx, palette, is_row)?;
+                    let mut idx = *start;
+                    emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row)?;
                 }
             }
             JustifyContent::Center => {
                 writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
-                for child in children.iter() {
-                    emit_swiftui_node(buf, child, depth + 1, leaf_idx, palette, is_row)?;
+                for (child, start) in children.iter().zip(starts.iter()) {
+                    let mut idx = *start;
+                    emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row)?;
                 }
                 writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
             }
             JustifyContent::SpaceEvenly | JustifyContent::SpaceAround => {
-                for child in children.iter() {
+                for (child, start) in children.iter().zip(starts.iter()) {
                     writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
-                    emit_swiftui_node(buf, child, depth + 1, leaf_idx, palette, is_row)?;
+                    let mut idx = *start;
+                    emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row)?;
                 }
                 writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
             }
             JustifyContent::FlexEnd | JustifyContent::End => {
                 writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
-                for child in children.iter() {
-                    emit_swiftui_node(buf, child, depth + 1, leaf_idx, palette, is_row)?;
+                for (child, start) in children.iter().zip(starts.iter()) {
+                    let mut idx = *start;
+                    emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row)?;
                 }
             }
             _ => {
-                for child in children.iter() {
-                    emit_swiftui_node(buf, child, depth + 1, leaf_idx, palette, is_row)?;
+                for (child, start) in children.iter().zip(starts.iter()) {
+                    let mut idx = *start;
+                    emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row)?;
                 }
             }
         }

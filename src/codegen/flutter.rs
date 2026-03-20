@@ -6,6 +6,14 @@ use bevy::prelude::*;
 use crate::art::palette_color;
 use crate::config::{ColorPalette, NodeConfig, ValueConfig};
 
+fn count_leaves(node: &NodeConfig) -> usize {
+    if node.children.is_empty() {
+        1
+    } else {
+        node.children.iter().map(count_leaves).sum()
+    }
+}
+
 fn dart_value(v: &ValueConfig) -> Option<String> {
     match v {
         ValueConfig::Auto => None,
@@ -46,6 +54,54 @@ fn dart_cross_axis(a: AlignItems) -> &'static str {
     }
 }
 
+fn dart_wrap_alignment(j: JustifyContent) -> Option<&'static str> {
+    match j {
+        JustifyContent::FlexStart | JustifyContent::Start => None, // default
+        JustifyContent::FlexEnd | JustifyContent::End => Some("WrapAlignment.end"),
+        JustifyContent::Center => Some("WrapAlignment.center"),
+        JustifyContent::SpaceBetween => Some("WrapAlignment.spaceBetween"),
+        JustifyContent::SpaceAround => Some("WrapAlignment.spaceAround"),
+        JustifyContent::SpaceEvenly => Some("WrapAlignment.spaceEvenly"),
+        _ => None,
+    }
+}
+
+fn dart_wrap_run_alignment(a: AlignContent) -> Option<&'static str> {
+    match a {
+        AlignContent::FlexStart | AlignContent::Start => None, // default
+        AlignContent::FlexEnd | AlignContent::End => Some("WrapAlignment.end"),
+        AlignContent::Center => Some("WrapAlignment.center"),
+        AlignContent::SpaceBetween => Some("WrapAlignment.spaceBetween"),
+        AlignContent::SpaceAround => Some("WrapAlignment.spaceAround"),
+        AlignContent::Stretch => None, // no direct equivalent
+        _ => None,
+    }
+}
+
+fn dart_wrap_cross_alignment(a: AlignItems) -> Option<&'static str> {
+    match a {
+        AlignItems::FlexStart | AlignItems::Start => None, // default
+        AlignItems::FlexEnd | AlignItems::End => Some("WrapCrossAlignment.end"),
+        AlignItems::Center => Some("WrapCrossAlignment.center"),
+        _ => None,
+    }
+}
+
+fn dart_align_self(a: AlignSelf, is_row: bool) -> Option<&'static str> {
+    match (a, is_row) {
+        (AlignSelf::Auto, _) => None,
+        (AlignSelf::FlexStart | AlignSelf::Start, true) => Some("Alignment.topCenter"),
+        (AlignSelf::FlexEnd | AlignSelf::End, true) => Some("Alignment.bottomCenter"),
+        (AlignSelf::Center, true) => Some("Alignment.center"),
+        (AlignSelf::Stretch, true) => None, // handled by CrossAxisAlignment
+        (AlignSelf::FlexStart | AlignSelf::Start, false) => Some("Alignment.centerLeft"),
+        (AlignSelf::FlexEnd | AlignSelf::End, false) => Some("Alignment.centerRight"),
+        (AlignSelf::Center, false) => Some("Alignment.center"),
+        (AlignSelf::Stretch, false) => None,
+        _ => None,
+    }
+}
+
 pub fn emit_flutter(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
     let mut buf = String::from("Widget build(BuildContext context) {\n  return ");
     emit_flutter_node(&mut buf, root, 1, &mut 0, palette)?;
@@ -64,8 +120,11 @@ fn emit_flutter_node(
     let is_leaf = node.children.is_empty();
 
     if !node.visible {
-        writeln!(buf, "{pad}Opacity(")?;
-        writeln!(buf, "{pad}  opacity: 0.0,")?;
+        writeln!(buf, "{pad}Visibility(")?;
+        writeln!(buf, "{pad}  visible: false,")?;
+        writeln!(buf, "{pad}  maintainSize: true,")?;
+        writeln!(buf, "{pad}  maintainAnimation: true,")?;
+        writeln!(buf, "{pad}  maintainState: true,")?;
         write!(buf, "{pad}  child: ")?;
         emit_flutter_inner(buf, node, depth + 1, leaf_idx, is_leaf, palette)?;
         writeln!(buf, "{pad})")?;
@@ -187,6 +246,15 @@ fn emit_flutter_inner(
                     writeln!(buf, "{ipad}  textDirection: TextDirection.rtl,")?;
                 }
             }
+            if let Some(a) = dart_wrap_alignment(node.justify_content) {
+                writeln!(buf, "{ipad}  alignment: {a},")?;
+            }
+            if let Some(ra) = dart_wrap_run_alignment(node.align_content) {
+                writeln!(buf, "{ipad}  runAlignment: {ra},")?;
+            }
+            if let Some(ca) = dart_wrap_cross_alignment(node.align_items) {
+                writeln!(buf, "{ipad}  crossAxisAlignment: {ca},")?;
+            }
             if let Some(s) = dart_value(&node.column_gap) {
                 writeln!(buf, "{ipad}  spacing: {s},")?;
             }
@@ -203,6 +271,17 @@ fn emit_flutter_inner(
         writeln!(buf, "{ipad}  children: [")?;
         let mut children: Vec<&NodeConfig> = node.children.iter().collect();
         children.sort_by_key(|c| c.order);
+
+        // Pre-compute leaf_idx start for each child in sorted order,
+        // so colors track with their original nodes even when reversed.
+        let mut starts = Vec::with_capacity(children.len());
+        let mut acc = *leaf_idx;
+        for child in &children {
+            starts.push(acc);
+            acc += count_leaves(child);
+        }
+        *leaf_idx = acc;
+
         if is_reversed {
             let dir_label = match node.flex_direction {
                 FlexDirection::RowReverse => "RowReverse",
@@ -211,22 +290,51 @@ fn emit_flutter_inner(
             };
             writeln!(buf, "{ipad}    // NOTE: flex-direction: {dir_label} — children reversed in source to approximate visual order")?;
             children.reverse();
+            starts.reverse();
         }
-        for child in children {
+        for (child, start) in children.iter().zip(starts.iter()) {
+            let mut idx = *start;
+            let needs_align = dart_align_self(child.align_self, is_row).is_some()
+                && node.flex_wrap == FlexWrap::NoWrap;
             if child.flex_grow > 0.0 && node.flex_wrap == FlexWrap::NoWrap {
                 writeln!(buf, "{ipad}    Expanded(")?;
                 writeln!(buf, "{ipad}      flex: {},", child.flex_grow.round().max(1.0) as i32)?;
                 write!(buf, "{ipad}      child: ")?;
-                emit_flutter_node(buf, child, inner_depth + 3, leaf_idx, palette)?;
+                if needs_align {
+                    let align = dart_align_self(child.align_self, is_row).unwrap();
+                    writeln!(buf, "Align(")?;
+                    writeln!(buf, "{ipad}        alignment: {align},")?;
+                    write!(buf, "{ipad}        child: ")?;
+                    emit_flutter_node(buf, child, inner_depth + 4, &mut idx, palette)?;
+                    writeln!(buf, "{ipad}      ),")?;
+                } else {
+                    emit_flutter_node(buf, child, inner_depth + 3, &mut idx, palette)?;
+                }
+                writeln!(buf, "{ipad}    ),")?;
+            } else if matches!(child.flex_basis, ValueConfig::Percent(n) if n > 0.0) && node.flex_wrap == FlexWrap::NoWrap {
+                let n = match child.flex_basis { ValueConfig::Percent(n) => n, _ => unreachable!() };
+                writeln!(buf, "{ipad}    Expanded(")?;
+                writeln!(buf, "{ipad}      flex: {},", n.round() as i32)?;
+                write!(buf, "{ipad}      child: ")?;
+                emit_flutter_node(buf, child, inner_depth + 3, &mut idx, palette)?;
                 writeln!(buf, "{ipad}    ),")?;
             } else if child.flex_shrink > 0.0 && node.flex_wrap == FlexWrap::NoWrap {
                 writeln!(buf, "{ipad}    Flexible(")?;
                 writeln!(buf, "{ipad}      fit: FlexFit.loose,")?;
                 write!(buf, "{ipad}      child: ")?;
-                emit_flutter_node(buf, child, inner_depth + 3, leaf_idx, palette)?;
+                if needs_align {
+                    let align = dart_align_self(child.align_self, is_row).unwrap();
+                    writeln!(buf, "Align(")?;
+                    writeln!(buf, "{ipad}        alignment: {align},")?;
+                    write!(buf, "{ipad}        child: ")?;
+                    emit_flutter_node(buf, child, inner_depth + 4, &mut idx, palette)?;
+                    writeln!(buf, "{ipad}      ),")?;
+                } else {
+                    emit_flutter_node(buf, child, inner_depth + 3, &mut idx, palette)?;
+                }
                 writeln!(buf, "{ipad}    ),")?;
             } else {
-                emit_flutter_node(buf, child, inner_depth + 2, leaf_idx, palette)?;
+                emit_flutter_node(buf, child, inner_depth + 2, &mut idx, palette)?;
                 writeln!(buf, "{ipad}    ,")?;
             }
         }
@@ -283,13 +391,14 @@ mod tests {
     }
 
     #[test]
-    fn emits_opacity_zero_when_not_visible() {
+    fn emits_visibility_when_not_visible() {
         let mut node = NodeConfig::new_leaf("A", 80.0, 80.0);
         node.visible = false;
         let mut root = NodeConfig::new_container("root");
         root.children = vec![node];
         let code = emit_flutter(&root, ColorPalette::Pastel1).unwrap();
-        assert!(code.contains("Opacity("), "should use Opacity, not Offstage");
-        assert!(code.contains("opacity: 0.0"), "should set opacity to 0.0");
+        assert!(code.contains("Visibility("), "should use Visibility widget");
+        assert!(code.contains("visible: false"), "should set visible to false");
+        assert!(code.contains("maintainSize: true"), "should maintain size for layout");
     }
 }

@@ -1,7 +1,9 @@
 struct ContentView: View {
     public var body: some View {
-        HStack(alignment: .center, spacing: 0.0) {
-            VStack(alignment: .center, spacing: 4.0) {
+        HStack(alignment: .top, spacing: 0.0) {
+            // NOTE: align-items: Stretch — add .frame(maxHeight: .infinity) to children
+            VStack(alignment: .leading, spacing: 4.0) {
+                // NOTE: align-items: Stretch — add .frame(maxWidth: .infinity) to children
                 Text("nav-1")
                     .font(.system(size: 26))
                     .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))

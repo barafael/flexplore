@@ -8,8 +8,11 @@ Widget build(BuildContext context) {
       spacing: 8.0,
       runSpacing: 8.0,
       children: [
-        Opacity(
-          opacity: 0.0,
+        Visibility(
+          visible: false,
+          maintainSize: true,
+          maintainAnimation: true,
+          maintainState: true,
           child:           Container(
             width: 80.0,
             height: 80.0,
@@ -23,8 +26,11 @@ Widget build(BuildContext context) {
           )
         )
         ,
-        Opacity(
-          opacity: 0.0,
+        Visibility(
+          visible: false,
+          maintainSize: true,
+          maintainAnimation: true,
+          maintainState: true,
           child:           Container(
             width: 80.0,
             height: 80.0,

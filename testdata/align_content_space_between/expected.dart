@@ -6,6 +6,7 @@ Widget build(BuildContext context) {
     margin: EdgeInsets.all(0.0),
     child:     Wrap(
       direction: Axis.horizontal,
+      runAlignment: WrapAlignment.spaceBetween,
       spacing: 8.0,
       runSpacing: 8.0,
       children: [

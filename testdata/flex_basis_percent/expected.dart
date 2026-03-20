@@ -7,8 +7,8 @@ Widget build(BuildContext context) {
       mainAxisAlignment: MainAxisAlignment.start,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Flexible(
-          fit: FlexFit.loose,
+        Expanded(
+          flex: 50,
           child:           Container(
             height: 80.0,
             padding: EdgeInsets.all(8.0),
@@ -20,8 +20,8 @@ Widget build(BuildContext context) {
             ),
           )
         ),
-        Flexible(
-          fit: FlexFit.loose,
+        Expanded(
+          flex: 25,
           child:           Container(
             height: 80.0,
             padding: EdgeInsets.all(8.0),
@@ -33,8 +33,8 @@ Widget build(BuildContext context) {
             ),
           )
         ),
-        Flexible(
-          fit: FlexFit.loose,
+        Expanded(
+          flex: 25,
           child:           Container(
             height: 80.0,
             padding: EdgeInsets.all(8.0),

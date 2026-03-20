@@ -6,7 +6,6 @@ struct ContentView: View {
                 .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
                 .frame(width: nil, height: 80.0)
                 .frame(minWidth: nil, maxWidth: 100.0, minHeight: nil, maxHeight: nil)
-                .frame(maxWidth: .infinity)
                 .padding(8.0)
                 .background(Color(red: 0.98, green: 0.71, blue: 0.68))
                 .layoutPriority(1.0) /* flex-grow */

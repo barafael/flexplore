@@ -1,13 +1,15 @@
 struct ContentView: View {
     public var body: some View {
-        VStack(alignment: .center, spacing: 0.0) {
+        VStack(alignment: .leading, spacing: 0.0) {
+            // NOTE: align-items: Stretch — add .frame(maxWidth: .infinity) to children
             Text("header")
                 .font(.system(size: 26))
                 .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
                 .frame(width: nil, height: 60.0)
                 .padding(8.0)
                 .background(Color(red: 0.98, green: 0.71, blue: 0.68))
-            HStack(alignment: .center, spacing: 0.0) {
+            HStack(alignment: .top, spacing: 0.0) {
+                // NOTE: align-items: Stretch — add .frame(maxHeight: .infinity) to children
                 Text("sidebar-left")
                     .font(.system(size: 26))
                     .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
