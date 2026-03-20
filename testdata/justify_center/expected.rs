@@ -24,7 +24,7 @@ fn spawn_ui(commands: &mut Commands) {
                 align_content: AlignContent::FlexStart,
                 row_gap: Val::Px(4.0),
                 column_gap: Val::Px(4.0),
-                width: Val::Px(100.0),
+                width: Val::Px(80.0),
                 height: Val::Px(60.0),
                 padding: UiRect::all(Val::Px(8.0)),
                 ..default()
@@ -55,7 +55,7 @@ fn spawn_ui(commands: &mut Commands) {
                 align_content: AlignContent::FlexStart,
                 row_gap: Val::Px(4.0),
                 column_gap: Val::Px(4.0),
-                width: Val::Px(60.0),
+                width: Val::Px(40.0),
                 height: Val::Px(60.0),
                 padding: UiRect::all(Val::Px(8.0)),
                 ..default()
@@ -86,7 +86,7 @@ fn spawn_ui(commands: &mut Commands) {
                 align_content: AlignContent::FlexStart,
                 row_gap: Val::Px(4.0),
                 column_gap: Val::Px(4.0),
-                width: Val::Px(140.0),
+                width: Val::Px(100.0),
                 height: Val::Px(60.0),
                 padding: UiRect::all(Val::Px(8.0)),
                 ..default()
@@ -117,7 +117,7 @@ fn spawn_ui(commands: &mut Commands) {
                 align_content: AlignContent::FlexStart,
                 row_gap: Val::Px(4.0),
                 column_gap: Val::Px(4.0),
-                width: Val::Px(80.0),
+                width: Val::Px(60.0),
                 height: Val::Px(60.0),
                 padding: UiRect::all(Val::Px(8.0)),
                 ..default()

@@ -76,10 +76,10 @@ fn all_fixtures() -> Vec<Fixture> {
             r.justify_content = JustifyContent::Center;
             r.flex_wrap = FlexWrap::NoWrap;
             r.children = vec![
-                NodeConfig::new_leaf("A", 100.0, 60.0),
-                NodeConfig::new_leaf("B", 60.0, 60.0),
-                NodeConfig::new_leaf("C", 140.0, 60.0),
-                NodeConfig::new_leaf("D", 80.0, 60.0),
+                NodeConfig::new_leaf("A", 80.0, 60.0),
+                NodeConfig::new_leaf("B", 40.0, 60.0),
+                NodeConfig::new_leaf("C", 100.0, 60.0),
+                NodeConfig::new_leaf("D", 60.0, 60.0),
             ];
             r
         }, ColorPalette::Pastel1),
@@ -88,10 +88,10 @@ fn all_fixtures() -> Vec<Fixture> {
             r.justify_content = JustifyContent::SpaceBetween;
             r.flex_wrap = FlexWrap::NoWrap;
             r.children = vec![
-                NodeConfig::new_leaf("A", 100.0, 60.0),
-                NodeConfig::new_leaf("B", 60.0, 60.0),
-                NodeConfig::new_leaf("C", 140.0, 60.0),
-                NodeConfig::new_leaf("D", 80.0, 60.0),
+                NodeConfig::new_leaf("A", 80.0, 60.0),
+                NodeConfig::new_leaf("B", 40.0, 60.0),
+                NodeConfig::new_leaf("C", 100.0, 60.0),
+                NodeConfig::new_leaf("D", 60.0, 60.0),
             ];
             r
         }, ColorPalette::Pastel1),
@@ -100,10 +100,10 @@ fn all_fixtures() -> Vec<Fixture> {
             r.justify_content = JustifyContent::SpaceEvenly;
             r.flex_wrap = FlexWrap::NoWrap;
             r.children = vec![
-                NodeConfig::new_leaf("A", 100.0, 60.0),
-                NodeConfig::new_leaf("B", 60.0, 60.0),
-                NodeConfig::new_leaf("C", 140.0, 60.0),
-                NodeConfig::new_leaf("D", 80.0, 60.0),
+                NodeConfig::new_leaf("A", 80.0, 60.0),
+                NodeConfig::new_leaf("B", 40.0, 60.0),
+                NodeConfig::new_leaf("C", 100.0, 60.0),
+                NodeConfig::new_leaf("D", 60.0, 60.0),
             ];
             r
         }, ColorPalette::Pastel1),
@@ -144,7 +144,7 @@ fn all_fixtures() -> Vec<Fixture> {
             let mut r = NodeConfig::new_container("root");
             r.align_content = AlignContent::SpaceBetween;
             r.flex_wrap = FlexWrap::Wrap;
-            r.height = ValueConfig::Px(400.0);
+            r.height = ValueConfig::Px(280.0);
             r.children = vec![
                 NodeConfig::new_leaf("A", 200.0, 60.0),
                 NodeConfig::new_leaf("B", 200.0, 60.0),
@@ -261,6 +261,7 @@ fn all_fixtures() -> Vec<Fixture> {
         fixture("nested_mixed", {
             let mut inner = NodeConfig::new_container("inner");
             inner.flex_direction = FlexDirection::Column;
+            inner.width = ValueConfig::Px(200.0);
             inner.children = vec![
                 NodeConfig::new_leaf("X", 40.0, 40.0),
                 NodeConfig::new_leaf("Y", 40.0, 40.0),

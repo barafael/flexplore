@@ -39,7 +39,7 @@ export default function FlexLayout() {
         rowGap: '8.0px',
         columnGap: '8.0px',
         flexGrow: 1,
-        width: '100.0%',
+        width: '200.0px',
         minHeight: '0.0px',
         padding: '12.0px',
         background: 'rgba(28, 28, 43, 1)',

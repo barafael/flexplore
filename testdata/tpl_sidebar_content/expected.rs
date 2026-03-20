@@ -24,7 +24,7 @@ fn spawn_ui(commands: &mut Commands) {
                 row_gap: Val::Px(4.0),
                 column_gap: Val::Px(8.0),
                 flex_shrink: 0.0,
-                width: Val::Px(250.0),
+                width: Val::Px(120.0),
                 min_height: Val::Px(0.0),
                 padding: UiRect::all(Val::Px(8.0)),
                 ..default()

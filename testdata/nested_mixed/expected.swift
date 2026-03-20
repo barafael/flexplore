@@ -23,7 +23,8 @@ struct ContentView: View {
                     .padding(8.0)
                     .background(Color(red: 0.80, green: 0.92, blue: 0.77))
             }
-            .frame(minWidth: nil, maxWidth: .infinity, minHeight: nil, maxHeight: nil, alignment: .topLeading)
+            .frame(width: 200.0, height: nil, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
             .padding(12.0)
             .background(Color(red: 0.11, green: 0.11, blue: 0.17))
             Text("B")

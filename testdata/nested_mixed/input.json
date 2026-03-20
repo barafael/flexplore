@@ -89,7 +89,7 @@
       "flex_basis": "Auto",
       "align_self": "Auto",
       "width": {
-        "Percent": 100.0
+        "Px": 200.0
       },
       "height": "Auto",
       "min_width": "Auto",

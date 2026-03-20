@@ -23,7 +23,7 @@ struct ContentView: View {
                     .padding(8.0)
                     .background(Color(red: 0.80, green: 0.92, blue: 0.77))
             }
-            .frame(width: 250.0, height: nil, alignment: .topLeading)
+            .frame(width: 120.0, height: nil, alignment: .topLeading)
             .padding(8.0)
             .background(Color(red: 0.11, green: 0.11, blue: 0.17))
             Text("content")

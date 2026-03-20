@@ -10,7 +10,7 @@ Widget build(BuildContext context) {
         Flexible(
           fit: FlexFit.loose,
           child:           Container(
-            width: 100.0,
+            width: 80.0,
             height: 60.0,
             padding: EdgeInsets.all(8.0),
             margin: EdgeInsets.all(0.0),
@@ -24,7 +24,7 @@ Widget build(BuildContext context) {
         Flexible(
           fit: FlexFit.loose,
           child:           Container(
-            width: 60.0,
+            width: 40.0,
             height: 60.0,
             padding: EdgeInsets.all(8.0),
             margin: EdgeInsets.all(0.0),
@@ -38,7 +38,7 @@ Widget build(BuildContext context) {
         Flexible(
           fit: FlexFit.loose,
           child:           Container(
-            width: 140.0,
+            width: 100.0,
             height: 60.0,
             padding: EdgeInsets.all(8.0),
             margin: EdgeInsets.all(0.0),
@@ -52,7 +52,7 @@ Widget build(BuildContext context) {
         Flexible(
           fit: FlexFit.loose,
           child:           Container(
-            width: 80.0,
+            width: 60.0,
             height: 60.0,
             padding: EdgeInsets.all(8.0),
             margin: EdgeInsets.all(0.0),

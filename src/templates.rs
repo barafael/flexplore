@@ -73,7 +73,7 @@ pub fn sidebar_content() -> NodeConfig {
     sidebar.flex_direction = FlexDirection::Column;
     sidebar.flex_wrap = FlexWrap::NoWrap;
     sidebar.align_items = AlignItems::Stretch;
-    sidebar.width = ValueConfig::Px(250.0);
+    sidebar.width = ValueConfig::Px(120.0);
     sidebar.height = ValueConfig::Auto;
     sidebar.flex_shrink = 0.0;
     sidebar.flex_grow = 0.0;
@@ -111,7 +111,7 @@ pub fn card_grid() -> NodeConfig {
     root.padding = ValueConfig::Px(16.0);
 
     root.children = (1..=6)
-        .map(|i| NodeConfig::new_leaf(format!("card-{i}"), 200.0, 250.0))
+        .map(|i| NodeConfig::new_leaf(format!("card-{i}"), 170.0, 80.0))
         .collect();
 
     root

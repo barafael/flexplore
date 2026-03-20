@@ -52,7 +52,7 @@
       "flex_basis": "Auto",
       "align_self": "Auto",
       "width": {
-        "Px": 100.0
+        "Px": 80.0
       },
       "height": {
         "Px": 60.0
@@ -89,7 +89,7 @@
       "flex_basis": "Auto",
       "align_self": "Auto",
       "width": {
-        "Px": 60.0
+        "Px": 40.0
       },
       "height": {
         "Px": 60.0
@@ -126,7 +126,7 @@
       "flex_basis": "Auto",
       "align_self": "Auto",
       "width": {
-        "Px": 140.0
+        "Px": 100.0
       },
       "height": {
         "Px": 60.0
@@ -163,7 +163,7 @@
       "flex_basis": "Auto",
       "align_self": "Auto",
       "width": {
-        "Px": 80.0
+        "Px": 60.0
       },
       "height": {
         "Px": 60.0

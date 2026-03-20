@@ -21,7 +21,7 @@ Widget build(BuildContext context) {
         )
         ,
         Container(
-          width: double.infinity,
+          width: 200.0,
           padding: EdgeInsets.all(12.0),
           margin: EdgeInsets.all(0.0),
           child:           Wrap(

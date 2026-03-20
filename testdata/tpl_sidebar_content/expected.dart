@@ -9,7 +9,7 @@ Widget build(BuildContext context) {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          width: 250.0,
+          width: 120.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
           child:           Column(

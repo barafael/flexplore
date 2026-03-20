@@ -18,7 +18,7 @@ export default function FlexLayout() {
         rowGap: '4.0px',
         columnGap: '8.0px',
         flexShrink: 0,
-        width: '250.0px',
+        width: '120.0px',
         minHeight: '0.0px',
         padding: '8.0px',
         background: 'rgba(28, 28, 43, 1)',

@@ -9,8 +9,8 @@ Widget build(BuildContext context) {
       runSpacing: 16.0,
       children: [
         Container(
-          width: 200.0,
-          height: 250.0,
+          width: 170.0,
+          height: 80.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
           color: Color.fromRGBO(251, 180, 174, 1.0),
@@ -21,8 +21,8 @@ Widget build(BuildContext context) {
         )
         ,
         Container(
-          width: 200.0,
-          height: 250.0,
+          width: 170.0,
+          height: 80.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
           color: Color.fromRGBO(179, 205, 227, 1.0),
@@ -33,8 +33,8 @@ Widget build(BuildContext context) {
         )
         ,
         Container(
-          width: 200.0,
-          height: 250.0,
+          width: 170.0,
+          height: 80.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
           color: Color.fromRGBO(204, 235, 197, 1.0),
@@ -45,8 +45,8 @@ Widget build(BuildContext context) {
         )
         ,
         Container(
-          width: 200.0,
-          height: 250.0,
+          width: 170.0,
+          height: 80.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
           color: Color.fromRGBO(222, 203, 228, 1.0),
@@ -57,8 +57,8 @@ Widget build(BuildContext context) {
         )
         ,
         Container(
-          width: 200.0,
-          height: 250.0,
+          width: 170.0,
+          height: 80.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
           color: Color.fromRGBO(254, 217, 166, 1.0),
@@ -69,8 +69,8 @@ Widget build(BuildContext context) {
         )
         ,
         Container(
-          width: 200.0,
-          height: 250.0,
+          width: 170.0,
+          height: 80.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
           color: Color.fromRGBO(255, 255, 204, 1.0),
