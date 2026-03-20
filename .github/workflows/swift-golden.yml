@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   render:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
