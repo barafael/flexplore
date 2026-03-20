@@ -64,7 +64,7 @@ fn swift_h_alignment(a: AlignItems) -> &'static str {
 }
 
 pub fn emit_swiftui(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
-    let mut buf = String::from("struct ContentView: View {\n    var body: some View {\n");
+    let mut buf = String::from("struct ContentView: View {\n    public var body: some View {\n");
     emit_swiftui_node(&mut buf, root, 2, &mut 0, palette)?;
     buf.push_str("    }\n}\n");
     Ok(buf)
@@ -105,10 +105,10 @@ fn emit_swiftui_node(
         if min_w.is_some() || min_h.is_some() || max_w.is_some() || max_h.is_some() {
             writeln!(
                 buf,
-                "{pad}    .frame(minWidth: {}, minHeight: {}, maxWidth: {}, maxHeight: {})",
+                "{pad}    .frame(minWidth: {}, maxWidth: {}, minHeight: {}, maxHeight: {})",
                 min_w.as_deref().unwrap_or("nil"),
-                min_h.as_deref().unwrap_or("nil"),
                 max_w.as_deref().unwrap_or("nil"),
+                min_h.as_deref().unwrap_or("nil"),
                 max_h.as_deref().unwrap_or("nil"),
             )?;
         }
@@ -219,10 +219,10 @@ fn emit_swiftui_node(
         if min_w.is_some() || min_h.is_some() || max_w.is_some() || max_h.is_some() {
             writeln!(
                 buf,
-                "{pad}.frame(minWidth: {}, minHeight: {}, maxWidth: {}, maxHeight: {})",
+                "{pad}.frame(minWidth: {}, maxWidth: {}, minHeight: {}, maxHeight: {})",
                 min_w.as_deref().unwrap_or("nil"),
-                min_h.as_deref().unwrap_or("nil"),
                 max_w.as_deref().unwrap_or("nil"),
+                min_h.as_deref().unwrap_or("nil"),
                 max_h.as_deref().unwrap_or("nil"),
             )?;
         }
@@ -263,7 +263,7 @@ mod tests {
     fn emits_struct_wrapper() {
         let code = emit_swiftui(&test_container(), ColorPalette::Pastel1).unwrap();
         assert!(code.contains("struct ContentView: View"));
-        assert!(code.contains("var body: some View"));
+        assert!(code.contains("public var body: some View"));
     }
 
     #[test]
