@@ -4,6 +4,11 @@
 #   No args = all cases. Pass case names to render a subset.
 set -euo pipefail
 
+# Ensure cargo is on PATH (non-login shells may not inherit it)
+for d in "${CARGO_HOME:-$HOME/.cargo}/bin" "$HOME/.cargo/bin"; do
+    [ -d "$d" ] && export PATH="$d:$PATH"
+done
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$SCRIPT_DIR/.."
 
