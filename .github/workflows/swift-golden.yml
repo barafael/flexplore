@@ -9,6 +9,7 @@ on:
       - 'src/codegen/swiftui.rs'
       - 'scripts/swift_golden/**'
       - 'scripts/render_swift.sh'
+      - '.github/workflows/swift-golden.yml'
 
 permissions:
   contents: write
