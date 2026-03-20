@@ -115,6 +115,10 @@ fn emit_swiftui_node(
         if let Some(p) = swift_optional_value(&node.padding) {
             writeln!(buf, "{pad}    .padding({p})")?;
         }
+        writeln!(
+            buf,
+            "{pad}    .background(Color(red: {r:.2}, green: {g:.2}, blue: {b:.2}))"
+        )?;
         if let Some(m) = swift_optional_value(&node.margin) {
             writeln!(buf, "{pad}    .padding({m}) /* margin */",)?;
         }
@@ -132,10 +136,6 @@ fn emit_swiftui_node(
                 node.flex_grow
             )?;
         }
-        writeln!(
-            buf,
-            "{pad}    .background(Color(red: {r:.2}, green: {g:.2}, blue: {b:.2}))"
-        )?;
         if !node.visible {
             writeln!(buf, "{pad}    .hidden()")?;
         }
@@ -229,13 +229,13 @@ fn emit_swiftui_node(
         if let Some(p) = swift_optional_value(&node.padding) {
             writeln!(buf, "{pad}.padding({p})")?;
         }
-        if let Some(m) = swift_optional_value(&node.margin) {
-            writeln!(buf, "{pad}.padding({m}) /* margin */")?;
-        }
         writeln!(
             buf,
             "{pad}.background(Color(red: 0.11, green: 0.11, blue: 0.17))"
         )?;
+        if let Some(m) = swift_optional_value(&node.margin) {
+            writeln!(buf, "{pad}.padding({m}) /* margin */")?;
+        }
         if !node.visible {
             writeln!(buf, "{pad}.hidden()")?;
         }
