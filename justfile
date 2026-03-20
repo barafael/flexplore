@@ -1,5 +1,7 @@
 # Flexplain task runner
 
+set windows-powershell := true
+
 # List available recipes
 default:
     @just --list
@@ -44,6 +46,10 @@ render-swift *cases:
 # Build the overview comparison page
 build-overview:
     python scripts/build_overview.py
+
+# Open the overview comparison page in the default browser
+view-overview:
+    {{ if os() == "windows" { "Start-Process testdata/overview.html" } else if os() == "macos" { "open testdata/overview.html" } else { "xdg-open testdata/overview.html" } }}
 
 # Render everything: snapshots, Bevy, HTML, Tailwind, Flutter, then build overview
 render-all *cases:
