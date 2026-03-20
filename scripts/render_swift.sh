@@ -19,7 +19,8 @@ python3 "$SWIFT_DIR/tool/generate_cases.py" 2>&1
 
 echo "=== Running Swift snapshot tests ===" >&2
 cd "$SWIFT_DIR"
-SWIFT_SNAPSHOT_RECORD=1 swift test 2>&1
+# Record mode always "fails" tests (by design) — ignore the exit code.
+SWIFT_SNAPSHOT_RECORD=1 swift test 2>&1 || true
 
 echo "=== Copying snapshots to testdata ===" >&2
 if [ $# -gt 0 ]; then
