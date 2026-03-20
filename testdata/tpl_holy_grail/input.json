@@ -123,7 +123,7 @@
           "flex_basis": "Auto",
           "align_self": "Auto",
           "width": {
-            "Px": 200.0
+            "Px": 120.0
           },
           "height": "Auto",
           "min_width": "Auto",
@@ -191,7 +191,7 @@
           "flex_basis": "Auto",
           "align_self": "Auto",
           "width": {
-            "Px": 200.0
+            "Px": 120.0
           },
           "height": "Auto",
           "min_width": "Auto",

@@ -174,15 +174,19 @@ fn emit_flutter_inner(
         let ipad = "  ".repeat(inner_depth);
 
         if node.flex_wrap != FlexWrap::NoWrap {
-            if node.flex_wrap == FlexWrap::WrapReverse {
-                writeln!(buf, "{ipad}// NOTE: flex-wrap: WrapReverse — Dart Wrap doesn't support reverse; children appear in normal order")?;
-            }
             writeln!(buf, "{ipad}Wrap(")?;
             writeln!(
                 buf,
                 "{ipad}  direction: {},",
                 if is_row { "Axis.horizontal" } else { "Axis.vertical" }
             )?;
+            if node.flex_wrap == FlexWrap::WrapReverse {
+                if is_row {
+                    writeln!(buf, "{ipad}  verticalDirection: VerticalDirection.up,")?;
+                } else {
+                    writeln!(buf, "{ipad}  textDirection: TextDirection.rtl,")?;
+                }
+            }
             if let Some(s) = dart_value(&node.column_gap) {
                 writeln!(buf, "{ipad}  spacing: {s},")?;
             }
@@ -212,6 +216,12 @@ fn emit_flutter_inner(
             if child.flex_grow > 0.0 && node.flex_wrap == FlexWrap::NoWrap {
                 writeln!(buf, "{ipad}    Expanded(")?;
                 writeln!(buf, "{ipad}      flex: {},", child.flex_grow.round().max(1.0) as i32)?;
+                write!(buf, "{ipad}      child: ")?;
+                emit_flutter_node(buf, child, inner_depth + 3, leaf_idx, palette)?;
+                writeln!(buf, "{ipad}    ),")?;
+            } else if child.flex_shrink > 0.0 && node.flex_wrap == FlexWrap::NoWrap {
+                writeln!(buf, "{ipad}    Flexible(")?;
+                writeln!(buf, "{ipad}      fit: FlexFit.loose,")?;
                 write!(buf, "{ipad}      child: ")?;
                 emit_flutter_node(buf, child, inner_depth + 3, leaf_idx, palette)?;
                 writeln!(buf, "{ipad}    ),")?;

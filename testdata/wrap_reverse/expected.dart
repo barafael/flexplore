@@ -3,9 +3,9 @@ Widget build(BuildContext context) {
     width: double.infinity,
     padding: EdgeInsets.all(12.0),
     margin: EdgeInsets.all(0.0),
-    child:     // NOTE: flex-wrap: WrapReverse — Dart Wrap doesn't support reverse; children appear in normal order
-    Wrap(
+    child:     Wrap(
       direction: Axis.horizontal,
+      verticalDirection: VerticalDirection.up,
       spacing: 8.0,
       runSpacing: 8.0,
       children: [

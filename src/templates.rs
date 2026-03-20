@@ -30,8 +30,8 @@ pub fn holy_grail() -> NodeConfig {
     middle.row_gap = ValueConfig::Px(0.0);
     middle.column_gap = ValueConfig::Px(0.0);
 
-    let mut sidebar_left = NodeConfig::new_leaf("sidebar-left", 200.0, 100.0);
-    sidebar_left.width = ValueConfig::Px(200.0);
+    let mut sidebar_left = NodeConfig::new_leaf("sidebar-left", 120.0, 100.0);
+    sidebar_left.width = ValueConfig::Px(120.0);
     sidebar_left.height = ValueConfig::Auto;
     sidebar_left.flex_shrink = 0.0;
     sidebar_left.flex_grow = 0.0;
@@ -41,8 +41,8 @@ pub fn holy_grail() -> NodeConfig {
     content.width = ValueConfig::Auto;
     content.height = ValueConfig::Auto;
 
-    let mut sidebar_right = NodeConfig::new_leaf("sidebar-right", 200.0, 100.0);
-    sidebar_right.width = ValueConfig::Px(200.0);
+    let mut sidebar_right = NodeConfig::new_leaf("sidebar-right", 120.0, 100.0);
+    sidebar_right.width = ValueConfig::Px(120.0);
     sidebar_right.height = ValueConfig::Auto;
     sidebar_right.flex_shrink = 0.0;
     sidebar_right.flex_grow = 0.0;

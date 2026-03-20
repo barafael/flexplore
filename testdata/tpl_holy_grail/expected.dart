@@ -29,7 +29,7 @@ Widget build(BuildContext context) {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Container(
-                  width: 200.0,
+                  width: 120.0,
                   padding: EdgeInsets.all(8.0),
                   margin: EdgeInsets.all(0.0),
                   color: Color.fromRGBO(179, 205, 227, 1.0),
@@ -52,7 +52,7 @@ Widget build(BuildContext context) {
                   )
                 ),
                 Container(
-                  width: 200.0,
+                  width: 120.0,
                   padding: EdgeInsets.all(8.0),
                   margin: EdgeInsets.all(0.0),
                   color: Color.fromRGBO(222, 203, 228, 1.0),

@@ -67,7 +67,7 @@ fn spawn_ui(commands: &mut Commands) {
                     row_gap: Val::Px(4.0),
                     column_gap: Val::Px(4.0),
                     flex_shrink: 0.0,
-                    width: Val::Px(200.0),
+                    width: Val::Px(120.0),
                     padding: UiRect::all(Val::Px(8.0)),
                     ..default()
                 },
@@ -128,7 +128,7 @@ fn spawn_ui(commands: &mut Commands) {
                     row_gap: Val::Px(4.0),
                     column_gap: Val::Px(4.0),
                     flex_shrink: 0.0,
-                    width: Val::Px(200.0),
+                    width: Val::Px(120.0),
                     padding: UiRect::all(Val::Px(8.0)),
                     ..default()
                 },

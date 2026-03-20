@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use bevy::prelude::*;
 use bevy::render::view::window::screenshot::{Screenshot, ScreenshotCaptured};
-use bevy::window::PrimaryWindow;
+use bevy::window::{PrimaryWindow, WindowResolution};
 
 use crate::config::{ColorPalette, NodeConfig};
 
@@ -35,11 +35,13 @@ pub fn render_to_images(jobs: Vec<RenderJob>, output_dir: PathBuf) {
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "flexplain render".into(),
-                resolution: (800, 600).into(),
+                resolution: WindowResolution::new(400, 300)
+                    .with_scale_factor_override(1.0),
                 ..default()
             }),
             ..default()
         }))
+        .insert_resource(ClearColor(Color::srgba(0.11, 0.11, 0.17, 1.0)))
         .insert_resource(RenderQueue {
             jobs: spawn_fns,
             current: 0,
@@ -148,7 +150,7 @@ fn save_and_signal(path: PathBuf) -> impl FnMut(On<ScreenshotCaptured>, ResMut<S
 
 fn spawn_node_tree(commands: &mut Commands, root: &NodeConfig, palette: ColorPalette) {
     let mut leaf_idx = 0;
-    spawn_node_entity(commands, root, &mut leaf_idx, palette);
+    spawn_node_entity(commands, root, &mut leaf_idx, palette, true);
 }
 
 fn spawn_node_entity(
@@ -156,6 +158,7 @@ fn spawn_node_entity(
     node: &NodeConfig,
     leaf_idx: &mut usize,
     palette: ColorPalette,
+    is_root: bool,
 ) -> Entity {
     let is_leaf = node.children.is_empty();
 
@@ -165,6 +168,13 @@ fn spawn_node_entity(
         Color::srgb(r, g, b)
     } else {
         Color::srgba(0.11, 0.11, 0.17, 1.0)
+    };
+
+    // Force root to fill the viewport, matching HTML `body { height: 100% }`.
+    let height = if is_root {
+        Val::Percent(100.0)
+    } else {
+        to_val(&node.height)
     };
 
     let style = Node {
@@ -180,7 +190,7 @@ fn spawn_node_entity(
         row_gap: to_val(&node.row_gap),
         column_gap: to_val(&node.column_gap),
         width: to_val(&node.width),
-        height: to_val(&node.height),
+        height,
         min_width: to_val(&node.min_width),
         min_height: to_val(&node.min_height),
         max_width: to_val(&node.max_width),
@@ -225,7 +235,7 @@ fn spawn_node_entity(
         sorted.sort_by_key(|c| c.order);
         let child_entities: Vec<Entity> = sorted
             .iter()
-            .map(|child| spawn_node_entity(commands, child, leaf_idx, palette))
+            .map(|child| spawn_node_entity(commands, child, leaf_idx, palette, false))
             .collect();
         commands.entity(entity).add_children(&child_entities);
     }
