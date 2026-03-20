@@ -1,7 +1,7 @@
 {
   "label": "root",
   "flex_direction": "Row",
-  "flex_wrap": "Wrap",
+  "flex_wrap": "NoWrap",
   "justify_content": "Center",
   "align_items": "FlexStart",
   "align_content": "FlexStart",
@@ -52,10 +52,10 @@
       "flex_basis": "Auto",
       "align_self": "Auto",
       "width": {
-        "Px": 80.0
+        "Px": 100.0
       },
       "height": {
-        "Px": 80.0
+        "Px": 60.0
       },
       "min_width": "Auto",
       "min_height": "Auto",
@@ -89,10 +89,84 @@
       "flex_basis": "Auto",
       "align_self": "Auto",
       "width": {
+        "Px": 60.0
+      },
+      "height": {
+        "Px": 60.0
+      },
+      "min_width": "Auto",
+      "min_height": "Auto",
+      "max_width": "Auto",
+      "max_height": "Auto",
+      "padding": {
+        "Px": 8.0
+      },
+      "margin": {
+        "Px": 0.0
+      },
+      "order": 0,
+      "visible": true,
+      "children": []
+    },
+    {
+      "label": "C",
+      "flex_direction": "Row",
+      "flex_wrap": "Wrap",
+      "justify_content": "Center",
+      "align_items": "Center",
+      "align_content": "FlexStart",
+      "row_gap": {
+        "Px": 4.0
+      },
+      "column_gap": {
+        "Px": 4.0
+      },
+      "flex_grow": 0.0,
+      "flex_shrink": 1.0,
+      "flex_basis": "Auto",
+      "align_self": "Auto",
+      "width": {
+        "Px": 140.0
+      },
+      "height": {
+        "Px": 60.0
+      },
+      "min_width": "Auto",
+      "min_height": "Auto",
+      "max_width": "Auto",
+      "max_height": "Auto",
+      "padding": {
+        "Px": 8.0
+      },
+      "margin": {
+        "Px": 0.0
+      },
+      "order": 0,
+      "visible": true,
+      "children": []
+    },
+    {
+      "label": "D",
+      "flex_direction": "Row",
+      "flex_wrap": "Wrap",
+      "justify_content": "Center",
+      "align_items": "Center",
+      "align_content": "FlexStart",
+      "row_gap": {
+        "Px": 4.0
+      },
+      "column_gap": {
+        "Px": 4.0
+      },
+      "flex_grow": 0.0,
+      "flex_shrink": 1.0,
+      "flex_basis": "Auto",
+      "align_self": "Auto",
+      "width": {
         "Px": 80.0
       },
       "height": {
-        "Px": 80.0
+        "Px": 60.0
       },
       "min_width": "Auto",
       "min_height": "Auto",

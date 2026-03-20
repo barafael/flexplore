@@ -14,7 +14,6 @@ body {
 
 .node-0 {
   display: flex;
-  flex-wrap: wrap;
   align-items: flex-start;
   align-content: flex-start;
   row-gap: 8.0px;
@@ -36,10 +35,43 @@ body {
   row-gap: 4.0px;
   column-gap: 4.0px;
   flex-basis: 50.0%;
-  width: 80.0px;
   height: 80.0px;
   padding: 8.0px;
   background: rgb(251, 180, 174);
+  box-sizing: border-box;
+  color: rgba(13, 13, 26, 0.85);
+  font-size: 26px;
+}
+
+.node-2 {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  align-content: flex-start;
+  row-gap: 4.0px;
+  column-gap: 4.0px;
+  flex-basis: 25.0%;
+  height: 80.0px;
+  padding: 8.0px;
+  background: rgb(179, 205, 227);
+  box-sizing: border-box;
+  color: rgba(13, 13, 26, 0.85);
+  font-size: 26px;
+}
+
+.node-3 {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  align-content: flex-start;
+  row-gap: 4.0px;
+  column-gap: 4.0px;
+  flex-basis: 25.0%;
+  height: 80.0px;
+  padding: 8.0px;
+  background: rgb(204, 235, 197);
   box-sizing: border-box;
   color: rgba(13, 13, 26, 0.85);
   font-size: 26px;
@@ -49,7 +81,9 @@ body {
 </head>
 <body>
 <div class="node-0">
-  <div class="node-1">based</div>
+  <div class="node-1">50%</div>
+  <div class="node-2">25%</div>
+  <div class="node-3">25%</div>
 </div>
 </body>
 </html>

@@ -2,6 +2,7 @@ export default function FlexLayout() {
   return (
     <div style={{
       display: 'flex',
+      flexDirection: 'column',
       flexWrap: 'wrap',
       alignItems: 'flex-start',
       alignContent: 'flex-start',
@@ -23,13 +24,29 @@ export default function FlexLayout() {
         rowGap: '4.0px',
         columnGap: '4.0px',
         width: '50.0vw',
-        height: '75.0vh',
+        height: '20.0vh',
         padding: '8.0px',
         background: 'rgb(251, 180, 174)',
         boxSizing: 'border-box',
         color: 'rgba(13, 13, 26, 0.85)',
         fontSize: 26,
-      }}>viewport</div>
+      }}>50vw x 20vh</div>
+      <div style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        alignItems: 'center',
+        alignContent: 'flex-start',
+        rowGap: '4.0px',
+        columnGap: '4.0px',
+        width: '75.0vw',
+        height: '30.0vh',
+        padding: '8.0px',
+        background: 'rgb(179, 205, 227)',
+        boxSizing: 'border-box',
+        color: 'rgba(13, 13, 26, 0.85)',
+        fontSize: 26,
+      }}>75vw x 30vh</div>
     </div>
   );
 }

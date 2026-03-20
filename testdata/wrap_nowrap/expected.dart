@@ -1,6 +1,6 @@
 Widget build(BuildContext context) {
   return   Container(
-    width: 100.0 /* 100% — use FractionallySizedBox */,
+    width: double.infinity,
     padding: EdgeInsets.all(12.0),
     margin: EdgeInsets.all(0.0),
     child:     Row(
@@ -8,7 +8,7 @@ Widget build(BuildContext context) {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 80.0,
+          width: 200.0,
           height: 80.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
@@ -20,13 +20,61 @@ Widget build(BuildContext context) {
         )
         ,
         Container(
-          width: 80.0,
+          width: 200.0,
           height: 80.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
           color: Color.fromRGBO(179, 205, 227, 1.0),
           alignment: Alignment.center,
           child: Text('B',
+            style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
+          ),
+        )
+        ,
+        Container(
+          width: 200.0,
+          height: 80.0,
+          padding: EdgeInsets.all(8.0),
+          margin: EdgeInsets.all(0.0),
+          color: Color.fromRGBO(204, 235, 197, 1.0),
+          alignment: Alignment.center,
+          child: Text('C',
+            style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
+          ),
+        )
+        ,
+        Container(
+          width: 200.0,
+          height: 80.0,
+          padding: EdgeInsets.all(8.0),
+          margin: EdgeInsets.all(0.0),
+          color: Color.fromRGBO(222, 203, 228, 1.0),
+          alignment: Alignment.center,
+          child: Text('D',
+            style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
+          ),
+        )
+        ,
+        Container(
+          width: 200.0,
+          height: 80.0,
+          padding: EdgeInsets.all(8.0),
+          margin: EdgeInsets.all(0.0),
+          color: Color.fromRGBO(254, 217, 166, 1.0),
+          alignment: Alignment.center,
+          child: Text('E',
+            style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
+          ),
+        )
+        ,
+        Container(
+          width: 200.0,
+          height: 80.0,
+          padding: EdgeInsets.all(8.0),
+          margin: EdgeInsets.all(0.0),
+          color: Color.fromRGBO(255, 255, 204, 1.0),
+          alignment: Alignment.center,
+          child: Text('F',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
         )

@@ -1,15 +1,15 @@
 Widget build(BuildContext context) {
   return   Container(
-    width: 100.0 /* 100% — use FractionallySizedBox */,
+    width: double.infinity,
     padding: EdgeInsets.all(12.0),
     margin: EdgeInsets.all(0.0),
     child:     Wrap(
       direction: Axis.horizontal,
-      spacing: 5.0 /* 5% — use FractionallySizedBox */,
-      runSpacing: 16.0,
+      spacing: 40.0,
+      runSpacing: 24.0,
       children: [
         Container(
-          width: 60.0,
+          width: 150.0,
           height: 60.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
@@ -21,13 +21,61 @@ Widget build(BuildContext context) {
         )
         ,
         Container(
-          width: 60.0,
+          width: 150.0,
           height: 60.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
           color: Color.fromRGBO(179, 205, 227, 1.0),
           alignment: Alignment.center,
           child: Text('B',
+            style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
+          ),
+        )
+        ,
+        Container(
+          width: 150.0,
+          height: 60.0,
+          padding: EdgeInsets.all(8.0),
+          margin: EdgeInsets.all(0.0),
+          color: Color.fromRGBO(204, 235, 197, 1.0),
+          alignment: Alignment.center,
+          child: Text('C',
+            style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
+          ),
+        )
+        ,
+        Container(
+          width: 150.0,
+          height: 60.0,
+          padding: EdgeInsets.all(8.0),
+          margin: EdgeInsets.all(0.0),
+          color: Color.fromRGBO(222, 203, 228, 1.0),
+          alignment: Alignment.center,
+          child: Text('D',
+            style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
+          ),
+        )
+        ,
+        Container(
+          width: 150.0,
+          height: 60.0,
+          padding: EdgeInsets.all(8.0),
+          margin: EdgeInsets.all(0.0),
+          color: Color.fromRGBO(254, 217, 166, 1.0),
+          alignment: Alignment.center,
+          child: Text('E',
+            style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
+          ),
+        )
+        ,
+        Container(
+          width: 150.0,
+          height: 60.0,
+          padding: EdgeInsets.all(8.0),
+          margin: EdgeInsets.all(0.0),
+          color: Color.fromRGBO(255, 255, 204, 1.0),
+          alignment: Alignment.center,
+          child: Text('F',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
         )

@@ -1,7 +1,7 @@
 {
   "label": "root",
   "flex_direction": "Row",
-  "flex_wrap": "Wrap",
+  "flex_wrap": "NoWrap",
   "justify_content": "FlexStart",
   "align_items": "FlexStart",
   "align_content": "FlexStart",
@@ -35,7 +35,7 @@
   "visible": true,
   "children": [
     {
-      "label": "constrained",
+      "label": "capped",
       "flex_direction": "Row",
       "flex_wrap": "Wrap",
       "justify_content": "Center",
@@ -47,28 +47,92 @@
       "column_gap": {
         "Px": 4.0
       },
-      "flex_grow": 0.0,
+      "flex_grow": 1.0,
       "flex_shrink": 1.0,
       "flex_basis": "Auto",
       "align_self": "Auto",
-      "width": {
+      "width": "Auto",
+      "height": {
         "Px": 80.0
       },
+      "min_width": "Auto",
+      "min_height": "Auto",
+      "max_width": {
+        "Px": 100.0
+      },
+      "max_height": "Auto",
+      "padding": {
+        "Px": 8.0
+      },
+      "margin": {
+        "Px": 0.0
+      },
+      "order": 0,
+      "visible": true,
+      "children": []
+    },
+    {
+      "label": "free",
+      "flex_direction": "Row",
+      "flex_wrap": "Wrap",
+      "justify_content": "Center",
+      "align_items": "Center",
+      "align_content": "FlexStart",
+      "row_gap": {
+        "Px": 4.0
+      },
+      "column_gap": {
+        "Px": 4.0
+      },
+      "flex_grow": 1.0,
+      "flex_shrink": 1.0,
+      "flex_basis": "Auto",
+      "align_self": "Auto",
+      "width": "Auto",
+      "height": {
+        "Px": 80.0
+      },
+      "min_width": "Auto",
+      "min_height": "Auto",
+      "max_width": "Auto",
+      "max_height": "Auto",
+      "padding": {
+        "Px": 8.0
+      },
+      "margin": {
+        "Px": 0.0
+      },
+      "order": 0,
+      "visible": true,
+      "children": []
+    },
+    {
+      "label": "wide",
+      "flex_direction": "Row",
+      "flex_wrap": "Wrap",
+      "justify_content": "Center",
+      "align_items": "Center",
+      "align_content": "FlexStart",
+      "row_gap": {
+        "Px": 4.0
+      },
+      "column_gap": {
+        "Px": 4.0
+      },
+      "flex_grow": 1.0,
+      "flex_shrink": 1.0,
+      "flex_basis": "Auto",
+      "align_self": "Auto",
+      "width": "Auto",
       "height": {
         "Px": 80.0
       },
       "min_width": {
-        "Px": 40.0
-      },
-      "min_height": {
-        "Px": 30.0
-      },
-      "max_width": {
         "Px": 200.0
       },
-      "max_height": {
-        "Px": 150.0
-      },
+      "min_height": "Auto",
+      "max_width": "Auto",
+      "max_height": "Auto",
       "padding": {
         "Px": 8.0
       },

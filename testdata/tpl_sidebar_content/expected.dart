@@ -1,7 +1,7 @@
 Widget build(BuildContext context) {
   return   Container(
-    width: 100.0 /* 100% — use FractionallySizedBox */,
-    height: 100.0 /* 100% — use FractionallySizedBox */,
+    width: double.infinity,
+    height: double.infinity,
     padding: EdgeInsets.all(0.0),
     margin: EdgeInsets.all(0.0),
     child:     Row(

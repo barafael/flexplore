@@ -14,6 +14,7 @@ body {
 
 .node-0 {
   display: flex;
+  flex-direction: column;
   flex-wrap: wrap;
   align-items: flex-start;
   align-content: flex-start;
@@ -36,9 +37,26 @@ body {
   row-gap: 4.0px;
   column-gap: 4.0px;
   width: 50.0vw;
-  height: 75.0vh;
+  height: 20.0vh;
   padding: 8.0px;
   background: rgb(251, 180, 174);
+  box-sizing: border-box;
+  color: rgba(13, 13, 26, 0.85);
+  font-size: 26px;
+}
+
+.node-2 {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  align-content: flex-start;
+  row-gap: 4.0px;
+  column-gap: 4.0px;
+  width: 75.0vw;
+  height: 30.0vh;
+  padding: 8.0px;
+  background: rgb(179, 205, 227);
   box-sizing: border-box;
   color: rgba(13, 13, 26, 0.85);
   font-size: 26px;
@@ -48,7 +66,8 @@ body {
 </head>
 <body>
 <div class="node-0">
-  <div class="node-1">viewport</div>
+  <div class="node-1">50vw x 20vh</div>
+  <div class="node-2">75vw x 30vh</div>
 </div>
 </body>
 </html>

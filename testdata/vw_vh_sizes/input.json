@@ -1,6 +1,6 @@
 {
   "label": "root",
-  "flex_direction": "Row",
+  "flex_direction": "Column",
   "flex_wrap": "Wrap",
   "justify_content": "FlexStart",
   "align_items": "FlexStart",
@@ -35,7 +35,7 @@
   "visible": true,
   "children": [
     {
-      "label": "viewport",
+      "label": "50vw x 20vh",
       "flex_direction": "Row",
       "flex_wrap": "Wrap",
       "justify_content": "Center",
@@ -55,7 +55,44 @@
         "Vw": 50.0
       },
       "height": {
-        "Vh": 75.0
+        "Vh": 20.0
+      },
+      "min_width": "Auto",
+      "min_height": "Auto",
+      "max_width": "Auto",
+      "max_height": "Auto",
+      "padding": {
+        "Px": 8.0
+      },
+      "margin": {
+        "Px": 0.0
+      },
+      "order": 0,
+      "visible": true,
+      "children": []
+    },
+    {
+      "label": "75vw x 30vh",
+      "flex_direction": "Row",
+      "flex_wrap": "Wrap",
+      "justify_content": "Center",
+      "align_items": "Center",
+      "align_content": "FlexStart",
+      "row_gap": {
+        "Px": 4.0
+      },
+      "column_gap": {
+        "Px": 4.0
+      },
+      "flex_grow": 0.0,
+      "flex_shrink": 1.0,
+      "flex_basis": "Auto",
+      "align_self": "Auto",
+      "width": {
+        "Vw": 75.0
+      },
+      "height": {
+        "Vh": 30.0
       },
       "min_width": "Auto",
       "min_height": "Auto",

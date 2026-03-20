@@ -21,7 +21,7 @@ struct Fixture {
 
 fn all_fixtures() -> Vec<Fixture> {
     vec![
-        // Basic shapes
+        // ── Basic shapes ─────────────────────────────────────────────────
         fixture("single_leaf", {
             let mut r = NodeConfig::new_container("root");
             r.children = vec![NodeConfig::new_leaf("only", 100.0, 60.0)];
@@ -36,13 +36,15 @@ fn all_fixtures() -> Vec<Fixture> {
             r
         }, ColorPalette::Pastel1),
 
-        // Flex-direction variants
+        // ── Flex-direction variants ──────────────────────────────────────
+        // 3 differently-sized children so direction change is unambiguous
         fixture("direction_column", {
             let mut r = NodeConfig::new_container("root");
             r.flex_direction = FlexDirection::Column;
             r.children = vec![
-                NodeConfig::new_leaf("A", 80.0, 80.0),
-                NodeConfig::new_leaf("B", 80.0, 80.0),
+                NodeConfig::new_leaf("A", 200.0, 60.0),
+                NodeConfig::new_leaf("B", 120.0, 80.0),
+                NodeConfig::new_leaf("C", 60.0, 40.0),
             ];
             r
         }, ColorPalette::Pastel1),
@@ -50,8 +52,9 @@ fn all_fixtures() -> Vec<Fixture> {
             let mut r = NodeConfig::new_container("root");
             r.flex_direction = FlexDirection::RowReverse;
             r.children = vec![
-                NodeConfig::new_leaf("A", 80.0, 80.0),
-                NodeConfig::new_leaf("B", 80.0, 80.0),
+                NodeConfig::new_leaf("A", 200.0, 60.0),
+                NodeConfig::new_leaf("B", 120.0, 80.0),
+                NodeConfig::new_leaf("C", 60.0, 40.0),
             ];
             r
         }, ColorPalette::Pastel1),
@@ -59,94 +62,131 @@ fn all_fixtures() -> Vec<Fixture> {
             let mut r = NodeConfig::new_container("root");
             r.flex_direction = FlexDirection::ColumnReverse;
             r.children = vec![
-                NodeConfig::new_leaf("A", 80.0, 80.0),
-                NodeConfig::new_leaf("B", 80.0, 80.0),
+                NodeConfig::new_leaf("A", 200.0, 60.0),
+                NodeConfig::new_leaf("B", 120.0, 80.0),
+                NodeConfig::new_leaf("C", 60.0, 40.0),
             ];
             r
         }, ColorPalette::Pastel1),
 
-        // Justify-content
+        // ── Justify-content ──────────────────────────────────────────────
+        // 4 differently-sized items so the spacing pattern is obvious
         fixture("justify_center", {
             let mut r = NodeConfig::new_container("root");
             r.justify_content = JustifyContent::Center;
+            r.flex_wrap = FlexWrap::NoWrap;
             r.children = vec![
-                NodeConfig::new_leaf("A", 80.0, 80.0),
-                NodeConfig::new_leaf("B", 80.0, 80.0),
+                NodeConfig::new_leaf("A", 100.0, 60.0),
+                NodeConfig::new_leaf("B", 60.0, 60.0),
+                NodeConfig::new_leaf("C", 140.0, 60.0),
+                NodeConfig::new_leaf("D", 80.0, 60.0),
             ];
             r
         }, ColorPalette::Pastel1),
         fixture("justify_space_between", {
             let mut r = NodeConfig::new_container("root");
             r.justify_content = JustifyContent::SpaceBetween;
+            r.flex_wrap = FlexWrap::NoWrap;
             r.children = vec![
-                NodeConfig::new_leaf("A", 80.0, 80.0),
-                NodeConfig::new_leaf("B", 80.0, 80.0),
+                NodeConfig::new_leaf("A", 100.0, 60.0),
+                NodeConfig::new_leaf("B", 60.0, 60.0),
+                NodeConfig::new_leaf("C", 140.0, 60.0),
+                NodeConfig::new_leaf("D", 80.0, 60.0),
             ];
             r
         }, ColorPalette::Pastel1),
         fixture("justify_space_evenly", {
             let mut r = NodeConfig::new_container("root");
             r.justify_content = JustifyContent::SpaceEvenly;
+            r.flex_wrap = FlexWrap::NoWrap;
             r.children = vec![
-                NodeConfig::new_leaf("A", 80.0, 80.0),
-                NodeConfig::new_leaf("B", 80.0, 80.0),
+                NodeConfig::new_leaf("A", 100.0, 60.0),
+                NodeConfig::new_leaf("B", 60.0, 60.0),
+                NodeConfig::new_leaf("C", 140.0, 60.0),
+                NodeConfig::new_leaf("D", 80.0, 60.0),
             ];
             r
         }, ColorPalette::Pastel1),
 
-        // Align-items
+        // ── Align-items ──────────────────────────────────────────────────
+        // Column + different widths + NoWrap: centering is visible as horizontal indent
         fixture("align_items_center", {
             let mut r = NodeConfig::new_container("root");
+            r.flex_direction = FlexDirection::Column;
+            r.flex_wrap = FlexWrap::NoWrap;
             r.align_items = AlignItems::Center;
             r.children = vec![
-                NodeConfig::new_leaf("A", 80.0, 80.0),
-                NodeConfig::new_leaf("B", 80.0, 80.0),
+                NodeConfig::new_leaf("A", 200.0, 50.0),
+                NodeConfig::new_leaf("B", 120.0, 50.0),
+                NodeConfig::new_leaf("C", 80.0, 50.0),
             ];
             r
         }, ColorPalette::Pastel1),
+        // Row + explicit container height, children have NO height → they stretch tall
         fixture("align_items_stretch", {
             let mut r = NodeConfig::new_container("root");
             r.align_items = AlignItems::Stretch;
-            r.children = vec![
-                NodeConfig::new_leaf("A", 80.0, 80.0),
-                NodeConfig::new_leaf("B", 80.0, 80.0),
-            ];
+            r.height = ValueConfig::Px(300.0);
+            r.flex_wrap = FlexWrap::NoWrap;
+            let mut a = NodeConfig::new_leaf("A", 100.0, 80.0);
+            a.height = ValueConfig::Auto;
+            let mut b = NodeConfig::new_leaf("B", 80.0, 80.0);
+            b.height = ValueConfig::Auto;
+            let mut c = NodeConfig::new_leaf("C", 60.0, 80.0);
+            c.height = ValueConfig::Auto;
+            r.children = vec![a, b, c];
             r
         }, ColorPalette::Pastel1),
 
-        // Align-content
+        // ── Align-content ────────────────────────────────────────────────
+        // 6 items that wrap into 2 rows, tall container → rows pushed to top/bottom
         fixture("align_content_space_between", {
             let mut r = NodeConfig::new_container("root");
             r.align_content = AlignContent::SpaceBetween;
             r.flex_wrap = FlexWrap::Wrap;
+            r.height = ValueConfig::Px(400.0);
             r.children = vec![
-                NodeConfig::new_leaf("A", 80.0, 80.0),
-                NodeConfig::new_leaf("B", 80.0, 80.0),
+                NodeConfig::new_leaf("A", 200.0, 60.0),
+                NodeConfig::new_leaf("B", 200.0, 60.0),
+                NodeConfig::new_leaf("C", 200.0, 60.0),
+                NodeConfig::new_leaf("D", 200.0, 60.0),
+                NodeConfig::new_leaf("E", 200.0, 60.0),
+                NodeConfig::new_leaf("F", 200.0, 60.0),
             ];
             r
         }, ColorPalette::Pastel1),
 
-        // Wrap
+        // ── Wrap ─────────────────────────────────────────────────────────
+        // 6 wide items that overflow when nowrap → visibly crammed/shrunk
         fixture("wrap_nowrap", {
             let mut r = NodeConfig::new_container("root");
             r.flex_wrap = FlexWrap::NoWrap;
             r.children = vec![
-                NodeConfig::new_leaf("A", 80.0, 80.0),
-                NodeConfig::new_leaf("B", 80.0, 80.0),
+                NodeConfig::new_leaf("A", 200.0, 80.0),
+                NodeConfig::new_leaf("B", 200.0, 80.0),
+                NodeConfig::new_leaf("C", 200.0, 80.0),
+                NodeConfig::new_leaf("D", 200.0, 80.0),
+                NodeConfig::new_leaf("E", 200.0, 80.0),
+                NodeConfig::new_leaf("F", 200.0, 80.0),
             ];
             r
         }, ColorPalette::Pastel1),
+        // Same 6 items with wrap-reverse → bottom row comes first
         fixture("wrap_reverse", {
             let mut r = NodeConfig::new_container("root");
             r.flex_wrap = FlexWrap::WrapReverse;
             r.children = vec![
-                NodeConfig::new_leaf("A", 80.0, 80.0),
-                NodeConfig::new_leaf("B", 80.0, 80.0),
+                NodeConfig::new_leaf("A", 200.0, 80.0),
+                NodeConfig::new_leaf("B", 200.0, 80.0),
+                NodeConfig::new_leaf("C", 200.0, 80.0),
+                NodeConfig::new_leaf("D", 200.0, 80.0),
+                NodeConfig::new_leaf("E", 200.0, 80.0),
+                NodeConfig::new_leaf("F", 200.0, 80.0),
             ];
             r
         }, ColorPalette::Pastel1),
 
-        // Visibility
+        // ── Visibility ───────────────────────────────────────────────────
         fixture("hidden_child", {
             let mut hidden = NodeConfig::new_leaf("hidden", 80.0, 80.0);
             hidden.visible = false;
@@ -167,7 +207,7 @@ fn all_fixtures() -> Vec<Fixture> {
             r
         }, ColorPalette::Pastel1),
 
-        // Ordering
+        // ── Ordering ─────────────────────────────────────────────────────
         fixture("ordered_children", {
             let mut a = NodeConfig::new_leaf("A", 80.0, 80.0);
             a.order = 3;
@@ -179,29 +219,45 @@ fn all_fixtures() -> Vec<Fixture> {
             r
         }, ColorPalette::Pastel1),
 
-        // Padding + margin
+        // ── Padding + margin ─────────────────────────────────────────────
+        // 3 items with margin inside a padded container → visible inset + gaps
         fixture("padding_margin", {
-            let mut leaf = NodeConfig::new_leaf("spaced", 80.0, 80.0);
-            leaf.padding = ValueConfig::Px(20.0);
-            leaf.margin = ValueConfig::Px(10.0);
             let mut r = NodeConfig::new_container("root");
-            r.children = vec![leaf];
+            r.padding = ValueConfig::Px(20.0);
+            r.flex_wrap = FlexWrap::NoWrap;
+            let items: Vec<_> = ["A", "B", "C"].iter().map(|label| {
+                let mut leaf = NodeConfig::new_leaf(*label, 100.0, 60.0);
+                leaf.margin = ValueConfig::Px(16.0);
+                leaf
+            }).collect();
+            r.children = items;
             r
         }, ColorPalette::Pastel1),
 
-        // Min/max sizes
+        // ── Min/max sizes ────────────────────────────────────────────────
+        // 3 items all grow=1 but with different constraints → visibly different widths
         fixture("min_max_sizes", {
-            let mut leaf = NodeConfig::new_leaf("constrained", 80.0, 80.0);
-            leaf.min_width = ValueConfig::Px(40.0);
-            leaf.max_width = ValueConfig::Px(200.0);
-            leaf.min_height = ValueConfig::Px(30.0);
-            leaf.max_height = ValueConfig::Px(150.0);
             let mut r = NodeConfig::new_container("root");
-            r.children = vec![leaf];
+            r.flex_wrap = FlexWrap::NoWrap;
+            // A: capped small
+            let mut a = NodeConfig::new_leaf("capped", 80.0, 80.0);
+            a.flex_grow = 1.0;
+            a.width = ValueConfig::Auto;
+            a.max_width = ValueConfig::Px(100.0);
+            // B: unconstrained
+            let mut b = NodeConfig::new_leaf("free", 80.0, 80.0);
+            b.flex_grow = 1.0;
+            b.width = ValueConfig::Auto;
+            // C: forced large
+            let mut c = NodeConfig::new_leaf("wide", 80.0, 80.0);
+            c.flex_grow = 1.0;
+            c.width = ValueConfig::Auto;
+            c.min_width = ValueConfig::Px(200.0);
+            r.children = vec![a, b, c];
             r
         }, ColorPalette::Pastel1),
 
-        // Nesting
+        // ── Nesting ──────────────────────────────────────────────────────
         fixture("nested_mixed", {
             let mut inner = NodeConfig::new_container("inner");
             inner.flex_direction = FlexDirection::Column;
@@ -235,49 +291,88 @@ fn all_fixtures() -> Vec<Fixture> {
             r
         }, ColorPalette::Pastel1),
 
-        // Flex item props
+        // ── Flex item props ──────────────────────────────────────────────
+        // 3 items with different grow factors → proportional widths
         fixture("grow_shrink", {
-            let mut leaf = NodeConfig::new_leaf("flex", 80.0, 80.0);
-            leaf.flex_grow = 2.5;
-            leaf.flex_shrink = 0.0;
             let mut r = NodeConfig::new_container("root");
-            r.children = vec![leaf];
+            r.flex_wrap = FlexWrap::NoWrap;
+            // A: grow 1 (gets 1/3 of remaining space)
+            let mut a = NodeConfig::new_leaf("grow-1", 80.0, 80.0);
+            a.flex_grow = 1.0;
+            a.width = ValueConfig::Auto;
+            // B: grow 2 (gets 2/3 of remaining space)
+            let mut b = NodeConfig::new_leaf("grow-2", 80.0, 80.0);
+            b.flex_grow = 2.0;
+            b.width = ValueConfig::Auto;
+            // C: grow 0, fixed width (stays at 100px)
+            let mut c = NodeConfig::new_leaf("fixed", 100.0, 80.0);
+            c.flex_grow = 0.0;
+            c.flex_shrink = 0.0;
+            r.children = vec![a, b, c];
             r
         }, ColorPalette::Pastel1),
+        // 3 items in a tall container; middle one centered, others at top
         fixture("align_self_center", {
-            let mut leaf = NodeConfig::new_leaf("centered", 80.0, 80.0);
-            leaf.align_self = AlignSelf::Center;
             let mut r = NodeConfig::new_container("root");
-            r.children = vec![leaf];
-            r
-        }, ColorPalette::Pastel1),
-        fixture("flex_basis_percent", {
-            let mut leaf = NodeConfig::new_leaf("based", 80.0, 80.0);
-            leaf.flex_basis = ValueConfig::Percent(50.0);
-            let mut r = NodeConfig::new_container("root");
-            r.children = vec![leaf];
-            r
-        }, ColorPalette::Pastel1),
-        fixture("gaps_mixed", {
-            let mut r = NodeConfig::new_container("root");
-            r.row_gap = ValueConfig::Px(16.0);
-            r.column_gap = ValueConfig::Percent(5.0);
+            r.height = ValueConfig::Px(300.0);
+            r.align_items = AlignItems::FlexStart;
+            r.flex_wrap = FlexWrap::NoWrap;
+            let mut centered = NodeConfig::new_leaf("centered", 120.0, 60.0);
+            centered.align_self = AlignSelf::Center;
             r.children = vec![
-                NodeConfig::new_leaf("A", 60.0, 60.0),
-                NodeConfig::new_leaf("B", 60.0, 60.0),
+                NodeConfig::new_leaf("top", 100.0, 60.0),
+                centered,
+                NodeConfig::new_leaf("top", 100.0, 60.0),
             ];
             r
         }, ColorPalette::Pastel1),
-        fixture("vw_vh_sizes", {
-            let mut leaf = NodeConfig::new_leaf("viewport", 100.0, 100.0);
-            leaf.width = ValueConfig::Vw(50.0);
-            leaf.height = ValueConfig::Vh(75.0);
+        // 3 items with different basis percentages → 50% / 25% / 25%
+        fixture("flex_basis_percent", {
             let mut r = NodeConfig::new_container("root");
-            r.children = vec![leaf];
+            r.flex_wrap = FlexWrap::NoWrap;
+            let mut a = NodeConfig::new_leaf("50%", 80.0, 80.0);
+            a.flex_basis = ValueConfig::Percent(50.0);
+            a.width = ValueConfig::Auto;
+            let mut b = NodeConfig::new_leaf("25%", 80.0, 80.0);
+            b.flex_basis = ValueConfig::Percent(25.0);
+            b.width = ValueConfig::Auto;
+            let mut c = NodeConfig::new_leaf("25%", 80.0, 80.0);
+            c.flex_basis = ValueConfig::Percent(25.0);
+            c.width = ValueConfig::Auto;
+            r.children = vec![a, b, c];
+            r
+        }, ColorPalette::Pastel1),
+        // 6 items that wrap → visible column gap AND row gap
+        fixture("gaps_mixed", {
+            let mut r = NodeConfig::new_container("root");
+            r.row_gap = ValueConfig::Px(24.0);
+            r.column_gap = ValueConfig::Px(40.0);
+            r.flex_wrap = FlexWrap::Wrap;
+            r.children = vec![
+                NodeConfig::new_leaf("A", 150.0, 60.0),
+                NodeConfig::new_leaf("B", 150.0, 60.0),
+                NodeConfig::new_leaf("C", 150.0, 60.0),
+                NodeConfig::new_leaf("D", 150.0, 60.0),
+                NodeConfig::new_leaf("E", 150.0, 60.0),
+                NodeConfig::new_leaf("F", 150.0, 60.0),
+            ];
+            r
+        }, ColorPalette::Pastel1),
+        // 2 bars at different viewport-relative sizes
+        fixture("vw_vh_sizes", {
+            let mut r = NodeConfig::new_container("root");
+            r.flex_direction = FlexDirection::Column;
+            let mut a = NodeConfig::new_leaf("50vw x 20vh", 100.0, 100.0);
+            a.width = ValueConfig::Vw(50.0);
+            a.height = ValueConfig::Vh(20.0);
+            let mut b = NodeConfig::new_leaf("75vw x 30vh", 100.0, 100.0);
+            b.width = ValueConfig::Vw(75.0);
+            b.height = ValueConfig::Vh(30.0);
+            r.children = vec![a, b];
             r
         }, ColorPalette::Pastel1),
 
-        // Different palette
+        // ── Different palette ────────────────────────────────────────────
         fixture("dark2_palette", {
             let mut r = NodeConfig::new_container("root");
             r.children = vec![
@@ -288,7 +383,7 @@ fn all_fixtures() -> Vec<Fixture> {
             r
         }, ColorPalette::Dark2),
 
-        // Templates
+        // ── Templates ────────────────────────────────────────────────────
         fixture("tpl_holy_grail", templates::holy_grail(), ColorPalette::Pastel1),
         fixture("tpl_sidebar_content", templates::sidebar_content(), ColorPalette::Pastel1),
         fixture("tpl_card_grid", templates::card_grid(), ColorPalette::Pastel1),

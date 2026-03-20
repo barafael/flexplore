@@ -2,6 +2,7 @@ fn spawn_ui(commands: &mut Commands) {
     // root
     commands.spawn((
         Node {
+            flex_direction: FlexDirection::Column,
             flex_wrap: FlexWrap::Wrap,
             justify_content: JustifyContent::FlexStart,
             align_items: AlignItems::FlexStart,
@@ -16,7 +17,7 @@ fn spawn_ui(commands: &mut Commands) {
         },
         BackgroundColor(Color::srgba(0.11, 0.11, 0.17, 1.0)),
     )).with_children(|parent| {
-        // viewport
+        // 50vw x 20vh
         parent.spawn((
             Node {
                 flex_wrap: FlexWrap::Wrap,
@@ -26,7 +27,7 @@ fn spawn_ui(commands: &mut Commands) {
                 row_gap: Val::Px(4.0),
                 column_gap: Val::Px(4.0),
                 width: Val::Vw(50.0),
-                height: Val::Vh(75.0),
+                height: Val::Vh(20.0),
                 padding: UiRect::all(Val::Px(8.0)),
                 ..default()
             },
@@ -42,7 +43,38 @@ fn spawn_ui(commands: &mut Commands) {
                 align_items: AlignItems::Center,
                 ..default()
             }).with_child((
-                Text::new("viewport"),
+                Text::new("50vw x 20vh"),
+                TextFont { font_size: 26.0, ..default() },
+                TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
+            ));
+        });
+        // 75vw x 30vh
+        parent.spawn((
+            Node {
+                flex_wrap: FlexWrap::Wrap,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                align_content: AlignContent::FlexStart,
+                row_gap: Val::Px(4.0),
+                column_gap: Val::Px(4.0),
+                width: Val::Vw(75.0),
+                height: Val::Vh(30.0),
+                padding: UiRect::all(Val::Px(8.0)),
+                ..default()
+            },
+            BackgroundColor(Color::srgb(0.70, 0.80, 0.89)),
+        )).with_children(|parent| {
+            parent.spawn(Node {
+                position_type: PositionType::Absolute,
+                top: Val::Px(0.0),
+                left: Val::Px(0.0),
+                right: Val::Px(0.0),
+                bottom: Val::Px(0.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            }).with_child((
+                Text::new("75vw x 30vh"),
                 TextFont { font_size: 26.0, ..default() },
                 TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
             ));
