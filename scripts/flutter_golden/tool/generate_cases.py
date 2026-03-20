@@ -52,7 +52,7 @@ class {class_name} extends StatelessWidget {{
     )
     test_cases = "\n".join(
         f"""  testWidgets('{name}', (tester) async {{
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,

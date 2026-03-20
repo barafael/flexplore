@@ -47,7 +47,7 @@ void main() {
   });
 
   testWidgets('align_content_space_between', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -65,7 +65,7 @@ void main() {
     );
   });
   testWidgets('align_items_center', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -83,7 +83,7 @@ void main() {
     );
   });
   testWidgets('align_items_stretch', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -101,7 +101,7 @@ void main() {
     );
   });
   testWidgets('align_self_center', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -119,7 +119,7 @@ void main() {
     );
   });
   testWidgets('all_hidden', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -137,7 +137,7 @@ void main() {
     );
   });
   testWidgets('dark2_palette', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -155,7 +155,7 @@ void main() {
     );
   });
   testWidgets('deep_chain_3', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -173,7 +173,7 @@ void main() {
     );
   });
   testWidgets('direction_column', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -191,7 +191,7 @@ void main() {
     );
   });
   testWidgets('direction_column_reverse', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -209,7 +209,7 @@ void main() {
     );
   });
   testWidgets('direction_row_reverse', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -227,7 +227,7 @@ void main() {
     );
   });
   testWidgets('flex_basis_percent', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -245,7 +245,7 @@ void main() {
     );
   });
   testWidgets('gaps_mixed', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -263,7 +263,7 @@ void main() {
     );
   });
   testWidgets('grow_shrink', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -281,7 +281,7 @@ void main() {
     );
   });
   testWidgets('hidden_child', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -299,7 +299,7 @@ void main() {
     );
   });
   testWidgets('justify_center', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -317,7 +317,7 @@ void main() {
     );
   });
   testWidgets('justify_space_between', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -335,7 +335,7 @@ void main() {
     );
   });
   testWidgets('justify_space_evenly', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -353,7 +353,7 @@ void main() {
     );
   });
   testWidgets('min_max_sizes', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -371,7 +371,7 @@ void main() {
     );
   });
   testWidgets('nested_mixed', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -389,7 +389,7 @@ void main() {
     );
   });
   testWidgets('ordered_children', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -407,7 +407,7 @@ void main() {
     );
   });
   testWidgets('padding_margin', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -425,7 +425,7 @@ void main() {
     );
   });
   testWidgets('single_leaf', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -443,7 +443,7 @@ void main() {
     );
   });
   testWidgets('tpl_card_grid', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -461,7 +461,7 @@ void main() {
     );
   });
   testWidgets('tpl_holy_grail', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -479,7 +479,7 @@ void main() {
     );
   });
   testWidgets('tpl_nav_bar', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -497,7 +497,7 @@ void main() {
     );
   });
   testWidgets('tpl_sidebar_content', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -515,7 +515,7 @@ void main() {
     );
   });
   testWidgets('two_children', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -533,7 +533,7 @@ void main() {
     );
   });
   testWidgets('vw_vh_sizes', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -551,7 +551,7 @@ void main() {
     );
   });
   testWidgets('wide_flat_5', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -569,7 +569,7 @@ void main() {
     );
   });
   testWidgets('wrap_nowrap', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -587,7 +587,7 @@ void main() {
     );
   });
   testWidgets('wrap_reverse', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,

@@ -1,5 +1,5 @@
 struct ContentView: View {
-    var body: some View {
+    public var body: some View {
         HStack(alignment: .center, spacing: 0.0) {
             // NOTE: justify-content: SpaceBetween — use Spacer() or custom Layout to replicate
             Text("logo")
@@ -32,7 +32,7 @@ struct ContentView: View {
                     .background(Color(red: 0.87, green: 0.80, blue: 0.89))
                     .padding(0.0) /* margin */
             }
-            .frame(minWidth: nil, minHeight: 0.0, maxWidth: nil, maxHeight: nil)
+            .frame(minWidth: nil, maxWidth: nil, minHeight: 0.0, maxHeight: nil)
             .padding(0.0)
             .background(Color(red: 0.11, green: 0.11, blue: 0.17))
             .padding(0.0) /* margin */
@@ -52,13 +52,13 @@ struct ContentView: View {
                     .background(Color(red: 1.00, green: 1.00, blue: 0.80))
                     .padding(0.0) /* margin */
             }
-            .frame(minWidth: nil, minHeight: 0.0, maxWidth: nil, maxHeight: nil)
+            .frame(minWidth: nil, maxWidth: nil, minHeight: 0.0, maxHeight: nil)
             .padding(0.0)
             .background(Color(red: 0.11, green: 0.11, blue: 0.17))
             .padding(0.0) /* margin */
         }
         .frame(width: 100.0 /* 100.0% — use GeometryReader for relative sizing */, height: 56.0)
-        .frame(minWidth: nil, minHeight: 0.0, maxWidth: nil, maxHeight: nil)
+        .frame(minWidth: nil, maxWidth: nil, minHeight: 0.0, maxHeight: nil)
         .padding(12.0)
         .background(Color(red: 0.11, green: 0.11, blue: 0.17))
         .padding(0.0) /* margin */

@@ -7,7 +7,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TESTDATA_DIR="$SCRIPT_DIR/../testdata"
-VIEWPORT="800,600"
+VIEWPORT="400,300"
 
 if [ $# -gt 0 ]; then
   cases=("$@")

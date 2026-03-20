@@ -10,8 +10,8 @@ import { pathToFileURL } from 'url';
 
 const __dirname = resolve(fileURLToPath(import.meta.url), '..');
 const testdataDir = resolve(__dirname, '..', 'testdata');
-const WIDTH = 800;
-const HEIGHT = 600;
+const WIDTH = 400;
+const HEIGHT = 300;
 
 async function main() {
   const args = process.argv.slice(2);

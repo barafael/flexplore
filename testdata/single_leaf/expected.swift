@@ -1,5 +1,5 @@
 struct ContentView: View {
-    var body: some View {
+    public var body: some View {
         HStack(alignment: .top, spacing: 8.0) {
             // NOTE: flex-wrap: Wrap — SwiftUI stacks don't wrap; consider a custom Layout
             Text("only")
@@ -11,7 +11,7 @@ struct ContentView: View {
                 .padding(0.0) /* margin */
         }
         .frame(width: 100.0 /* 100.0% — use GeometryReader for relative sizing */, height: nil)
-        .frame(minWidth: nil, minHeight: 0.0, maxWidth: nil, maxHeight: nil)
+        .frame(minWidth: nil, maxWidth: nil, minHeight: 0.0, maxHeight: nil)
         .padding(12.0)
         .background(Color(red: 0.11, green: 0.11, blue: 0.17))
         .padding(0.0) /* margin */

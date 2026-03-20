@@ -10,8 +10,8 @@ CASES_DIR = Path(__file__).resolve().parent.parent / "Sources" / "SwiftGolden" /
 TEST_DIR = Path(__file__).resolve().parent.parent / "Tests" / "SwiftGoldenTests"
 
 # Viewport used for rendering (must match the snapshot test size)
-VIEWPORT_W = 800.0
-VIEWPORT_H = 600.0
+VIEWPORT_W = 400.0
+VIEWPORT_H = 300.0
 
 
 def snake_to_camel(s: str) -> str:

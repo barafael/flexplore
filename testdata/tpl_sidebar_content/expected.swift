@@ -1,5 +1,5 @@
 struct ContentView: View {
-    var body: some View {
+    public var body: some View {
         HStack(alignment: .center, spacing: 0.0) {
             VStack(alignment: .center, spacing: 4.0) {
                 Text("nav-1")
@@ -25,7 +25,7 @@ struct ContentView: View {
                     .padding(0.0) /* margin */
             }
             .frame(width: 250.0, height: nil)
-            .frame(minWidth: nil, minHeight: 0.0, maxWidth: nil, maxHeight: nil)
+            .frame(minWidth: nil, maxWidth: nil, minHeight: 0.0, maxHeight: nil)
             .padding(8.0)
             .background(Color(red: 0.11, green: 0.11, blue: 0.17))
             .padding(0.0) /* margin */
@@ -38,7 +38,7 @@ struct ContentView: View {
                 .layoutPriority(1.0) /* flex-grow */
         }
         .frame(width: 100.0 /* 100.0% — use GeometryReader for relative sizing */, height: 100.0 /* 100.0% — use GeometryReader for relative sizing */)
-        .frame(minWidth: nil, minHeight: 0.0, maxWidth: nil, maxHeight: nil)
+        .frame(minWidth: nil, maxWidth: nil, minHeight: 0.0, maxHeight: nil)
         .padding(0.0)
         .background(Color(red: 0.11, green: 0.11, blue: 0.17))
         .padding(0.0) /* margin */
