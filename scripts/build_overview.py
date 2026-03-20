@@ -11,6 +11,8 @@ IMAGES = [
     ("Bevy", "rendered_bevy.png"),
     ("HTML/CSS", "rendered_html.png"),
     ("Tailwind", "rendered_tailwind.png"),
+    ("Flutter", "rendered_flutter.png"),
+    ("SwiftUI", "rendered_swift.png"),
 ]
 
 

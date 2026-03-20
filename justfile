@@ -33,10 +33,18 @@ render-html *cases:
 render-tailwind *cases:
     bash scripts/render_tailwind.sh {{cases}}
 
+# Render Flutter screenshots via golden tests (pass case names to filter)
+render-flutter *cases:
+    bash scripts/render_flutter.sh {{cases}}
+
+# Render SwiftUI screenshots via snapshot tests (requires macOS)
+render-swift *cases:
+    bash scripts/render_swift.sh {{cases}}
+
 # Build the overview comparison page
 build-overview:
     python scripts/build_overview.py
 
-# Render everything: snapshots, Bevy, HTML, Tailwind, then build overview
+# Render everything: snapshots, Bevy, HTML, Tailwind, Flutter, then build overview
 render-all *cases:
     bash scripts/render_all.sh {{cases}}

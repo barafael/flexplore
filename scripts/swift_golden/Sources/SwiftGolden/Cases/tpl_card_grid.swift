@@ -1,0 +1,57 @@
+// AUTO-GENERATED — do not edit. Run tool/generate_cases.py to regenerate.
+import SwiftUI
+
+public struct TplCardGridView: View {
+    var body: some View {
+        HStack(alignment: .top, spacing: 16.0) {
+            // NOTE: flex-wrap: Wrap — SwiftUI stacks don't wrap; consider a custom Layout
+            Text("card-1")
+                .font(.system(size: 26))
+                .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
+                .frame(width: 200.0, height: 250.0)
+                .padding(8.0)
+                .padding(0.0) /* margin */
+                .background(Color(red: 0.98, green: 0.71, blue: 0.68))
+            Text("card-2")
+                .font(.system(size: 26))
+                .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
+                .frame(width: 200.0, height: 250.0)
+                .padding(8.0)
+                .padding(0.0) /* margin */
+                .background(Color(red: 0.70, green: 0.80, blue: 0.89))
+            Text("card-3")
+                .font(.system(size: 26))
+                .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
+                .frame(width: 200.0, height: 250.0)
+                .padding(8.0)
+                .padding(0.0) /* margin */
+                .background(Color(red: 0.80, green: 0.92, blue: 0.77))
+            Text("card-4")
+                .font(.system(size: 26))
+                .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
+                .frame(width: 200.0, height: 250.0)
+                .padding(8.0)
+                .padding(0.0) /* margin */
+                .background(Color(red: 0.87, green: 0.80, blue: 0.89))
+            Text("card-5")
+                .font(.system(size: 26))
+                .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
+                .frame(width: 200.0, height: 250.0)
+                .padding(8.0)
+                .padding(0.0) /* margin */
+                .background(Color(red: 1.00, green: 0.85, blue: 0.65))
+            Text("card-6")
+                .font(.system(size: 26))
+                .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
+                .frame(width: 200.0, height: 250.0)
+                .padding(8.0)
+                .padding(0.0) /* margin */
+                .background(Color(red: 1.00, green: 1.00, blue: 0.80))
+        }
+        .frame(width: 100.0 /* 100.0% — use GeometryReader for relative sizing */, height: nil)
+        .frame(minWidth: nil, minHeight: 0.0, maxWidth: nil, maxHeight: nil)
+        .padding(16.0)
+        .padding(0.0) /* margin */
+        .background(Color(red: 0.11, green: 0.11, blue: 0.17))
+    }
+}
