@@ -14,7 +14,8 @@
       "Bash(bash scripts/render_tailwind.sh)",
       "Bash(just render-all:*)",
       "Bash(just snapshots:*)",
-      "Bash(just render-flutter:*)"
+      "Bash(just render-flutter:*)",
+      "Bash(FLEXPLORE_UPDATE=1 cargo test)"
     ]
   }
 }

@@ -53,7 +53,15 @@ jobs:
             target/wasm32-unknown-unknown/release/flexplore.wasm
 
       - name: Copy web assets
-        run: cp web/index.html dist/
+        run: |
+          cp web/index.html dist/
+          mkdir -p dist/testdata
+          cp testdata/overview.html dist/testdata/
+          for d in testdata/*/; do
+            name=$(basename "$d")
+            mkdir -p "dist/testdata/$name"
+            cp -f "$d"rendered_*.png "dist/testdata/$name/" 2>/dev/null || true
+          done
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
