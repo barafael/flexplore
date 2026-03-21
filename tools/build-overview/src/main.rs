@@ -517,11 +517,14 @@ fn generate_flutter_cases(testdata: &Path, flutter_dir: &Path) -> Result<()> {
                  {INDENT}{INDENT}addTearDown(() => tester.view.resetDevicePixelRatio());\n\
                  {INDENT}{INDENT}await tester.binding.setSurfaceSize(const Size(400, 300));\n\
                  {INDENT}{INDENT}await tester.pumpWidget(\n\
-                 {INDENT}{INDENT}{INDENT}MaterialApp(\n\
-                 {INDENT}{INDENT}{INDENT}{INDENT}debugShowCheckedModeBanner: false,\n\
-                 {INDENT}{INDENT}{INDENT}{INDENT}home: Scaffold(\n\
-                 {INDENT}{INDENT}{INDENT}{INDENT}{INDENT}backgroundColor: const Color(0xFF1C1C2E),\n\
-                 {INDENT}{INDENT}{INDENT}{INDENT}{INDENT}body: {class_name}(),\n\
+                 {INDENT}{INDENT}{INDENT}MediaQuery(\n\
+                 {INDENT}{INDENT}{INDENT}{INDENT}data: const MediaQueryData(size: Size(400, 300)),\n\
+                 {INDENT}{INDENT}{INDENT}{INDENT}child: MaterialApp(\n\
+                 {INDENT}{INDENT}{INDENT}{INDENT}{INDENT}debugShowCheckedModeBanner: false,\n\
+                 {INDENT}{INDENT}{INDENT}{INDENT}{INDENT}home: Scaffold(\n\
+                 {INDENT}{INDENT}{INDENT}{INDENT}{INDENT}{INDENT}backgroundColor: const Color(0xFF1C1C2E),\n\
+                 {INDENT}{INDENT}{INDENT}{INDENT}{INDENT}{INDENT}body: {class_name}(),\n\
+                 {INDENT}{INDENT}{INDENT}{INDENT}{INDENT}),\n\
                  {INDENT}{INDENT}{INDENT}{INDENT}),\n\
                  {INDENT}{INDENT}{INDENT}),\n\
                  {INDENT}{INDENT});\n\

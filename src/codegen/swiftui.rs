@@ -428,9 +428,23 @@ fn emit_swiftui_node(
         }
 
         if min_w.is_some() || min_h.is_some() || max_w.is_some() || max_h.is_some() {
+            // Derive frame alignment from the container's cross-axis alignment
+            let frame_align = if is_row {
+                match node.align_items {
+                    AlignItems::Center => ".leading",
+                    AlignItems::FlexEnd | AlignItems::End => ".bottomLeading",
+                    _ => ".topLeading",
+                }
+            } else {
+                match node.align_items {
+                    AlignItems::Center => ".top",
+                    AlignItems::FlexEnd | AlignItems::End => ".topTrailing",
+                    _ => ".topLeading",
+                }
+            };
             writeln!(
                 buf,
-                "{pad}.frame(minWidth: {}, maxWidth: {}, minHeight: {}, maxHeight: {}, alignment: .topLeading)",
+                "{pad}.frame(minWidth: {}, maxWidth: {}, minHeight: {}, maxHeight: {}, alignment: {frame_align})",
                 min_w.as_deref().unwrap_or("nil"),
                 max_w.as_deref().unwrap_or("nil"),
                 min_h.as_deref().unwrap_or("nil"),

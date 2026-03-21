@@ -329,11 +329,20 @@ fn build_container<'a>(
             | JustifyContent::End
     );
 
-    // Sort children by order
+    // Sort children by order and pre-compute leaf_idx starts so palette
+    // colours track with original nodes even when reversed.
     let mut children: Vec<&NodeConfig> = node.children.iter().collect();
     children.sort_by_key(|c| c.order);
+    let mut starts: Vec<usize> = Vec::with_capacity(children.len());
+    let mut acc = *leaf_idx;
+    for child in &children {
+        starts.push(acc);
+        acc += leaf_count(child);
+    }
+    *leaf_idx = acc;
     if is_reversed {
         children.reverse();
+        starts.reverse();
     }
 
     // Gap values (main-axis and cross-axis)
@@ -410,12 +419,12 @@ fn build_container<'a>(
             (0..num_lines).map(|_| Vec::new()).collect();
         let mut visible_idx = 0usize;
 
-        for child in &children {
+        for (child, start) in children.iter().zip(starts.iter()) {
             if !child.visible {
-                count_leaves(child, leaf_idx);
                 continue;
             }
-            let widget = build_widget(child, leaf_idx, palette, is_row, stretch, false);
+            let mut idx = *start;
+            let widget = build_widget(child, &mut idx, palette, is_row, stretch, false);
             let widget = apply_align_self(widget, child, is_row);
             if let Some(&line_idx) = line_breaks.get(visible_idx) {
                 lines[line_idx].push(widget);
@@ -451,16 +460,57 @@ fn build_container<'a>(
         }
     } else {
         // ── Single-line layout ───────────────────────────────────────────
+
+        // Pre-compute flex-shrink: if children overflow, shrink them proportionally.
+        let parent_main = if is_row { VIEWPORT_W } else { VIEWPORT_H };
+        let padding_px = resolve_to_px(&node.padding, 0.0);
+        let available = (parent_main - padding_px * 2.0).max(0.0);
+        let visible: Vec<&&NodeConfig> = children.iter().filter(|c| c.visible).collect();
+        let num_gaps = if visible.len() > 1 && !uses_space_justification {
+            (visible.len() - 1) as f32
+        } else {
+            0.0
+        };
+        let total_main: f32 = visible.iter().map(|c| {
+            let dim = if is_row { &c.width } else { &c.height };
+            resolve_to_px(dim, parent_main)
+                + resolve_to_px(&c.margin, 0.0) * 2.0
+        }).sum::<f32>() + num_gaps * main_gap_px;
+
+        let shrink_ratio = if total_main > available && total_main > 0.0 {
+            available / total_main
+        } else {
+            1.0
+        };
+
         // Build child widgets, skipping invisible ones
         let child_widgets: Vec<Element<'a, Message>> = children
             .iter()
-            .filter_map(|child| {
+            .zip(starts.iter())
+            .filter_map(|(child, start)| {
                 if !child.visible {
-                    count_leaves(child, leaf_idx);
                     return None;
                 }
-                let widget = build_widget(child, leaf_idx, palette, is_row, stretch, false);
+                let mut idx = *start;
+                let widget = build_widget(child, &mut idx, palette, is_row, stretch, false);
                 let widget = apply_align_self(widget, child, is_row);
+                // Apply flex-shrink by wrapping in a fixed-size container
+                let widget = if shrink_ratio < 1.0 && child.flex_shrink > 0.0 {
+                    let dim = if is_row { &child.width } else { &child.height };
+                    let orig = resolve_to_px(dim, parent_main);
+                    if orig > 0.0 {
+                        let shrunk = orig * shrink_ratio;
+                        if is_row {
+                            container(widget).width(Length::Fixed(shrunk)).into()
+                        } else {
+                            container(widget).height(Length::Fixed(shrunk)).into()
+                        }
+                    } else {
+                        widget
+                    }
+                } else {
+                    widget
+                };
                 Some(widget)
             })
             .collect();
@@ -750,14 +800,12 @@ fn apply_align_self<'a>(
     }
 }
 
-/// Count leaf nodes without building widgets (for color index bookkeeping).
-fn count_leaves(node: &NodeConfig, leaf_idx: &mut usize) {
+/// Return the number of leaves under a node.
+fn leaf_count(node: &NodeConfig) -> usize {
     if node.children.is_empty() {
-        *leaf_idx += 1;
+        1
     } else {
-        for child in &node.children {
-            count_leaves(child, leaf_idx);
-        }
+        node.children.iter().map(leaf_count).sum()
     }
 }
 
