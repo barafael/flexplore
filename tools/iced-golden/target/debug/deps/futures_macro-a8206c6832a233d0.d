@@ -1,0 +1,9 @@
+C:\workspace\sources\flexplain\scripts\iced_golden\target\debug\deps\futures_macro-a8206c6832a233d0.d: C:\workspace\tools\cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.32\src\lib.rs C:\workspace\tools\cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.32\src\executor.rs C:\workspace\tools\cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.32\src\join.rs C:\workspace\tools\cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.32\src\select.rs C:\workspace\tools\cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.32\src\stream_select.rs
+
+C:\workspace\sources\flexplain\scripts\iced_golden\target\debug\deps\futures_macro-a8206c6832a233d0.dll: C:\workspace\tools\cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.32\src\lib.rs C:\workspace\tools\cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.32\src\executor.rs C:\workspace\tools\cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.32\src\join.rs C:\workspace\tools\cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.32\src\select.rs C:\workspace\tools\cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.32\src\stream_select.rs
+
+C:\workspace\tools\cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.32\src\lib.rs:
+C:\workspace\tools\cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.32\src\executor.rs:
+C:\workspace\tools\cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.32\src\join.rs:
+C:\workspace\tools\cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.32\src\select.rs:
+C:\workspace\tools\cargo\registry\src\index.crates.io-1949cf8c6b5b557f\futures-macro-0.3.32\src\stream_select.rs:
