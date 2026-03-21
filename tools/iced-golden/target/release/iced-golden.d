@@ -1,1 +1,0 @@
-\\?\C:\workspace\sources\flexplain\tools\iced-golden\target\release\iced-golden.exe: \\?\C:\workspace\sources\flexplain\tools\iced-golden\src\config.rs \\?\C:\workspace\sources\flexplain\tools\iced-golden\src\main.rs
