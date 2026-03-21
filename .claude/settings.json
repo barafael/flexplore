@@ -5,7 +5,6 @@
       "Bash(cargo doc:*)",
       "Bash(cargo run:*)",
       "Bash(cargo test:*)",
-      "Bash(npx playwright:*)",
       "WebSearch",
       "WebFetch(domain:raw.githubusercontent.com)"
     ]
