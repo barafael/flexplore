@@ -29,6 +29,9 @@ try {
     Write-Host "`n=== Rendering Swift screenshots ==="
     & "$ScriptDir/render_swift.ps1" @Cases
 
+    Write-Host "`n=== Rendering Iced screenshots ==="
+    & "$ScriptDir/render_iced.ps1" @Cases
+
     Write-Host "`n=== Building overview page ==="
     python3 "$ScriptDir/build_overview.py"
 

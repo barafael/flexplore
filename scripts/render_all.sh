@@ -37,6 +37,10 @@ echo "=== Rendering Swift screenshots ===" >&2
 bash "$SCRIPT_DIR/render_swift.sh" "$@" 2>&1
 
 echo ""
+echo "=== Rendering Iced screenshots ===" >&2
+bash "$SCRIPT_DIR/render_iced.sh" "$@" 2>&1
+
+echo ""
 echo "=== Building overview page ===" >&2
 python3 "$SCRIPT_DIR/build_overview.py" 2>&1
 

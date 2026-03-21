@@ -13,6 +13,7 @@ IMAGES = [
     ("Tailwind", "rendered_tailwind.png"),
     ("Flutter", "rendered_flutter.png"),
     ("SwiftUI", "rendered_swift.png"),
+    ("Iced", "rendered_iced.png"),
 ]
 
 I = "  "  # indent unit
