@@ -7,8 +7,7 @@ on:
     paths:
       - 'testdata/*/expected.swift'
       - 'src/codegen/swiftui.rs'
-      - 'scripts/swift_golden/**'
-      - 'scripts/render_swift.sh'
+      - 'tools/swift-golden/**'
       - '.github/workflows/swift-golden.yml'
 
 permissions:
@@ -24,11 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Render Swift golden screenshots
-        run: bash scripts/render_swift.sh
-
-      - name: Rebuild overview page
-        run: python3 scripts/build_overview.py
+      - name: Render Swift golden screenshots and rebuild overview
+        run: cargo run -p build-overview
 
       - name: Commit rendered PNGs and overview
         run: |

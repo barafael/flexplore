@@ -2,22 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(cargo check:*)",
-      "WebSearch",
-      "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(cargo doc:*)",
       "Bash(cargo run:*)",
-      "Bash(node scripts/render_html.mjs tpl_holy_grail)",
+      "Bash(cargo test:*)",
       "Bash(npx playwright:*)",
-      "Bash(bash scripts/render_html.sh tpl_holy_grail)",
-      "Bash(bash scripts/render_html.sh)",
-      "Bash(bash scripts/render_tailwind.sh tpl_holy_grail tpl_card_grid)",
-      "Bash(bash scripts/render_tailwind.sh)",
-      "Bash(just render-all:*)",
-      "Bash(just snapshots:*)",
-      "Bash(just render-flutter:*)",
-      "Bash(FLEXPLORE_UPDATE=1 cargo test)",
-      "Bash(find /c/workspace/sources/flexplain/src/codegen -name \"*.rs\" -exec wc -l {} +)",
-      "Bash(pwsh -File scripts/render_tailwind.ps1)"
+      "WebSearch",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }
