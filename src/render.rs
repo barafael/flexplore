@@ -8,6 +8,9 @@ use bevy::window::{PrimaryWindow, WindowResolution};
 
 use crate::config::{ColorPalette, NodeConfig};
 
+/// Frames to let Bevy's UI layout settle after spawning a new tree.
+const SETTLE_FRAMES: u32 = 4;
+
 /// A single render job: name, layout tree, and palette.
 pub struct RenderJob {
     pub name: String,
@@ -23,15 +26,6 @@ pub fn render_to_images(jobs: Vec<RenderJob>, output_dir: PathBuf) {
         return;
     }
     eprintln!("Will render {} test case(s) to {}", jobs.len(), output_dir.display());
-
-    let spawn_fns: Vec<SpawnableJob> = jobs
-        .into_iter()
-        .map(|j| SpawnableJob {
-            name: j.name,
-            node: j.node,
-            palette: j.palette,
-        })
-        .collect();
 
     App::new()
         .add_plugins(DefaultPlugins
@@ -57,48 +51,57 @@ pub fn render_to_images(jobs: Vec<RenderJob>, output_dir: PathBuf) {
             }))
         .insert_resource(ClearColor(Color::srgba(0.11, 0.11, 0.17, 1.0)))
         .insert_resource(RenderQueue {
-            jobs: spawn_fns,
+            jobs,
             current: 0,
             output_dir,
+            phase: Phase::WarmingUp,
             frames_waited: 0,
-            screenshot_pending: false,
         })
+        .insert_resource(PipelineReady(false))
         .insert_resource(ScreenshotSaved(false))
-        .add_systems(Startup, setup_first)
+        .add_systems(Startup, setup_camera)
         .add_systems(Update, drive_rendering)
         .run();
 }
 
-struct SpawnableJob {
-    name: String,
-    node: NodeConfig,
-    palette: ColorPalette,
+
+/// Rendering proceeds in phases for each job.
+enum Phase {
+    /// Fire a throwaway screenshot to wait for the GPU pipeline to be ready.
+    /// The callback proves the pipeline can produce frames.
+    WarmingUp,
+    /// Probe requested; waiting for its callback before spawning UI.
+    WaitingForPipeline,
+    /// UI tree has been spawned; waiting SETTLE_FRAMES for layout to converge.
+    Settling,
+    /// Real screenshot requested; waiting for the observer callback.
+    Capturing,
 }
 
 #[derive(Resource)]
 struct RenderQueue {
-    jobs: Vec<SpawnableJob>,
+    jobs: Vec<RenderJob>,
     current: usize,
     output_dir: PathBuf,
+    phase: Phase,
     frames_waited: u32,
-    screenshot_pending: bool,
 }
+
+#[derive(Resource)]
+struct PipelineReady(bool);
 
 #[derive(Resource)]
 struct ScreenshotSaved(bool);
 
-fn setup_first(mut commands: Commands, queue: Res<RenderQueue>) {
+fn setup_camera(mut commands: Commands) {
     commands.spawn(Camera2d);
-    if let Some(job) = queue.jobs.first() {
-        eprintln!("Spawning UI: {}", job.name);
-        spawn_node_tree(&mut commands, &job.node, job.palette);
-    }
 }
 
 fn drive_rendering(
     mut commands: Commands,
     mut queue: ResMut<RenderQueue>,
     mut exit: MessageWriter<AppExit>,
+    mut ready: ResMut<PipelineReady>,
     mut saved: ResMut<ScreenshotSaved>,
     ui_roots: Query<Entity, (With<Node>, Without<ChildOf>)>,
     window: Single<Entity, With<PrimaryWindow>>,
@@ -108,38 +111,70 @@ fn drive_rendering(
         return;
     }
 
-    queue.frames_waited += 1;
-
-    // Wait a few frames for layout + render to settle, then request screenshot
-    if queue.frames_waited == 4 && !queue.screenshot_pending {
-        let job = &queue.jobs[queue.current];
-        let path = queue.output_dir.join(&job.name).join("rendered_bevy.png");
-        eprintln!("Capturing screenshot: {}", path.display());
-        commands
-            .spawn(Screenshot::window(*window))
-            .observe(save_and_signal(path));
-        queue.screenshot_pending = true;
-    }
-
-    // Wait for the observer to confirm the file was saved
-    if queue.screenshot_pending && saved.0 {
-        saved.0 = false;
-        queue.screenshot_pending = false;
-        queue.current += 1;
-        queue.frames_waited = 0;
-
-        for entity in ui_roots.iter() {
-            commands.entity(entity).despawn();
-        }
-
-        if let Some(job) = queue.jobs.get(queue.current) {
+    match queue.phase {
+        Phase::WarmingUp => {
+            // Spawn the first job's UI immediately so the render pipeline
+            // starts compiling UI shaders during warmup.
+            let job = &queue.jobs[queue.current];
             eprintln!("Spawning UI: {}", job.name);
             spawn_node_tree(&mut commands, &job.node, job.palette);
-        } else {
-            eprintln!("All done!");
-            exit.write(AppExit::Success);
+            // Request a throwaway screenshot whose callback proves the
+            // GPU render pipeline has produced at least one frame.
+            commands
+                .spawn(Screenshot::window(*window))
+                .observe(signal_pipeline_ready);
+            queue.phase = Phase::WaitingForPipeline;
+        }
+        Phase::WaitingForPipeline => {
+            if ready.0 {
+                ready.0 = false;
+                // Pipeline is warm and UI shaders are compiled.
+                // Start counting settle frames for layout convergence.
+                queue.phase = Phase::Settling;
+            }
+        }
+        Phase::Settling => {
+            queue.frames_waited += 1;
+            if queue.frames_waited >= SETTLE_FRAMES {
+                let job = &queue.jobs[queue.current];
+                let path = queue.output_dir.join(&job.name).join("rendered_bevy.png");
+                eprintln!("Capturing screenshot: {}", path.display());
+                commands
+                    .spawn(Screenshot::window(*window))
+                    .observe(save_and_signal(path));
+                queue.phase = Phase::Capturing;
+            }
+        }
+        Phase::Capturing => {
+            if saved.0 {
+                saved.0 = false;
+                queue.current += 1;
+                queue.frames_waited = 0;
+
+                for entity in ui_roots.iter() {
+                    commands.entity(entity).despawn();
+                }
+
+                if let Some(job) = queue.jobs.get(queue.current) {
+                    eprintln!("Spawning UI: {}", job.name);
+                    spawn_node_tree(&mut commands, &job.node, job.palette);
+                    // Pipeline is already warm; go straight to settling.
+                    queue.phase = Phase::Settling;
+                } else {
+                    eprintln!("All done!");
+                    exit.write(AppExit::Success);
+                }
+            }
         }
     }
+}
+
+/// Observer for the warmup probe — signals pipeline readiness, discards the image.
+fn signal_pipeline_ready(
+    _screenshot_captured: On<ScreenshotCaptured>,
+    mut ready: ResMut<PipelineReady>,
+) {
+    ready.0 = true;
 }
 
 /// Observer that saves the screenshot to disk and sets the ScreenshotSaved flag.
