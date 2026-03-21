@@ -11,7 +11,7 @@ Widget build(BuildContext context) {
       runSpacing: 8.0,
       children: [
         Container(
-          width: 200.0,
+          width: 170.0,
           height: 60.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
@@ -23,7 +23,7 @@ Widget build(BuildContext context) {
         )
         ,
         Container(
-          width: 200.0,
+          width: 170.0,
           height: 60.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
@@ -35,7 +35,7 @@ Widget build(BuildContext context) {
         )
         ,
         Container(
-          width: 200.0,
+          width: 170.0,
           height: 60.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
@@ -47,7 +47,7 @@ Widget build(BuildContext context) {
         )
         ,
         Container(
-          width: 200.0,
+          width: 170.0,
           height: 60.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
@@ -59,7 +59,7 @@ Widget build(BuildContext context) {
         )
         ,
         Container(
-          width: 200.0,
+          width: 170.0,
           height: 60.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
@@ -71,7 +71,7 @@ Widget build(BuildContext context) {
         )
         ,
         Container(
-          width: 200.0,
+          width: 170.0,
           height: 60.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),

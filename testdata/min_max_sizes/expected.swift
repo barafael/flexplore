@@ -8,7 +8,6 @@ struct ContentView: View {
                 .frame(minWidth: nil, maxWidth: 100.0, minHeight: nil, maxHeight: nil)
                 .padding(8.0)
                 .background(Color(red: 0.98, green: 0.71, blue: 0.68))
-                .layoutPriority(1.0) /* flex-grow */
             Text("free")
                 .font(.system(size: 26))
                 .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
@@ -16,7 +15,6 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity)
                 .padding(8.0)
                 .background(Color(red: 0.70, green: 0.80, blue: 0.89))
-                .layoutPriority(1.0) /* flex-grow */
             Text("wide")
                 .font(.system(size: 26))
                 .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
@@ -25,7 +23,6 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity)
                 .padding(8.0)
                 .background(Color(red: 0.80, green: 0.92, blue: 0.77))
-                .layoutPriority(1.0) /* flex-grow */
         }
         .frame(minWidth: nil, maxWidth: .infinity, minHeight: nil, maxHeight: nil, alignment: .topLeading)
         .padding(12.0)

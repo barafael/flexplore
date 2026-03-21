@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use test_case::test_case;
 
 use crate::config::{ColorPalette, NodeConfig, ValueConfig};
-use crate::codegen::{emit_bevy_code, emit_html_css};
+use crate::codegen::{emit_bevy_code, emit_html_css, emit_iced};
 use crate::templates;
 
 // ─── Procedural graph builders ───────────────────────────────────────────────
@@ -198,10 +198,11 @@ fn align_content_test(ac: AlignContent) -> NodeConfig {
 
 // ─── Structural assertions ───────────────────────────────────────────────────
 
-/// Both codegen targets must produce non-empty, well-structured output.
+/// All codegen targets must produce non-empty, well-structured output.
 fn assert_both_emit(node: &NodeConfig, palette: ColorPalette) {
     let html = emit_html_css(node, palette).unwrap();
     let bevy = emit_bevy_code(node, palette).unwrap();
+    let iced = emit_iced(node, palette).unwrap();
 
     // HTML structure
     assert!(html.contains("<style>"), "HTML missing <style> block");
@@ -214,6 +215,16 @@ fn assert_both_emit(node: &NodeConfig, palette: ColorPalette) {
         "Bevy missing spawn_ui function"
     );
     assert!(bevy.contains("Node {"), "Bevy missing Node struct");
+
+    // Iced structure
+    assert!(
+        iced.contains("fn view(&self) -> iced::Element<'_, Message>"),
+        "Iced missing view function"
+    );
+    assert!(
+        iced.contains(".into()"),
+        "Iced missing .into() call"
+    );
 
     // Leaf count: each leaf produces a <div> with its label AND a Text::new in Bevy
     let leaf_count = count_leaves(node);
@@ -231,14 +242,15 @@ fn count_leaves(node: &NodeConfig) -> usize {
     }
 }
 
-/// Verify that every leaf label appears in both outputs.
+/// Verify that every leaf label appears in all outputs.
 fn assert_labels_present(node: &NodeConfig, palette: ColorPalette) {
     let html = emit_html_css(node, palette).unwrap();
     let bevy = emit_bevy_code(node, palette).unwrap();
-    check_labels_in(&html, &bevy, node);
+    let iced = emit_iced(node, palette).unwrap();
+    check_labels_in(&html, &bevy, &iced, node);
 }
 
-fn check_labels_in(html: &str, bevy: &str, node: &NodeConfig) {
+fn check_labels_in(html: &str, bevy: &str, iced: &str, node: &NodeConfig) {
     if node.children.is_empty() {
         assert!(
             html.contains(&node.label),
@@ -250,18 +262,24 @@ fn check_labels_in(html: &str, bevy: &str, node: &NodeConfig) {
             "Bevy missing Text::new for {:?}",
             node.label,
         );
+        assert!(
+            iced.contains(&format!("text({:?})", node.label)),
+            "Iced missing text() for {:?}",
+            node.label,
+        );
     }
     for child in &node.children {
-        check_labels_in(html, bevy, child);
+        check_labels_in(html, bevy, iced, child);
     }
 }
 
-/// Verify matching property consistency between HTML and Bevy outputs.
+/// Verify matching property consistency across HTML, Bevy, and Iced outputs.
 fn assert_property_consistency(node: &NodeConfig, palette: ColorPalette) {
     let html = emit_html_css(node, palette).unwrap();
     let bevy = emit_bevy_code(node, palette).unwrap();
+    let iced = emit_iced(node, palette).unwrap();
 
-    // flex-direction: if non-default, both must mention it
+    // flex-direction: if non-default, all must mention it
     if node.flex_direction != FlexDirection::Row {
         let css_dir = match node.flex_direction {
             FlexDirection::Column => "column",
@@ -278,12 +296,21 @@ fn assert_property_consistency(node: &NodeConfig, palette: ColorPalette) {
             "Bevy missing FlexDirection::{:?}",
             node.flex_direction,
         );
+        // Iced uses row![] / column![] — column direction means column![ must appear
+        let is_col = matches!(
+            node.flex_direction,
+            FlexDirection::Column | FlexDirection::ColumnReverse
+        );
+        if is_col {
+            assert!(iced.contains("column!["), "Iced missing column![ for {:?}", node.flex_direction);
+        }
     }
 
-    // visibility: if hidden, both targets should indicate it
+    // visibility: if hidden, all targets should indicate it
     if !node.visible {
         assert!(html.contains("visibility: hidden"), "HTML missing visibility: hidden");
         assert!(bevy.contains("Visibility::Hidden"), "Bevy missing Visibility::Hidden");
+        assert!(iced.contains("// NOTE: hidden"), "Iced missing hidden comment");
     }
 }
 
@@ -397,14 +424,25 @@ fn grow_shrink_codegen(grow: f32, shrink: f32) {
     let node = grow_shrink(grow, shrink);
     let html = emit_html_css(&node, ColorPalette::Pastel1).unwrap();
     let bevy = emit_bevy_code(&node, ColorPalette::Pastel1).unwrap();
+    let iced = emit_iced(&node, ColorPalette::Pastel1).unwrap();
 
     if grow != 0.0 {
         assert!(html.contains("flex-grow:"), "HTML missing flex-grow for {grow}");
         assert!(bevy.contains("flex_grow:"), "Bevy missing flex_grow for {grow}");
+        // Iced maps flex-grow to Length::Fill or Length::FillPortion
+        assert!(
+            iced.contains("Length::Fill"),
+            "Iced missing Length::Fill for flex-grow {grow}"
+        );
     }
     if shrink != 1.0 {
         assert!(html.contains("flex-shrink:"), "HTML missing flex-shrink for {shrink}");
         assert!(bevy.contains("flex_shrink:"), "Bevy missing flex_shrink for {shrink}");
+        // Iced has no flex-shrink — should emit a comment
+        assert!(
+            iced.contains("flex-shrink"),
+            "Iced missing flex-shrink comment for {shrink}"
+        );
     }
 }
 
@@ -418,10 +456,12 @@ fn align_self_codegen(align: AlignSelf) {
     let node = align_self_child(align);
     let html = emit_html_css(&node, ColorPalette::Pastel1).unwrap();
     let bevy = emit_bevy_code(&node, ColorPalette::Pastel1).unwrap();
+    let iced = emit_iced(&node, ColorPalette::Pastel1).unwrap();
 
     if align != AlignSelf::Auto {
         assert!(html.contains("align-self:"), "HTML missing align-self for {align:?}");
         assert!(bevy.contains("align_self:"), "Bevy missing align_self for {align:?}");
+        assert!(iced.contains("align-self"), "Iced missing align-self comment for {align:?}");
     }
 }
 
@@ -434,10 +474,12 @@ fn flex_basis_codegen(basis: ValueConfig) {
     let node = with_flex_basis(basis);
     let html = emit_html_css(&node, ColorPalette::Pastel1).unwrap();
     let bevy = emit_bevy_code(&node, ColorPalette::Pastel1).unwrap();
+    let iced = emit_iced(&node, ColorPalette::Pastel1).unwrap();
 
     if !matches!(basis, ValueConfig::Auto) {
         assert!(html.contains("flex-basis:"), "HTML missing flex-basis");
         assert!(bevy.contains("flex_basis:"), "Bevy missing flex_basis");
+        assert!(iced.contains("flex-basis"), "Iced missing flex-basis comment");
     }
 }
 
@@ -498,8 +540,10 @@ fn visibility_codegen() {
     for node in [hidden_child(), all_hidden()] {
         let html = emit_html_css(&node, ColorPalette::Pastel1).unwrap();
         let bevy = emit_bevy_code(&node, ColorPalette::Pastel1).unwrap();
+        let iced = emit_iced(&node, ColorPalette::Pastel1).unwrap();
         assert!(html.contains("visibility: hidden"), "HTML missing visibility: hidden");
         assert!(bevy.contains("Visibility::Hidden"), "Bevy missing Visibility::Hidden");
+        assert!(iced.contains("// NOTE: hidden"), "Iced missing hidden comment");
     }
 }
 
@@ -535,6 +579,21 @@ fn order_reflected_in_bevy() {
     assert!(pos_c < pos_a, "C should appear before A in Bevy output");
 }
 
+#[test]
+fn order_reflected_in_iced() {
+    let node = ordered_children();
+    let iced = emit_iced(&node, ColorPalette::Pastel1).unwrap();
+    // Iced sorts children by order and emits comments for non-zero
+    assert!(iced.contains("order: 3"), "Iced missing order comment for 3");
+    assert!(iced.contains("order: -1"), "Iced missing order comment for -1");
+    // text() call order should be B, C, A
+    let pos_b = iced.find("text(\"B\")").expect("missing B text");
+    let pos_c = iced.find("text(\"C\")").expect("missing C text");
+    let pos_a = iced.find("text(\"A\")").expect("missing A text");
+    assert!(pos_b < pos_c, "B should appear before C in Iced output");
+    assert!(pos_c < pos_a, "C should appear before A in Iced output");
+}
+
 // ─── Tests: padding and margin ───────────────────────────────────────────────
 
 #[test]
@@ -542,10 +601,13 @@ fn padding_and_margin_emitted() {
     let node = with_padding_margin();
     let html = emit_html_css(&node, ColorPalette::Pastel1).unwrap();
     let bevy = emit_bevy_code(&node, ColorPalette::Pastel1).unwrap();
+    let iced = emit_iced(&node, ColorPalette::Pastel1).unwrap();
     assert!(html.contains("padding: 20.0px"), "HTML missing padding");
     assert!(html.contains("margin: 10.0px"), "HTML missing margin");
     assert!(bevy.contains("UiRect::all(Val::Px(20.0))"), "Bevy missing padding UiRect");
     assert!(bevy.contains("UiRect::all(Val::Px(10.0))"), "Bevy missing margin UiRect");
+    assert!(iced.contains(".padding(20.0)"), "Iced missing padding");
+    assert!(iced.contains("// NOTE: margin: 10px"), "Iced missing margin comment");
 }
 
 // ─── Tests: min/max sizes ────────────────────────────────────────────────────
@@ -555,6 +617,7 @@ fn min_max_sizes_emitted() {
     let node = min_max_sizes();
     let html = emit_html_css(&node, ColorPalette::Pastel1).unwrap();
     let bevy = emit_bevy_code(&node, ColorPalette::Pastel1).unwrap();
+    let iced = emit_iced(&node, ColorPalette::Pastel1).unwrap();
     assert!(html.contains("min-width: 40.0px"), "HTML missing min-width");
     assert!(html.contains("max-width: 200.0px"), "HTML missing max-width");
     assert!(html.contains("min-height: 30.0px"), "HTML missing min-height");
@@ -563,6 +626,11 @@ fn min_max_sizes_emitted() {
     assert!(bevy.contains("Val::Px(200.0)"), "Bevy missing max_width value");
     assert!(bevy.contains("Val::Px(30.0)"), "Bevy missing min_height value");
     assert!(bevy.contains("Val::Px(150.0)"), "Bevy missing max_height value");
+    // Iced: max_width is supported, min/max height via comments
+    assert!(iced.contains(".max_width(200.0)"), "Iced missing max_width");
+    assert!(iced.contains("min-width: 40px"), "Iced missing min-width comment");
+    assert!(iced.contains("min-height: 30px"), "Iced missing min-height comment");
+    assert!(iced.contains("max-height: 150px"), "Iced missing max-height comment");
 }
 
 // ─── Tests: template layouts ─────────────────────────────────────────────────
@@ -641,6 +709,7 @@ fn leaf_count_card_grid() {
 fn leaf_count_check(node: &NodeConfig, expected_leaves: usize) {
     let html = emit_html_css(&node, ColorPalette::Pastel1).unwrap();
     let bevy = emit_bevy_code(&node, ColorPalette::Pastel1).unwrap();
+    let iced = emit_iced(&node, ColorPalette::Pastel1).unwrap();
 
     let text_new_count = bevy.matches("Text::new(").count();
     assert_eq!(
@@ -654,5 +723,12 @@ fn leaf_count_check(node: &NodeConfig, expected_leaves: usize) {
     assert_eq!(
         rgb_count, expected_leaves,
         "HTML leaf background rgb() count mismatch"
+    );
+
+    // Iced: count text() calls (leaves only) — exclude "text(" in "container::Style" etc.
+    let iced_text_count = iced.matches("text(\"").count();
+    assert_eq!(
+        iced_text_count, expected_leaves,
+        "Iced text() count mismatch"
     );
 }

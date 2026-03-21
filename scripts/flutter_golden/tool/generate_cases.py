@@ -52,6 +52,8 @@ class {class_name} extends StatelessWidget {{
     )
     test_cases = "\n".join(
         f"""  testWidgets('{name}', (tester) async {{
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(

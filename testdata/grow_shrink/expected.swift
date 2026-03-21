@@ -8,7 +8,6 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity)
                 .padding(8.0)
                 .background(Color(red: 0.98, green: 0.71, blue: 0.68))
-                .layoutPriority(1.0) /* flex-grow */
             Text("grow-2")
                 .font(.system(size: 26))
                 .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
@@ -16,7 +15,6 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity)
                 .padding(8.0)
                 .background(Color(red: 0.70, green: 0.80, blue: 0.89))
-                .layoutPriority(2.0) /* flex-grow */
             Text("fixed")
                 .font(.system(size: 26))
                 .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))

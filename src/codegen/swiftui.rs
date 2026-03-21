@@ -82,7 +82,7 @@ fn swift_h_alignment(a: AlignItems) -> &'static str {
 
 pub fn emit_swiftui(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
     let mut buf = String::from("struct ContentView: View {\n    public var body: some View {\n");
-    emit_swiftui_node(&mut buf, root, 2, &mut 0, palette, true)?;
+    emit_swiftui_node(&mut buf, root, 2, &mut 0, palette, true, false)?;
     buf.push_str("    }\n}\n");
     Ok(buf)
 }
@@ -94,6 +94,7 @@ fn emit_swiftui_node(
     leaf_idx: &mut usize,
     palette: ColorPalette,
     parent_is_row: bool,
+    parent_stretch: bool,
 ) -> Result<()> {
     let pad = "    ".repeat(depth);
     let is_leaf = node.children.is_empty();
@@ -130,11 +131,20 @@ fn emit_swiftui_node(
                 max_h.as_deref().unwrap_or("nil"),
             )?;
         }
+        // Flex-grow: expand along main axis
         if node.flex_grow > 0.0 {
             if parent_is_row && max_w.is_none() {
                 writeln!(buf, "{pad}    .frame(maxWidth: .infinity)")?;
             } else if !parent_is_row && max_h.is_none() {
                 writeln!(buf, "{pad}    .frame(maxHeight: .infinity)")?;
+            }
+        }
+        // align-items: Stretch from parent — expand along cross axis
+        if parent_stretch {
+            if parent_is_row && matches!(node.height, ValueConfig::Auto) {
+                writeln!(buf, "{pad}    .frame(maxHeight: .infinity)")?;
+            } else if !parent_is_row && matches!(node.width, ValueConfig::Auto) {
+                writeln!(buf, "{pad}    .frame(maxWidth: .infinity)")?;
             }
         }
         if !is_zero_px(&node.padding) {
@@ -156,13 +166,6 @@ fn emit_swiftui_node(
                 buf,
                 "{pad}    /* align-self: {:?} — override manually with .alignmentGuide() */",
                 node.align_self
-            )?;
-        }
-        if node.flex_grow > 0.0 {
-            writeln!(
-                buf,
-                "{pad}    .layoutPriority({:.1}) /* flex-grow */",
-                node.flex_grow
             )?;
         }
         if !node.visible {
@@ -216,13 +219,6 @@ fn emit_swiftui_node(
                 node.flex_wrap
             )?;
         }
-        if node.align_items == AlignItems::Stretch {
-            let axis = if is_row { "maxHeight" } else { "maxWidth" };
-            writeln!(
-                buf,
-                "{pad}    // NOTE: align-items: Stretch — add .frame({axis}: .infinity) to children",
-            )?;
-        }
 
         let mut children: Vec<&NodeConfig> = node.children.iter().collect();
         children.sort_by_key(|c| c.order);
@@ -255,14 +251,14 @@ fn emit_swiftui_node(
                         writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
                     }
                     let mut idx = *start;
-                    emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row)?;
+                    emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch)?;
                 }
             }
             JustifyContent::Center => {
                 writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
                 for (child, start) in children.iter().zip(starts.iter()) {
                     let mut idx = *start;
-                    emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row)?;
+                    emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch)?;
                 }
                 writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
             }
@@ -270,7 +266,7 @@ fn emit_swiftui_node(
                 for (child, start) in children.iter().zip(starts.iter()) {
                     writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
                     let mut idx = *start;
-                    emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row)?;
+                    emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch)?;
                 }
                 writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
             }
@@ -278,13 +274,13 @@ fn emit_swiftui_node(
                 writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
                 for (child, start) in children.iter().zip(starts.iter()) {
                     let mut idx = *start;
-                    emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row)?;
+                    emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch)?;
                 }
             }
             _ => {
                 for (child, start) in children.iter().zip(starts.iter()) {
                     let mut idx = *start;
-                    emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row)?;
+                    emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch)?;
                 }
             }
         }
@@ -321,11 +317,19 @@ fn emit_swiftui_node(
         }
 
         // Flex-grow expansion (when not already handled by percent → infinity)
-        if node.flex_grow > 0.0 && !full_w && !full_h {
-            if parent_is_row {
+        if node.flex_grow > 0.0 {
+            if parent_is_row && !full_w && max_w.is_none() {
                 writeln!(buf, "{pad}.frame(maxWidth: .infinity, alignment: .topLeading)")?;
-            } else {
+            } else if !parent_is_row && !full_h && max_h.is_none() {
                 writeln!(buf, "{pad}.frame(maxHeight: .infinity, alignment: .topLeading)")?;
+            }
+        }
+        // align-items: Stretch from parent — expand along cross axis
+        if parent_stretch {
+            if parent_is_row && !full_h && matches!(node.height, ValueConfig::Auto) && max_h.is_none() {
+                writeln!(buf, "{pad}.frame(maxHeight: .infinity, alignment: .topLeading)")?;
+            } else if !parent_is_row && !full_w && matches!(node.width, ValueConfig::Auto) && max_w.is_none() {
+                writeln!(buf, "{pad}.frame(maxWidth: .infinity, alignment: .topLeading)")?;
             }
         }
 
