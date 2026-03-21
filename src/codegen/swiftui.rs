@@ -22,6 +22,25 @@ fn is_full_percent(v: &ValueConfig) -> bool {
     matches!(v, ValueConfig::Percent(n) if *n >= 100.0)
 }
 
+fn needs_wrap(node: &NodeConfig) -> bool {
+    if !node.children.is_empty() && node.flex_wrap != FlexWrap::NoWrap {
+        return true;
+    }
+    node.children.iter().any(|c| needs_wrap(c))
+}
+
+fn swift_line_alignment(ac: AlignContent) -> &'static str {
+    match ac {
+        AlignContent::FlexStart | AlignContent::Start | AlignContent::Stretch => ".start",
+        AlignContent::FlexEnd | AlignContent::End => ".end",
+        AlignContent::Center => ".center",
+        AlignContent::SpaceBetween => ".spaceBetween",
+        AlignContent::SpaceAround => ".spaceAround",
+        AlignContent::SpaceEvenly => ".spaceEvenly",
+        _ => ".start",
+    }
+}
+
 fn swift_value(v: &ValueConfig) -> String {
     match v {
         ValueConfig::Auto => ".infinity".into(),
@@ -84,6 +103,10 @@ pub fn emit_swiftui(root: &NodeConfig, palette: ColorPalette) -> Result<String> 
     let mut buf = String::from("struct ContentView: View {\n    public var body: some View {\n");
     emit_swiftui_node(&mut buf, root, 2, &mut 0, palette, true, false)?;
     buf.push_str("    }\n}\n");
+    if needs_wrap(root) {
+        buf.push('\n');
+        buf.push_str(FLOW_LAYOUT_STRUCT);
+    }
     Ok(buf)
 }
 
@@ -183,48 +206,11 @@ fn emit_swiftui_node(
             node.flex_direction,
             FlexDirection::RowReverse | FlexDirection::ColumnReverse
         );
+        let is_wrapping = node.flex_wrap != FlexWrap::NoWrap;
 
-        let gap = if is_row {
-            &node.column_gap
-        } else {
-            &node.row_gap
-        };
-
-        let jc = node.justify_content;
-        let uses_zero_spacing = matches!(
-            jc,
-            JustifyContent::SpaceBetween | JustifyContent::SpaceEvenly | JustifyContent::SpaceAround
-        );
-        let spacing = if uses_zero_spacing {
-            ", spacing: 0".to_string()
-        } else {
-            swift_spacing_value(gap)
-                .map(|s| format!(", spacing: {s}"))
-                .unwrap_or_default()
-        };
-
-        let alignment = if is_row {
-            swift_alignment(node.align_items)
-        } else {
-            swift_h_alignment(node.align_items)
-        };
-
-        let stack = if is_row { "HStack" } else { "VStack" };
-        writeln!(buf, "{pad}{stack}(alignment: {alignment}{spacing}) {{")?;
-
-        if node.flex_wrap != FlexWrap::NoWrap {
-            writeln!(
-                buf,
-                "{pad}    // NOTE: flex-wrap: {:?} — SwiftUI stacks don't wrap; consider a custom Layout",
-                node.flex_wrap
-            )?;
-        }
-
+        // Sort children by order and pre-compute leaf_idx starts for palette colours.
         let mut children: Vec<&NodeConfig> = node.children.iter().collect();
         children.sort_by_key(|c| c.order);
-
-        // Pre-compute leaf_idx start for each child in sorted order,
-        // so colors track with their original nodes even when reversed.
         let mut starts = Vec::with_capacity(children.len());
         let mut acc = *leaf_idx;
         for child in &children {
@@ -234,53 +220,116 @@ fn emit_swiftui_node(
         *leaf_idx = acc;
 
         if is_reversed {
-            let dir_label = match node.flex_direction {
-                FlexDirection::RowReverse => "RowReverse",
-                FlexDirection::ColumnReverse => "ColumnReverse",
-                _ => unreachable!(),
-            };
-            writeln!(buf, "{pad}    // NOTE: flex-direction: {dir_label} — children reversed in source to approximate visual order")?;
             children.reverse();
             starts.reverse();
         }
 
-        match jc {
-            JustifyContent::SpaceBetween => {
-                for (i, (child, start)) in children.iter().zip(starts.iter()).enumerate() {
-                    if i > 0 {
-                        writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
+        if is_wrapping {
+            // --- FlowLayout (custom wrapping layout) ---
+            let axis = if is_row { ".horizontal" } else { ".vertical" };
+            let item_gap = if is_row { &node.column_gap } else { &node.row_gap };
+            let line_gap = if is_row { &node.row_gap } else { &node.column_gap };
+            let line_align = swift_line_alignment(node.align_content);
+            let wrap_reversed = node.flex_wrap == FlexWrap::WrapReverse;
+
+            let mut args = vec![format!("axis: {axis}")];
+            if let Some(s) = swift_spacing_value(item_gap) {
+                args.push(format!("spacing: {s}"));
+            }
+            if let Some(s) = swift_spacing_value(line_gap) {
+                args.push(format!("lineSpacing: {s}"));
+            }
+            if line_align != ".start" {
+                args.push(format!("lineAlignment: {line_align}"));
+            }
+            if wrap_reversed {
+                args.push("reversed: true".to_string());
+            }
+            writeln!(buf, "{pad}FlowLayout({}) {{", args.join(", "))?;
+
+            if is_reversed {
+                let dir_label = match node.flex_direction {
+                    FlexDirection::RowReverse => "RowReverse",
+                    FlexDirection::ColumnReverse => "ColumnReverse",
+                    _ => unreachable!(),
+                };
+                writeln!(buf, "{pad}    // NOTE: flex-direction: {dir_label} — children reversed")?;
+            }
+
+            for (child, start) in children.iter().zip(starts.iter()) {
+                let mut idx = *start;
+                emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch)?;
+            }
+        } else {
+            // --- HStack / VStack (non-wrapping) ---
+            let gap = if is_row { &node.column_gap } else { &node.row_gap };
+            let jc = node.justify_content;
+            let uses_zero_spacing = matches!(
+                jc,
+                JustifyContent::SpaceBetween | JustifyContent::SpaceEvenly | JustifyContent::SpaceAround
+            );
+            let spacing = if uses_zero_spacing {
+                ", spacing: 0".to_string()
+            } else {
+                swift_spacing_value(gap)
+                    .map(|s| format!(", spacing: {s}"))
+                    .unwrap_or_default()
+            };
+            let alignment = if is_row {
+                swift_alignment(node.align_items)
+            } else {
+                swift_h_alignment(node.align_items)
+            };
+            let stack = if is_row { "HStack" } else { "VStack" };
+            writeln!(buf, "{pad}{stack}(alignment: {alignment}{spacing}) {{")?;
+
+            if is_reversed {
+                let dir_label = match node.flex_direction {
+                    FlexDirection::RowReverse => "RowReverse",
+                    FlexDirection::ColumnReverse => "ColumnReverse",
+                    _ => unreachable!(),
+                };
+                writeln!(buf, "{pad}    // NOTE: flex-direction: {dir_label} — children reversed in source to approximate visual order")?;
+            }
+
+            match jc {
+                JustifyContent::SpaceBetween => {
+                    for (i, (child, start)) in children.iter().zip(starts.iter()).enumerate() {
+                        if i > 0 {
+                            writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
+                        }
+                        let mut idx = *start;
+                        emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch)?;
                     }
-                    let mut idx = *start;
-                    emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch)?;
                 }
-            }
-            JustifyContent::Center => {
-                writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
-                for (child, start) in children.iter().zip(starts.iter()) {
-                    let mut idx = *start;
-                    emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch)?;
-                }
-                writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
-            }
-            JustifyContent::SpaceEvenly | JustifyContent::SpaceAround => {
-                for (child, start) in children.iter().zip(starts.iter()) {
+                JustifyContent::Center => {
                     writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
-                    let mut idx = *start;
-                    emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch)?;
+                    for (child, start) in children.iter().zip(starts.iter()) {
+                        let mut idx = *start;
+                        emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch)?;
+                    }
+                    writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
                 }
-                writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
-            }
-            JustifyContent::FlexEnd | JustifyContent::End => {
-                writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
-                for (child, start) in children.iter().zip(starts.iter()) {
-                    let mut idx = *start;
-                    emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch)?;
+                JustifyContent::SpaceEvenly | JustifyContent::SpaceAround => {
+                    for (child, start) in children.iter().zip(starts.iter()) {
+                        writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
+                        let mut idx = *start;
+                        emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch)?;
+                    }
+                    writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
                 }
-            }
-            _ => {
-                for (child, start) in children.iter().zip(starts.iter()) {
-                    let mut idx = *start;
-                    emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch)?;
+                JustifyContent::FlexEnd | JustifyContent::End => {
+                    writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
+                    for (child, start) in children.iter().zip(starts.iter()) {
+                        let mut idx = *start;
+                        emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch)?;
+                    }
+                }
+                _ => {
+                    for (child, start) in children.iter().zip(starts.iter()) {
+                        let mut idx = *start;
+                        emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch)?;
+                    }
                 }
             }
         }
@@ -357,12 +406,113 @@ fn emit_swiftui_node(
     Ok(())
 }
 
+const FLOW_LAYOUT_STRUCT: &str = r#"struct FlowLayout: Layout {
+    var axis: Axis = .horizontal
+    var spacing: CGFloat = 0
+    var lineSpacing: CGFloat = 0
+    var lineAlignment: LineAlignment = .start
+    var reversed: Bool = false
+
+    enum LineAlignment: Sendable {
+        case start, center, end, spaceBetween, spaceAround, spaceEvenly
+    }
+
+    private struct FlowLine {
+        var range: Range<Int>
+        var mainLength: CGFloat
+        var crossLength: CGFloat
+    }
+
+    private func mainLength(_ s: CGSize) -> CGFloat {
+        axis == .horizontal ? s.width : s.height
+    }
+
+    private func crossLength(_ s: CGSize) -> CGFloat {
+        axis == .horizontal ? s.height : s.width
+    }
+
+    private func breakLines(sizes: [CGSize], maxMain: CGFloat) -> [FlowLine] {
+        var lines: [FlowLine] = []
+        var start = 0, main: CGFloat = 0, cross: CGFloat = 0
+        for (i, size) in sizes.enumerated() {
+            let m = mainLength(size)
+            if main + m > maxMain && main > 0 {
+                lines.append(FlowLine(range: start..<i, mainLength: main - spacing, crossLength: cross))
+                start = i; main = 0; cross = 0
+            }
+            main += m + spacing
+            cross = max(cross, crossLength(size))
+        }
+        if start < sizes.count {
+            lines.append(FlowLine(range: start..<sizes.count, mainLength: main - spacing, crossLength: cross))
+        }
+        return lines
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let maxMain = axis == .horizontal ? (proposal.width ?? .infinity) : (proposal.height ?? .infinity)
+        let lines = breakLines(sizes: sizes, maxMain: maxMain)
+        let mainMax = lines.map(\.mainLength).max() ?? 0
+        let crossTotal = lines.map(\.crossLength).reduce(0, +)
+            + CGFloat(max(lines.count - 1, 0)) * lineSpacing
+        return axis == .horizontal
+            ? CGSize(width: mainMax, height: crossTotal)
+            : CGSize(width: crossTotal, height: mainMax)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let maxMain = axis == .horizontal ? bounds.width : bounds.height
+        let maxCross = axis == .horizontal ? bounds.height : bounds.width
+        var lines = breakLines(sizes: sizes, maxMain: maxMain)
+        if reversed { lines.reverse() }
+
+        let totalCross = lines.map(\.crossLength).reduce(0, +)
+        let remaining = maxCross - totalCross
+        let n = CGFloat(lines.count)
+        var crossStart: CGFloat = 0
+        var gap = lineSpacing
+
+        switch lineAlignment {
+        case .start: break
+        case .center:
+            crossStart = (remaining - CGFloat(max(lines.count - 1, 0)) * lineSpacing) / 2
+        case .end:
+            crossStart = remaining - CGFloat(max(lines.count - 1, 0)) * lineSpacing
+        case .spaceBetween:
+            gap = n > 1 ? remaining / (n - 1) : 0
+        case .spaceAround:
+            gap = n > 0 ? remaining / n : 0
+            crossStart = gap / 2
+        case .spaceEvenly:
+            gap = n > 0 ? remaining / (n + 1) : 0
+            crossStart = gap
+        }
+
+        var cross = crossStart
+        for line in lines {
+            var main: CGFloat = 0
+            for idx in line.range {
+                let pt = axis == .horizontal
+                    ? CGPoint(x: bounds.minX + main, y: bounds.minY + cross)
+                    : CGPoint(x: bounds.minX + cross, y: bounds.minY + main)
+                subviews[idx].place(at: pt, proposal: .unspecified)
+                main += mainLength(sizes[idx]) + spacing
+            }
+            cross += line.crossLength + gap
+        }
+    }
+}
+"#;
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn test_container() -> NodeConfig {
         let mut root = NodeConfig::new_container("root");
+        root.flex_wrap = FlexWrap::NoWrap;
         root.children = vec![
             NodeConfig::new_leaf("A", 80.0, 80.0),
             NodeConfig::new_leaf("B", 120.0, 100.0),
@@ -437,5 +587,30 @@ mod tests {
         root.justify_content = JustifyContent::SpaceBetween;
         let code = emit_swiftui(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("Spacer(minLength: 0)"), "SpaceBetween should use Spacer()");
+    }
+
+    #[test]
+    fn wrapping_emits_flow_layout() {
+        let mut root = test_container();
+        root.flex_wrap = FlexWrap::Wrap;
+        let code = emit_swiftui(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains("FlowLayout("), "Wrap should emit FlowLayout");
+        assert!(code.contains("struct FlowLayout: Layout"), "Should include FlowLayout definition");
+        assert!(!code.contains("HStack"), "Should not emit HStack when wrapping");
+    }
+
+    #[test]
+    fn wrapping_with_space_between_sets_line_alignment() {
+        let mut root = test_container();
+        root.flex_wrap = FlexWrap::Wrap;
+        root.align_content = AlignContent::SpaceBetween;
+        let code = emit_swiftui(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains("lineAlignment: .spaceBetween"), "SpaceBetween align_content should set lineAlignment");
+    }
+
+    #[test]
+    fn no_flow_layout_without_wrap() {
+        let code = emit_swiftui(&test_container(), ColorPalette::Pastel1).unwrap();
+        assert!(!code.contains("FlowLayout"), "Non-wrapping should not include FlowLayout");
     }
 }
