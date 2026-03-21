@@ -384,18 +384,11 @@ fn render_swift(testdata: &Path, tools: &Path, filter: &[String]) -> Result<()> 
 }
 
 fn render_iced(testdata: &Path, root: &Path, filter: &[String]) -> Result<()> {
-    let iced_dir = root.join("tools/iced-golden");
-
-    run_cmd(
-        "Building Iced golden renderer",
-        Command::new("cargo")
-            .args(["build", "--release", "--manifest-path"])
-            .arg(iced_dir.join("Cargo.toml")),
-    )?;
-
-    let mut cmd = Command::new(iced_dir.join("target/release/iced-golden"));
-    cmd.arg(testdata);
-    cmd.args(filter);
+    let mut cmd = Command::new("cargo");
+    cmd.args(["run", "--release", "-p", "iced-golden", "--"])
+        .arg(testdata)
+        .args(filter)
+        .current_dir(root);
     run_cmd("Rendering Iced screenshots", &mut cmd)?;
     Ok(())
 }
