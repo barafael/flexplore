@@ -12,7 +12,10 @@ use iced::window;
 use iced::{Color, Element, Length, Padding, Size, Subscription, Task, Theme};
 
 mod config;
-use config::{AlignItems, ColorPalette, FlexDirection, JustifyContent, NodeConfig, ValueConfig};
+use config::{
+    AlignItems, AlignSelf, ColorPalette, FlexDirection, JustifyContent, LayoutInput, NodeConfig,
+    ValueConfig,
+};
 
 // ─── Application state ──────────────────────────────────────────────────────
 
@@ -168,19 +171,13 @@ fn load_jobs(testdata_dir: &PathBuf, filter: &[&str]) -> Result<Vec<RenderJob>> 
 
         let json = std::fs::read_to_string(&input_path)
             .with_context(|| format!("failed to read {}", input_path.display()))?;
-        let node: NodeConfig = serde_json::from_str(&json)
+        let input: LayoutInput = serde_json::from_str(&json)
             .with_context(|| format!("failed to parse {}", input_path.display()))?;
-
-        let palette = if name.contains("dark2") {
-            ColorPalette::Dark2
-        } else {
-            ColorPalette::Pastel1
-        };
 
         jobs.push(RenderJob {
             name,
-            node,
-            palette,
+            node: input.node,
+            palette: input.palette,
             output_dir: testdata_dir.to_path_buf(),
         });
     }
@@ -200,11 +197,14 @@ fn build_widget<'a>(
 ) -> Element<'a, Message> {
     let is_leaf = node.children.is_empty();
 
-    if is_leaf {
+    let inner = if is_leaf {
         build_leaf(node, leaf_idx, palette, parent_is_row, parent_stretch)
     } else {
         build_container(node, leaf_idx, palette, parent_is_row, parent_stretch, is_root)
-    }
+    };
+
+    // Apply margin as an outer container with padding
+    apply_margin(inner, &node.margin)
 }
 
 fn build_leaf<'a>(
@@ -223,17 +223,16 @@ fn build_leaf<'a>(
         .color(Color::from_rgba(0.05, 0.05, 0.1, 0.85));
 
     // Determine effective width
+    let basis_overrides_width = parent_is_row && matches!(node.flex_basis, ValueConfig::Percent(n) if n > 0.0);
     let grow_overrides_width =
         node.flex_grow > 0.0 && parent_is_row && matches!(node.width, ValueConfig::Auto);
     let stretch_overrides_width =
         parent_stretch && !parent_is_row && matches!(node.width, ValueConfig::Auto);
 
-    let width = if grow_overrides_width {
-        if node.flex_grow > 1.0 {
-            Length::FillPortion(node.flex_grow as u16)
-        } else {
-            Length::Fill
-        }
+    let width = if basis_overrides_width {
+        flex_basis_length(&node.flex_basis)
+    } else if grow_overrides_width {
+        fill_portion(node.flex_grow)
     } else if stretch_overrides_width {
         Length::Fill
     } else {
@@ -241,17 +240,16 @@ fn build_leaf<'a>(
     };
 
     // Determine effective height
+    let basis_overrides_height = !parent_is_row && matches!(node.flex_basis, ValueConfig::Percent(n) if n > 0.0);
     let grow_overrides_height =
         node.flex_grow > 0.0 && !parent_is_row && matches!(node.height, ValueConfig::Auto);
     let stretch_overrides_height =
         parent_stretch && parent_is_row && matches!(node.height, ValueConfig::Auto);
 
-    let height = if grow_overrides_height {
-        if node.flex_grow > 1.0 {
-            Length::FillPortion(node.flex_grow as u16)
-        } else {
-            Length::Fill
-        }
+    let height = if basis_overrides_height {
+        flex_basis_length(&node.flex_basis)
+    } else if grow_overrides_height {
+        fill_portion(node.flex_grow)
     } else if stretch_overrides_height {
         Length::Fill
     } else {
@@ -315,10 +313,20 @@ fn build_container<'a>(
         children.reverse();
     }
 
-    // Build child widgets (collect leaf_idx ranges first for correct color assignment)
+    // Build child widgets, skipping invisible ones
     let child_widgets: Vec<Element<'a, Message>> = children
         .iter()
-        .map(|child| build_widget(child, leaf_idx, palette, is_row, stretch, false))
+        .filter_map(|child| {
+            if !child.visible {
+                // Still advance leaf_idx for correct color assignment
+                count_leaves(child, leaf_idx);
+                return None;
+            }
+            let widget = build_widget(child, leaf_idx, palette, is_row, stretch, false);
+            // Apply align_self override
+            let widget = apply_align_self(widget, child, is_row);
+            Some(widget)
+        })
         .collect();
 
     // Build elements list with Space widgets for justify-content
@@ -410,7 +418,12 @@ fn build_container<'a>(
     let full_w = matches!(node.width, ValueConfig::Percent(n) if n >= 100.0);
     let full_h = matches!(node.height, ValueConfig::Percent(n) if n >= 100.0);
 
-    let width = if full_w {
+    let basis_w = parent_is_row && matches!(node.flex_basis, ValueConfig::Percent(n) if n > 0.0);
+    let basis_h = !parent_is_row && matches!(node.flex_basis, ValueConfig::Percent(n) if n > 0.0);
+
+    let width = if basis_w {
+        flex_basis_length(&node.flex_basis)
+    } else if full_w {
         Length::Fill
     } else if grow_overrides(node.flex_grow, parent_is_row, &node.width) {
         fill_portion(node.flex_grow)
@@ -424,6 +437,8 @@ fn build_container<'a>(
     // Root always fills viewport height, matching HTML body { height: 100% }
     let height = if is_root {
         Length::Fill
+    } else if basis_h {
+        flex_basis_length(&node.flex_basis)
     } else if full_h {
         Length::Fill
     } else if grow_overrides(node.flex_grow, !parent_is_row, &node.height) {
@@ -486,6 +501,91 @@ fn to_padding(v: &ValueConfig) -> Option<Padding> {
         ValueConfig::Percent(n) => Some(Padding::from(*n)),
         ValueConfig::Vw(n) => Some(Padding::from(n / 100.0 * 400.0)),
         ValueConfig::Vh(n) => Some(Padding::from(n / 100.0 * 300.0)),
+    }
+}
+
+/// Wrap a widget in a container with padding to simulate CSS margin.
+fn apply_margin<'a>(widget: Element<'a, Message>, margin: &ValueConfig) -> Element<'a, Message> {
+    match to_padding(margin) {
+        Some(p) => container(widget).padding(p).into(),
+        None => widget,
+    }
+}
+
+/// Apply align_self by wrapping the child in a container with appropriate alignment.
+fn apply_align_self<'a>(
+    widget: Element<'a, Message>,
+    child: &NodeConfig,
+    parent_is_row: bool,
+) -> Element<'a, Message> {
+    match child.align_self {
+        AlignSelf::Auto => widget,
+        AlignSelf::Center => {
+            if parent_is_row {
+                container(widget)
+                    .align_y(iced::alignment::Vertical::Center)
+                    .height(Length::Fill)
+                    .into()
+            } else {
+                container(widget)
+                    .align_x(iced::alignment::Horizontal::Center)
+                    .width(Length::Fill)
+                    .into()
+            }
+        }
+        AlignSelf::FlexStart | AlignSelf::Start => {
+            if parent_is_row {
+                container(widget)
+                    .align_y(iced::alignment::Vertical::Top)
+                    .height(Length::Fill)
+                    .into()
+            } else {
+                container(widget)
+                    .align_x(iced::alignment::Horizontal::Left)
+                    .width(Length::Fill)
+                    .into()
+            }
+        }
+        AlignSelf::FlexEnd | AlignSelf::End => {
+            if parent_is_row {
+                container(widget)
+                    .align_y(iced::alignment::Vertical::Bottom)
+                    .height(Length::Fill)
+                    .into()
+            } else {
+                container(widget)
+                    .align_x(iced::alignment::Horizontal::Right)
+                    .width(Length::Fill)
+                    .into()
+            }
+        }
+        AlignSelf::Stretch => {
+            if parent_is_row {
+                container(widget).height(Length::Fill).into()
+            } else {
+                container(widget).width(Length::Fill).into()
+            }
+        }
+        AlignSelf::Baseline => widget, // Iced has no baseline alignment
+    }
+}
+
+/// Count leaf nodes without building widgets (for color index bookkeeping).
+fn count_leaves(node: &NodeConfig, leaf_idx: &mut usize) {
+    if node.children.is_empty() {
+        *leaf_idx += 1;
+    } else {
+        for child in &node.children {
+            count_leaves(child, leaf_idx);
+        }
+    }
+}
+
+/// Convert a flex_basis percentage to a Length::FillPortion.
+fn flex_basis_length(basis: &ValueConfig) -> Length {
+    match basis {
+        ValueConfig::Percent(n) => Length::FillPortion(n.round() as u16),
+        _ => Length::Shrink,
     }
 }
 

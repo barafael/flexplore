@@ -114,7 +114,7 @@ fn default_true() -> bool {
     true
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug, Deserialize)]
 pub enum ColorPalette {
     Pastel1,
     Pastel2,
@@ -126,4 +126,17 @@ pub enum ColorPalette {
     Accent,
     Dark2,
     Paired,
+}
+
+fn default_palette() -> ColorPalette {
+    ColorPalette::Pastel1
+}
+
+/// Top-level JSON structure: a NodeConfig plus an optional palette field.
+#[derive(Clone, Deserialize)]
+pub struct LayoutInput {
+    #[serde(flatten)]
+    pub node: NodeConfig,
+    #[serde(default = "default_palette")]
+    pub palette: ColorPalette,
 }
