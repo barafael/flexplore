@@ -6,6 +6,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
+use anyhow::{Context, Result};
 use iced::widget::{column, container, row, text, Space};
 use iced::window;
 use iced::{Color, Element, Length, Padding, Size, Subscription, Task, Theme};
@@ -45,7 +46,7 @@ fn main() -> iced::Result {
 
     let filter: Vec<&str> = args[2..].iter().map(|s| s.as_str()).collect();
 
-    let jobs = load_jobs(&testdata_dir, &filter);
+    let jobs = load_jobs(&testdata_dir, &filter).expect("failed to load test jobs");
     if jobs.is_empty() {
         eprintln!("No render jobs found.");
         return Ok(());
@@ -143,11 +144,11 @@ fn save_screenshot(path: &PathBuf, screenshot: &window::Screenshot) {
 
 // ─── Job loading ────────────────────────────────────────────────────────────
 
-fn load_jobs(testdata_dir: &PathBuf, filter: &[&str]) -> Vec<RenderJob> {
+fn load_jobs(testdata_dir: &PathBuf, filter: &[&str]) -> Result<Vec<RenderJob>> {
     let mut jobs = Vec::new();
 
     let mut entries: Vec<_> = std::fs::read_dir(testdata_dir)
-        .expect("cannot read testdata directory")
+        .context("cannot read testdata directory")?
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
         .collect();
@@ -166,9 +167,9 @@ fn load_jobs(testdata_dir: &PathBuf, filter: &[&str]) -> Vec<RenderJob> {
         }
 
         let json = std::fs::read_to_string(&input_path)
-            .unwrap_or_else(|e| panic!("failed to read {}: {e}", input_path.display()));
+            .with_context(|| format!("failed to read {}", input_path.display()))?;
         let node: NodeConfig = serde_json::from_str(&json)
-            .unwrap_or_else(|e| panic!("failed to parse {}: {e}", input_path.display()));
+            .with_context(|| format!("failed to parse {}", input_path.display()))?;
 
         let palette = if name.contains("dark2") {
             ColorPalette::Dark2
@@ -184,7 +185,7 @@ fn load_jobs(testdata_dir: &PathBuf, filter: &[&str]) -> Vec<RenderJob> {
         });
     }
 
-    jobs
+    Ok(jobs)
 }
 
 // ─── Widget building ────────────────────────────────────────────────────────

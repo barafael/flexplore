@@ -1,9 +1,10 @@
 use std::path::PathBuf;
 
+use anyhow::{bail, Context, Result};
 use test_case::test_case;
 
 use crate::codegen::{emit_bevy_code, emit_flutter, emit_html_css, emit_iced, emit_react, emit_swiftui, emit_tailwind};
-use crate::config::NodeConfig;
+use crate::config::LayoutInput;
 use crate::fixtures::all_fixtures;
 
 // ─── Snapshot infrastructure ─────────────────────────────────────────────────
@@ -12,39 +13,37 @@ fn testdata_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("testdata")
 }
 
-fn run_snapshot(name: &str) {
+fn run_snapshot(name: &str) -> Result<()> {
     let fixtures = all_fixtures();
-    let f = fixtures.iter().find(|f| f.name == name).unwrap_or_else(|| {
-        panic!("unknown fixture: {name}");
-    });
+    let f = fixtures.iter().find(|f| f.name == name)
+        .context(format!("unknown fixture: {name}"))?;
 
     let dir = testdata_dir().join(name);
     let input_path = dir.join("input.json");
 
     let targets: Vec<(&str, String)> = vec![
-        ("expected.html", emit_html_css(&f.node, f.palette).unwrap()),
-        ("expected.rs", emit_bevy_code(&f.node, f.palette).unwrap()),
-        ("expected.jsx", emit_react(&f.node, f.palette).unwrap()),
-        ("expected.tailwind.html", emit_tailwind(&f.node, f.palette).unwrap()),
-        ("expected.swift", emit_swiftui(&f.node, f.palette).unwrap()),
-        ("expected.dart", emit_flutter(&f.node, f.palette).unwrap()),
-        ("expected.iced.rs", emit_iced(&f.node, f.palette).unwrap()),
+        ("expected.html", emit_html_css(&f.node, f.palette)?),
+        ("expected.rs", emit_bevy_code(&f.node, f.palette)?),
+        ("expected.jsx", emit_react(&f.node, f.palette)?),
+        ("expected.tailwind.html", emit_tailwind(&f.node, f.palette)?),
+        ("expected.swift", emit_swiftui(&f.node, f.palette)?),
+        ("expected.dart", emit_flutter(&f.node, f.palette)?),
+        ("expected.iced.rs", emit_iced(&f.node, f.palette)?),
     ];
 
     // Read input JSON back and re-generate to verify round-trip
-    let json_src = std::fs::read_to_string(&input_path).unwrap_or_else(|e| {
-        panic!("missing {}: {e} (run `cargo run -p update-snapshots` to generate)", input_path.display());
-    });
-    let from_json: NodeConfig = serde_json::from_str(&json_src).unwrap();
+    let json_src = std::fs::read_to_string(&input_path)
+        .with_context(|| format!("missing {} (run `cargo run -p update-snapshots` to generate)", input_path.display()))?;
+    let from_json: LayoutInput = serde_json::from_str(&json_src)?;
 
     let roundtrip_targets: Vec<(&str, String)> = vec![
-        ("expected.html", emit_html_css(&from_json, f.palette).unwrap()),
-        ("expected.rs", emit_bevy_code(&from_json, f.palette).unwrap()),
-        ("expected.jsx", emit_react(&from_json, f.palette).unwrap()),
-        ("expected.tailwind.html", emit_tailwind(&from_json, f.palette).unwrap()),
-        ("expected.swift", emit_swiftui(&from_json, f.palette).unwrap()),
-        ("expected.dart", emit_flutter(&from_json, f.palette).unwrap()),
-        ("expected.iced.rs", emit_iced(&from_json, f.palette).unwrap()),
+        ("expected.html", emit_html_css(&from_json.node, from_json.palette)?),
+        ("expected.rs", emit_bevy_code(&from_json.node, from_json.palette)?),
+        ("expected.jsx", emit_react(&from_json.node, from_json.palette)?),
+        ("expected.tailwind.html", emit_tailwind(&from_json.node, from_json.palette)?),
+        ("expected.swift", emit_swiftui(&from_json.node, from_json.palette)?),
+        ("expected.dart", emit_flutter(&from_json.node, from_json.palette)?),
+        ("expected.iced.rs", emit_iced(&from_json.node, from_json.palette)?),
     ];
 
     // Verify JSON round-trip produces identical codegen
@@ -58,15 +57,16 @@ fn run_snapshot(name: &str) {
     // Compare against stored snapshots
     for (filename, actual) in &targets {
         let path = dir.join(filename);
-        let expected = std::fs::read_to_string(&path).unwrap_or_else(|e| {
-            panic!("missing {}: {e} (run `cargo run -p update-snapshots` to generate)", path.display());
-        });
+        let expected = std::fs::read_to_string(&path)
+            .with_context(|| format!("missing {} (run `cargo run -p update-snapshots` to generate)", path.display()))?;
         if *actual != expected {
-            panic!(
+            bail!(
                 "[{name}] {filename} snapshot mismatch.\n\n--- expected ---\n{expected}\n--- actual ---\n{actual}"
             );
         }
     }
+
+    Ok(())
 }
 
 // ─── One test per fixture ────────────────────────────────────────────────────
@@ -102,6 +102,6 @@ fn run_snapshot(name: &str) {
 #[test_case("tpl_sidebar_content" ; "tpl_sidebar_content")]
 #[test_case("tpl_card_grid" ; "tpl_card_grid")]
 #[test_case("tpl_nav_bar" ; "tpl_nav_bar")]
-fn snapshot(name: &str) {
-    run_snapshot(name);
+fn snapshot(name: &str) -> Result<()> {
+    run_snapshot(name)
 }

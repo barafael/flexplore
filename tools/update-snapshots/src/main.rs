@@ -1,9 +1,11 @@
 use std::path::PathBuf;
 
+use anyhow::Result;
 use flexplore::codegen::{
     emit_bevy_code, emit_flutter, emit_html_css, emit_iced, emit_react, emit_swiftui,
     emit_tailwind,
 };
+use flexplore::config::LayoutInput;
 use flexplore::fixtures::all_fixtures;
 
 fn testdata_dir() -> PathBuf {
@@ -12,42 +14,38 @@ fn testdata_dir() -> PathBuf {
         .join("testdata")
 }
 
-fn main() {
+fn main() -> Result<()> {
     let fixtures = all_fixtures();
     let dir = testdata_dir();
 
     for f in &fixtures {
         let case_dir = dir.join(&f.name);
-        std::fs::create_dir_all(&case_dir).unwrap();
+        std::fs::create_dir_all(&case_dir)?;
 
-        let input_json = serde_json::to_string_pretty(&f.node).unwrap();
-        std::fs::write(case_dir.join("input.json"), &input_json).unwrap();
+        let input = LayoutInput {
+            node: f.node.clone(),
+            palette: f.palette,
+        };
+        let input_json = serde_json::to_string_pretty(&input)?;
+        std::fs::write(case_dir.join("input.json"), &input_json)?;
 
         let targets: Vec<(&str, String)> = vec![
-            ("expected.html", emit_html_css(&f.node, f.palette).unwrap()),
-            ("expected.rs", emit_bevy_code(&f.node, f.palette).unwrap()),
-            ("expected.jsx", emit_react(&f.node, f.palette).unwrap()),
-            (
-                "expected.tailwind.html",
-                emit_tailwind(&f.node, f.palette).unwrap(),
-            ),
-            (
-                "expected.swift",
-                emit_swiftui(&f.node, f.palette).unwrap(),
-            ),
-            ("expected.dart", emit_flutter(&f.node, f.palette).unwrap()),
-            (
-                "expected.iced.rs",
-                emit_iced(&f.node, f.palette).unwrap(),
-            ),
+            ("expected.html", emit_html_css(&f.node, f.palette)?),
+            ("expected.rs", emit_bevy_code(&f.node, f.palette)?),
+            ("expected.jsx", emit_react(&f.node, f.palette)?),
+            ("expected.tailwind.html", emit_tailwind(&f.node, f.palette)?),
+            ("expected.swift", emit_swiftui(&f.node, f.palette)?),
+            ("expected.dart", emit_flutter(&f.node, f.palette)?),
+            ("expected.iced.rs", emit_iced(&f.node, f.palette)?),
         ];
 
         for (filename, content) in &targets {
-            std::fs::write(case_dir.join(filename), content).unwrap();
+            std::fs::write(case_dir.join(filename), content)?;
         }
 
         eprintln!("  updated: {}", f.name);
     }
 
     eprintln!("done — {} fixtures updated", fixtures.len());
+    Ok(())
 }
