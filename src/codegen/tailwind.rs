@@ -193,6 +193,9 @@ fn emit_tailwind_node(
     }
 
     if is_leaf {
+        classes.push("flex".into());
+        classes.push("items-center".into());
+        classes.push("justify-center".into());
         classes.push("text-[26px]".into());
         classes.push("text-[rgba(13,13,26,0.85)]".into());
     }

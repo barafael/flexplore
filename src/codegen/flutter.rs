@@ -31,6 +31,21 @@ fn dart_value(v: &ValueConfig) -> Option<String> {
     }
 }
 
+/// When direction is reversed, flex-start/end swap so items anchor to the
+/// correct end of the main axis (CSS reverses the axis, not just child order).
+fn effective_justify(jc: JustifyContent, is_reversed: bool) -> JustifyContent {
+    if !is_reversed {
+        return jc;
+    }
+    match jc {
+        JustifyContent::FlexStart => JustifyContent::FlexEnd,
+        JustifyContent::FlexEnd => JustifyContent::FlexStart,
+        JustifyContent::Start => JustifyContent::End,
+        JustifyContent::End => JustifyContent::Start,
+        other => other,
+    }
+}
+
 fn dart_main_axis(j: JustifyContent) -> &'static str {
     match j {
         JustifyContent::FlexStart | JustifyContent::Start => "MainAxisAlignment.start",
@@ -104,7 +119,7 @@ fn dart_align_self(a: AlignSelf, is_row: bool) -> Option<&'static str> {
 
 pub fn emit_flutter(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
     let mut buf = String::from("Widget build(BuildContext context) {\n  return ");
-    emit_flutter_node(&mut buf, root, 1, &mut 0, palette)?;
+    emit_flutter_node(&mut buf, root, 1, &mut 0, palette, true)?;
     buf.push_str(";\n}\n");
     Ok(buf)
 }
@@ -115,6 +130,7 @@ fn emit_flutter_node(
     depth: usize,
     leaf_idx: &mut usize,
     palette: ColorPalette,
+    is_root: bool,
 ) -> Result<()> {
     let pad = "  ".repeat(depth);
     let is_leaf = node.children.is_empty();
@@ -126,12 +142,12 @@ fn emit_flutter_node(
         writeln!(buf, "{pad}  maintainAnimation: true,")?;
         writeln!(buf, "{pad}  maintainState: true,")?;
         write!(buf, "{pad}  child: ")?;
-        emit_flutter_inner(buf, node, depth + 1, leaf_idx, is_leaf, palette)?;
+        emit_flutter_inner(buf, node, depth + 1, leaf_idx, is_leaf, palette, is_root)?;
         writeln!(buf, "{pad})")?;
         return Ok(());
     }
 
-    emit_flutter_inner(buf, node, depth, leaf_idx, is_leaf, palette)
+    emit_flutter_inner(buf, node, depth, leaf_idx, is_leaf, palette, is_root)
 }
 
 fn emit_flutter_inner(
@@ -141,6 +157,7 @@ fn emit_flutter_inner(
     leaf_idx: &mut usize,
     is_leaf: bool,
     palette: ColorPalette,
+    is_root: bool,
 ) -> Result<()> {
     let pad = "  ".repeat(depth);
 
@@ -207,10 +224,15 @@ fn emit_flutter_inner(
         );
 
         let w = dart_value(&node.width);
-        let h = dart_value(&node.height);
+        // Root with flex_grow fills the viewport height, matching CSS body { height: 100% }
+        let h = if is_root && node.flex_grow > 0.0 {
+            Some("double.infinity".to_string())
+        } else {
+            dart_value(&node.height)
+        };
         let p = dart_value(&node.padding);
         let m = dart_value(&node.margin);
-        let has_container = w.is_some() || h.is_some() || p.is_some() || m.is_some();
+        let has_container = w.is_some() || h.is_some() || p.is_some() || m.is_some() || is_root;
 
         if has_container {
             writeln!(buf, "{pad}Container(")?;
@@ -232,6 +254,8 @@ fn emit_flutter_inner(
         let inner_depth = if has_container { depth + 1 } else { depth };
         let ipad = "  ".repeat(inner_depth);
 
+        let eff_jc = effective_justify(node.justify_content, is_reversed);
+
         if node.flex_wrap != FlexWrap::NoWrap {
             writeln!(buf, "{ipad}Wrap(")?;
             writeln!(
@@ -246,7 +270,7 @@ fn emit_flutter_inner(
                     writeln!(buf, "{ipad}  textDirection: TextDirection.rtl,")?;
                 }
             }
-            if let Some(a) = dart_wrap_alignment(node.justify_content) {
+            if let Some(a) = dart_wrap_alignment(eff_jc) {
                 writeln!(buf, "{ipad}  alignment: {a},")?;
             }
             if let Some(ra) = dart_wrap_run_alignment(node.align_content) {
@@ -264,7 +288,7 @@ fn emit_flutter_inner(
         } else {
             let widget = if is_row { "Row" } else { "Column" };
             writeln!(buf, "{ipad}{widget}(")?;
-            writeln!(buf, "{ipad}  mainAxisAlignment: {},", dart_main_axis(node.justify_content))?;
+            writeln!(buf, "{ipad}  mainAxisAlignment: {},", dart_main_axis(eff_jc))?;
             writeln!(buf, "{ipad}  crossAxisAlignment: {},", dart_cross_axis(node.align_items))?;
         }
 
@@ -305,10 +329,10 @@ fn emit_flutter_inner(
                     writeln!(buf, "Align(")?;
                     writeln!(buf, "{ipad}        alignment: {align},")?;
                     write!(buf, "{ipad}        child: ")?;
-                    emit_flutter_node(buf, child, inner_depth + 4, &mut idx, palette)?;
+                    emit_flutter_node(buf, child, inner_depth + 4, &mut idx, palette, false)?;
                     writeln!(buf, "{ipad}      ),")?;
                 } else {
-                    emit_flutter_node(buf, child, inner_depth + 3, &mut idx, palette)?;
+                    emit_flutter_node(buf, child, inner_depth + 3, &mut idx, palette, false)?;
                 }
                 writeln!(buf, "{ipad}    ),")?;
             } else if matches!(child.flex_basis, ValueConfig::Percent(n) if n > 0.0) && node.flex_wrap == FlexWrap::NoWrap {
@@ -316,7 +340,7 @@ fn emit_flutter_inner(
                 writeln!(buf, "{ipad}    Expanded(")?;
                 writeln!(buf, "{ipad}      flex: {},", n.round() as i32)?;
                 write!(buf, "{ipad}      child: ")?;
-                emit_flutter_node(buf, child, inner_depth + 3, &mut idx, palette)?;
+                emit_flutter_node(buf, child, inner_depth + 3, &mut idx, palette, false)?;
                 writeln!(buf, "{ipad}    ),")?;
             } else if child.flex_shrink > 0.0 && node.flex_wrap == FlexWrap::NoWrap {
                 writeln!(buf, "{ipad}    Flexible(")?;
@@ -327,14 +351,14 @@ fn emit_flutter_inner(
                     writeln!(buf, "Align(")?;
                     writeln!(buf, "{ipad}        alignment: {align},")?;
                     write!(buf, "{ipad}        child: ")?;
-                    emit_flutter_node(buf, child, inner_depth + 4, &mut idx, palette)?;
+                    emit_flutter_node(buf, child, inner_depth + 4, &mut idx, palette, false)?;
                     writeln!(buf, "{ipad}      ),")?;
                 } else {
-                    emit_flutter_node(buf, child, inner_depth + 3, &mut idx, palette)?;
+                    emit_flutter_node(buf, child, inner_depth + 3, &mut idx, palette, false)?;
                 }
                 writeln!(buf, "{ipad}    ),")?;
             } else {
-                emit_flutter_node(buf, child, inner_depth + 2, &mut idx, palette)?;
+                emit_flutter_node(buf, child, inner_depth + 2, &mut idx, palette, false)?;
                 writeln!(buf, "{ipad}    ,")?;
             }
         }

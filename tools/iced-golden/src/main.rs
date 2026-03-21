@@ -318,7 +318,7 @@ fn build_container<'a>(
     let stretch = node.align_items == AlignItems::Stretch;
     let wraps = matches!(node.flex_wrap, FlexWrap::Wrap | FlexWrap::WrapReverse);
 
-    let jc = &node.justify_content;
+    let jc = effective_justify(&node.justify_content, is_reversed);
     let uses_space_justification = matches!(
         jc,
         JustifyContent::SpaceBetween
@@ -432,11 +432,11 @@ fn build_container<'a>(
             .into_iter()
             .map(|line_elements| {
                 if is_row {
-                    let mut r = row(line_elements).spacing(main_gap_px);
+                    let mut r = row(line_elements).spacing(main_gap_px).height(Length::Fill);
                     r = apply_row_align(&node.align_items, r);
                     r.into()
                 } else {
-                    let mut c = column(line_elements).spacing(main_gap_px);
+                    let mut c = column(line_elements).spacing(main_gap_px).width(Length::Fill);
                     c = apply_column_align(&node.align_items, c);
                     c.into()
                 }
@@ -476,7 +476,7 @@ fn build_container<'a>(
 
         let mut elements: Vec<Element<'a, Message>> = Vec::new();
 
-        match jc {
+        match &jc {
             JustifyContent::SpaceBetween => {
                 for (i, widget) in child_widgets.into_iter().enumerate() {
                     if i > 0 {
@@ -516,13 +516,13 @@ fn build_container<'a>(
             main_gap_px
         };
 
-        // Build the row or column
+        // Build the row or column — fill parent so cross-axis alignment works
         if is_row {
-            let mut r = row(elements).spacing(spacing);
+            let mut r = row(elements).spacing(spacing).height(Length::Fill);
             r = apply_row_align(&node.align_items, r);
             r.into()
         } else {
-            let mut c = column(elements).spacing(spacing);
+            let mut c = column(elements).spacing(spacing).width(Length::Fill);
             c = apply_column_align(&node.align_items, c);
             c.into()
         }
@@ -581,6 +581,21 @@ fn build_container<'a>(
     c = apply_min_max(c, node);
 
     c.into()
+}
+
+/// When direction is reversed, flex-start/end swap so items anchor to the
+/// correct end of the main axis (CSS reverses the axis, not just child order).
+fn effective_justify(jc: &JustifyContent, is_reversed: bool) -> JustifyContent {
+    if !is_reversed {
+        return *jc;
+    }
+    match jc {
+        JustifyContent::FlexStart => JustifyContent::FlexEnd,
+        JustifyContent::FlexEnd => JustifyContent::FlexStart,
+        JustifyContent::Start => JustifyContent::End,
+        JustifyContent::End => JustifyContent::Start,
+        other => *other,
+    }
 }
 
 fn apply_row_align<'a>(

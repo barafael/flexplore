@@ -219,6 +219,9 @@ fn emit_html_node(
     writeln!(css, "  background: {bg};")?;
     css.push_str("  box-sizing: border-box;\n");
     if is_leaf {
+        css.push_str("  display: flex;\n");
+        css.push_str("  align-items: center;\n");
+        css.push_str("  justify-content: center;\n");
         css.push_str("  color: rgba(13, 13, 26, 0.85);\n");
         css.push_str("  font-size: 26px;\n");
     }

@@ -28,7 +28,7 @@ struct ContentView: View {
                 .background(Color(red: 0.87, green: 0.80, blue: 0.89))
             Spacer(minLength: 0)
         }
-        .frame(minWidth: nil, maxWidth: .infinity, minHeight: nil, maxHeight: nil, alignment: .topLeading)
+        .frame(minWidth: nil, maxWidth: .infinity, minHeight: nil, maxHeight: .infinity, alignment: .topLeading)
         .padding(12.0)
         .background(Color(red: 0.11, green: 0.11, blue: 0.17))
     }

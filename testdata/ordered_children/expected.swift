@@ -22,7 +22,7 @@ struct ContentView: View {
                 .background(Color(red: 0.80, green: 0.92, blue: 0.77))
                 // order: 3 (no SwiftUI equivalent)
         }
-        .frame(minWidth: nil, maxWidth: .infinity, minHeight: nil, maxHeight: nil, alignment: .topLeading)
+        .frame(minWidth: nil, maxWidth: .infinity, minHeight: nil, maxHeight: .infinity, alignment: .topLeading)
         .padding(12.0)
         .background(Color(red: 0.11, green: 0.11, blue: 0.17))
     }
