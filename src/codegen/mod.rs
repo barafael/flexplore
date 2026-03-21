@@ -1,6 +1,7 @@
 mod bevy;
 mod css;
 mod flutter;
+mod iced;
 mod react;
 mod swiftui;
 mod tailwind;
@@ -13,6 +14,7 @@ mod snapshot_tests;
 pub use bevy::emit_bevy_code;
 pub use css::emit_html_css;
 pub use flutter::emit_flutter;
+pub use iced::emit_iced;
 pub use react::emit_react;
 pub use swiftui::emit_swiftui;
 pub use tailwind::emit_tailwind;

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use bevy::prelude::*;
 use test_case::test_case;
 
-use crate::codegen::{emit_bevy_code, emit_flutter, emit_html_css, emit_react, emit_swiftui, emit_tailwind};
+use crate::codegen::{emit_bevy_code, emit_flutter, emit_html_css, emit_iced, emit_react, emit_swiftui, emit_tailwind};
 use crate::config::{ColorPalette, NodeConfig, ValueConfig};
 use crate::templates;
 
@@ -139,19 +139,19 @@ fn all_fixtures() -> Vec<Fixture> {
         }, ColorPalette::Pastel1),
 
         // ── Align-content ────────────────────────────────────────────────
-        // 6 items that wrap into 2 rows, tall container → rows pushed to top/bottom
+        // 6 items that wrap into 3 rows of 2, tall container → rows pushed to top/bottom
         fixture("align_content_space_between", {
             let mut r = NodeConfig::new_container("root");
             r.align_content = AlignContent::SpaceBetween;
             r.flex_wrap = FlexWrap::Wrap;
             r.height = ValueConfig::Px(280.0);
             r.children = vec![
-                NodeConfig::new_leaf("A", 200.0, 60.0),
-                NodeConfig::new_leaf("B", 200.0, 60.0),
-                NodeConfig::new_leaf("C", 200.0, 60.0),
-                NodeConfig::new_leaf("D", 200.0, 60.0),
-                NodeConfig::new_leaf("E", 200.0, 60.0),
-                NodeConfig::new_leaf("F", 200.0, 60.0),
+                NodeConfig::new_leaf("A", 170.0, 60.0),
+                NodeConfig::new_leaf("B", 170.0, 60.0),
+                NodeConfig::new_leaf("C", 170.0, 60.0),
+                NodeConfig::new_leaf("D", 170.0, 60.0),
+                NodeConfig::new_leaf("E", 170.0, 60.0),
+                NodeConfig::new_leaf("F", 170.0, 60.0),
             ];
             r
         }, ColorPalette::Pastel1),
@@ -176,12 +176,12 @@ fn all_fixtures() -> Vec<Fixture> {
             let mut r = NodeConfig::new_container("root");
             r.flex_wrap = FlexWrap::WrapReverse;
             r.children = vec![
-                NodeConfig::new_leaf("A", 200.0, 80.0),
-                NodeConfig::new_leaf("B", 200.0, 80.0),
-                NodeConfig::new_leaf("C", 200.0, 80.0),
-                NodeConfig::new_leaf("D", 200.0, 80.0),
-                NodeConfig::new_leaf("E", 200.0, 80.0),
-                NodeConfig::new_leaf("F", 200.0, 80.0),
+                NodeConfig::new_leaf("A", 170.0, 80.0),
+                NodeConfig::new_leaf("B", 170.0, 80.0),
+                NodeConfig::new_leaf("C", 170.0, 80.0),
+                NodeConfig::new_leaf("D", 170.0, 80.0),
+                NodeConfig::new_leaf("E", 170.0, 80.0),
+                NodeConfig::new_leaf("F", 170.0, 80.0),
             ];
             r
         }, ColorPalette::Pastel1),
@@ -418,6 +418,7 @@ fn run_snapshot(name: &str) {
         ("expected.tailwind.html", emit_tailwind(&f.node, f.palette).unwrap()),
         ("expected.swift", emit_swiftui(&f.node, f.palette).unwrap()),
         ("expected.dart", emit_flutter(&f.node, f.palette).unwrap()),
+        ("expected.iced.rs", emit_iced(&f.node, f.palette).unwrap()),
     ];
 
     let input_json = serde_json::to_string_pretty(&f.node).unwrap();
@@ -445,6 +446,7 @@ fn run_snapshot(name: &str) {
         ("expected.tailwind.html", emit_tailwind(&from_json, f.palette).unwrap()),
         ("expected.swift", emit_swiftui(&from_json, f.palette).unwrap()),
         ("expected.dart", emit_flutter(&from_json, f.palette).unwrap()),
+        ("expected.iced.rs", emit_iced(&from_json, f.palette).unwrap()),
     ];
 
     // Verify JSON round-trip produces identical codegen
