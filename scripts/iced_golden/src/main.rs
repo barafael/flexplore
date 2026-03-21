@@ -259,7 +259,8 @@ fn build_leaf<'a>(
     let mut c = container(label)
         .width(width)
         .height(height)
-        .center(Length::Fill)
+        .align_x(iced::alignment::Horizontal::Center)
+        .align_y(iced::alignment::Vertical::Center)
         .style(move |_| container::Style {
             background: Some(bg.into()),
             ..Default::default()
@@ -268,11 +269,7 @@ fn build_leaf<'a>(
     if let Some(p) = to_padding(&node.padding) {
         c = c.padding(p);
     }
-    if !matches!(node.max_width, ValueConfig::Auto) {
-        if let ValueConfig::Px(n) = node.max_width {
-            c = c.max_width(n);
-        }
-    }
+    c = apply_min_max(c, node);
 
     c.into()
 }

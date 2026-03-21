@@ -27,8 +27,11 @@ class HiddenChild extends StatelessWidget {
           ),
         )
         ,
-        Opacity(
-          opacity: 0.0,
+        Visibility(
+          visible: false,
+          maintainSize: true,
+          maintainAnimation: true,
+          maintainState: true,
           child:           Container(
             width: 80.0,
             height: 80.0,

@@ -36,7 +36,7 @@ class TplHolyGrail extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Container(
-                  width: 200.0,
+                  width: 120.0,
                   padding: EdgeInsets.all(8.0),
                   margin: EdgeInsets.all(0.0),
                   color: Color.fromRGBO(179, 205, 227, 1.0),
@@ -59,7 +59,7 @@ class TplHolyGrail extends StatelessWidget {
                   )
                 ),
                 Container(
-                  width: 200.0,
+                  width: 120.0,
                   padding: EdgeInsets.all(8.0),
                   margin: EdgeInsets.all(0.0),
                   color: Color.fromRGBO(222, 203, 228, 1.0),

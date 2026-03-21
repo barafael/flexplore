@@ -15,7 +15,9 @@
       "Bash(just render-all:*)",
       "Bash(just snapshots:*)",
       "Bash(just render-flutter:*)",
-      "Bash(FLEXPLORE_UPDATE=1 cargo test)"
+      "Bash(FLEXPLORE_UPDATE=1 cargo test)",
+      "Bash(find /c/workspace/sources/flexplain/src/codegen -name \"*.rs\" -exec wc -l {} +)",
+      "Bash(pwsh -File scripts/render_tailwind.ps1)"
     ]
   }
 }

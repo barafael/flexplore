@@ -47,6 +47,8 @@ void main() {
   });
 
   testWidgets('align_content_space_between', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -65,6 +67,8 @@ void main() {
     );
   });
   testWidgets('align_items_center', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -83,6 +87,8 @@ void main() {
     );
   });
   testWidgets('align_items_stretch', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -101,6 +107,8 @@ void main() {
     );
   });
   testWidgets('align_self_center', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -119,6 +127,8 @@ void main() {
     );
   });
   testWidgets('all_hidden', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -137,6 +147,8 @@ void main() {
     );
   });
   testWidgets('dark2_palette', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -155,6 +167,8 @@ void main() {
     );
   });
   testWidgets('deep_chain_3', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -173,6 +187,8 @@ void main() {
     );
   });
   testWidgets('direction_column', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -191,6 +207,8 @@ void main() {
     );
   });
   testWidgets('direction_column_reverse', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -209,6 +227,8 @@ void main() {
     );
   });
   testWidgets('direction_row_reverse', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -227,6 +247,8 @@ void main() {
     );
   });
   testWidgets('flex_basis_percent', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -245,6 +267,8 @@ void main() {
     );
   });
   testWidgets('gaps_mixed', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -263,6 +287,8 @@ void main() {
     );
   });
   testWidgets('grow_shrink', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -281,6 +307,8 @@ void main() {
     );
   });
   testWidgets('hidden_child', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -299,6 +327,8 @@ void main() {
     );
   });
   testWidgets('justify_center', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -317,6 +347,8 @@ void main() {
     );
   });
   testWidgets('justify_space_between', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -335,6 +367,8 @@ void main() {
     );
   });
   testWidgets('justify_space_evenly', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -353,6 +387,8 @@ void main() {
     );
   });
   testWidgets('min_max_sizes', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -371,6 +407,8 @@ void main() {
     );
   });
   testWidgets('nested_mixed', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -389,6 +427,8 @@ void main() {
     );
   });
   testWidgets('ordered_children', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -407,6 +447,8 @@ void main() {
     );
   });
   testWidgets('padding_margin', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -425,6 +467,8 @@ void main() {
     );
   });
   testWidgets('single_leaf', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -443,6 +487,8 @@ void main() {
     );
   });
   testWidgets('tpl_card_grid', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -461,6 +507,8 @@ void main() {
     );
   });
   testWidgets('tpl_holy_grail', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -479,6 +527,8 @@ void main() {
     );
   });
   testWidgets('tpl_nav_bar', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -497,6 +547,8 @@ void main() {
     );
   });
   testWidgets('tpl_sidebar_content', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -515,6 +567,8 @@ void main() {
     );
   });
   testWidgets('two_children', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -533,6 +587,8 @@ void main() {
     );
   });
   testWidgets('vw_vh_sizes', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -551,6 +607,8 @@ void main() {
     );
   });
   testWidgets('wide_flat_5', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -569,6 +627,8 @@ void main() {
     );
   });
   testWidgets('wrap_nowrap', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(
@@ -587,6 +647,8 @@ void main() {
     );
   });
   testWidgets('wrap_reverse', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
       MaterialApp(

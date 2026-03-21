@@ -10,14 +10,14 @@ class WrapReverse extends StatelessWidget {
     width: double.infinity,
     padding: EdgeInsets.all(12.0),
     margin: EdgeInsets.all(0.0),
-    child:     // NOTE: flex-wrap: WrapReverse — Dart Wrap doesn't support reverse; children appear in normal order
-    Wrap(
+    child:     Wrap(
       direction: Axis.horizontal,
+      verticalDirection: VerticalDirection.up,
       spacing: 8.0,
       runSpacing: 8.0,
       children: [
         Container(
-          width: 200.0,
+          width: 170.0,
           height: 80.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
@@ -29,7 +29,7 @@ class WrapReverse extends StatelessWidget {
         )
         ,
         Container(
-          width: 200.0,
+          width: 170.0,
           height: 80.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
@@ -41,7 +41,7 @@ class WrapReverse extends StatelessWidget {
         )
         ,
         Container(
-          width: 200.0,
+          width: 170.0,
           height: 80.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
@@ -53,7 +53,7 @@ class WrapReverse extends StatelessWidget {
         )
         ,
         Container(
-          width: 200.0,
+          width: 170.0,
           height: 80.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
@@ -65,7 +65,7 @@ class WrapReverse extends StatelessWidget {
         )
         ,
         Container(
-          width: 200.0,
+          width: 170.0,
           height: 80.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
@@ -77,7 +77,7 @@ class WrapReverse extends StatelessWidget {
         )
         ,
         Container(
-          width: 200.0,
+          width: 170.0,
           height: 80.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),

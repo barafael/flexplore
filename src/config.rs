@@ -290,6 +290,19 @@ pub enum ColorPalette {
     Paired,
 }
 
+// ─── Serialisable layout + palette bundle ────────────────────────────────────
+
+/// Self-contained input for codegen: the node tree plus the colour palette.
+/// Uses `#[serde(flatten)]` so existing JSON files without a `palette` field
+/// still deserialise (defaulting to [`ColorPalette::Pastel1`]).
+#[derive(Clone, Serialize, Deserialize)]
+pub struct LayoutInput {
+    #[serde(flatten)]
+    pub node: NodeConfig,
+    #[serde(default = "default_palette")]
+    pub palette: ColorPalette,
+}
+
 // ─── Main resource ────────────────────────────────────────────────────────────
 
 #[derive(Resource, Clone, Serialize, Deserialize)]

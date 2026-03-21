@@ -8,16 +8,17 @@ class AlignContentSpaceBetween extends StatelessWidget {
   Widget build(BuildContext context) {
   return   Container(
     width: double.infinity,
-    height: 400.0,
+    height: 280.0,
     padding: EdgeInsets.all(12.0),
     margin: EdgeInsets.all(0.0),
     child:     Wrap(
       direction: Axis.horizontal,
+      runAlignment: WrapAlignment.spaceBetween,
       spacing: 8.0,
       runSpacing: 8.0,
       children: [
         Container(
-          width: 200.0,
+          width: 170.0,
           height: 60.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
@@ -29,7 +30,7 @@ class AlignContentSpaceBetween extends StatelessWidget {
         )
         ,
         Container(
-          width: 200.0,
+          width: 170.0,
           height: 60.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
@@ -41,7 +42,7 @@ class AlignContentSpaceBetween extends StatelessWidget {
         )
         ,
         Container(
-          width: 200.0,
+          width: 170.0,
           height: 60.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
@@ -53,7 +54,7 @@ class AlignContentSpaceBetween extends StatelessWidget {
         )
         ,
         Container(
-          width: 200.0,
+          width: 170.0,
           height: 60.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
@@ -65,7 +66,7 @@ class AlignContentSpaceBetween extends StatelessWidget {
         )
         ,
         Container(
-          width: 200.0,
+          width: 170.0,
           height: 60.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
@@ -77,7 +78,7 @@ class AlignContentSpaceBetween extends StatelessWidget {
         )
         ,
         Container(
-          width: 200.0,
+          width: 170.0,
           height: 60.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
