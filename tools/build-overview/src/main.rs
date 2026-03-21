@@ -397,7 +397,7 @@ fn build_overview(testdata: &Path) -> Result<()> {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Flexplain Render Overview</title>
+  <title>Flexplore Render Overview</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: system-ui, sans-serif; background: #111; color: #ddd; padding: 24px; }
@@ -412,7 +412,7 @@ fn build_overview(testdata: &Path) -> Result<()> {
   </style>
 </head>
 <body>
-  <h1>Flexplain Render Overview</h1>
+  <h1>Flexplore Render Overview</h1>
 "#,
     );
 

@@ -31,7 +31,7 @@ pub fn render_to_images(jobs: Vec<RenderJob>, output_dir: PathBuf) {
         .add_plugins(DefaultPlugins
             .set(WindowPlugin {
                 primary_window: Some(Window {
-                    title: "flexplain render".into(),
+                    title: "flexplore render".into(),
                     resolution: WindowResolution::new(400, 300)
                         .with_scale_factor_override(1.0),
                     ..default()

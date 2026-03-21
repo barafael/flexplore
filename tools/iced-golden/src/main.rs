@@ -1,4 +1,4 @@
-//! Headless-ish Iced renderer for flexplain golden tests.
+//! Headless-ish Iced renderer for flexplore golden tests.
 //!
 //! Reads `testdata/{case}/input.json`, renders the layout with Iced,
 //! captures a screenshot, and saves `rendered_iced.png`.
