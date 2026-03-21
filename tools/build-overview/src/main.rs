@@ -12,6 +12,11 @@ use regex::Regex;
 struct Cli {
     /// Only render these test cases (default: all).
     cases: Vec<String>,
+
+    /// Only run these backends (e.g. --backend swift --backend html).
+    /// Default: all backends.
+    #[arg(long = "backend")]
+    backends: Vec<String>,
 }
 
 const VIEWPORT_W: f64 = 400.0;
@@ -45,6 +50,10 @@ const OVERVIEW_IMAGES: &[(&str, &str)] = &[
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let filter = cli.cases;
+    let backends = cli.backends;
+
+    let run_backend =
+        |name: &str| backends.is_empty() || backends.iter().any(|b| b.eq_ignore_ascii_case(name));
 
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize()?;
     let testdata = root.join("testdata");
@@ -59,30 +68,44 @@ fn main() -> Result<()> {
             .current_dir(&root),
     )?;
 
-    run_cmd(
-        "Rendering Bevy screenshots",
-        Command::new("cargo")
-            .args(["run", "-p", "bevy-golden", "--"])
-            .args(&filter)
-            .current_dir(&root),
-    )?;
-
-    render_html(&testdata, &filter)?;
-    render_tailwind(&testdata, &filter)?;
-
-    if tool_available("flutter") {
-        render_flutter(&testdata, &tools, &filter)?;
-    } else {
-        eprintln!("  SKIP: flutter not found");
+    if run_backend("bevy") {
+        run_cmd(
+            "Rendering Bevy screenshots",
+            Command::new("cargo")
+                .args(["run", "-p", "bevy-golden", "--"])
+                .args(&filter)
+                .current_dir(&root),
+        )?;
     }
 
-    if tool_available("swift") {
-        render_swift(&testdata, &tools, &filter)?;
-    } else {
-        eprintln!("  SKIP: swift not found (requires macOS)");
+    if run_backend("html") {
+        render_html(&testdata, &filter)?;
     }
 
-    render_iced(&testdata, &root, &filter)?;
+    if run_backend("tailwind") {
+        render_tailwind(&testdata, &filter)?;
+    }
+
+    if run_backend("flutter") {
+        if tool_available("flutter") {
+            render_flutter(&testdata, &tools, &filter)?;
+        } else {
+            eprintln!("  SKIP: flutter not found");
+        }
+    }
+
+    if run_backend("swift") {
+        if tool_available("swift") {
+            render_swift(&testdata, &tools, &filter)?;
+        } else {
+            eprintln!("  SKIP: swift not found (requires macOS)");
+        }
+    }
+
+    if run_backend("iced") {
+        render_iced(&testdata, &root, &filter)?;
+    }
+
     build_overview(&testdata)?;
 
     eprintln!();

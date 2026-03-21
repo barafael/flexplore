@@ -11,6 +11,10 @@ use crate::config::{ColorPalette, NodeConfig};
 /// Frames to let Bevy's UI layout settle after spawning a new tree.
 const SETTLE_FRAMES: u32 = 4;
 
+/// Max frames to wait for the GPU pipeline before giving up.
+/// At 60 fps this is ~5 seconds — enough for shader compilation, short enough to fail fast.
+const PIPELINE_TIMEOUT_FRAMES: u32 = 300;
+
 /// A single render job: name, layout tree, and palette.
 pub struct RenderJob {
     pub name: String,
@@ -128,9 +132,21 @@ fn drive_rendering(
         Phase::WaitingForPipeline => {
             if ready.0 {
                 ready.0 = false;
+                queue.frames_waited = 0;
                 // Pipeline is warm and UI shaders are compiled.
                 // Start counting settle frames for layout convergence.
                 queue.phase = Phase::Settling;
+            } else {
+                queue.frames_waited += 1;
+                if queue.frames_waited >= PIPELINE_TIMEOUT_FRAMES {
+                    eprintln!(
+                        "ERROR: GPU render pipeline did not become ready after {} frames. \
+                         The RenderApp likely failed to initialize (no GPU available?).",
+                        PIPELINE_TIMEOUT_FRAMES
+                    );
+                    exit.write(AppExit::error());
+                    return;
+                }
             }
         }
         Phase::Settling => {
