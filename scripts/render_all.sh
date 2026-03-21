@@ -30,11 +30,19 @@ bash "$SCRIPT_DIR/render_tailwind.sh" "$@" 2>&1
 
 echo ""
 echo "=== Rendering Flutter screenshots ===" >&2
-bash "$SCRIPT_DIR/render_flutter.sh" "$@" 2>&1
+if command -v flutter &>/dev/null; then
+    bash "$SCRIPT_DIR/render_flutter.sh" "$@" 2>&1
+else
+    echo "  SKIP: flutter not found" >&2
+fi
 
 echo ""
 echo "=== Rendering Swift screenshots ===" >&2
-bash "$SCRIPT_DIR/render_swift.sh" "$@" 2>&1
+if command -v swift &>/dev/null; then
+    bash "$SCRIPT_DIR/render_swift.sh" "$@" 2>&1
+else
+    echo "  SKIP: swift not found (requires macOS)" >&2
+fi
 
 echo ""
 echo "=== Rendering Iced screenshots ===" >&2

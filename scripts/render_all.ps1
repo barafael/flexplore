@@ -24,10 +24,18 @@ try {
     & "$ScriptDir/render_tailwind.ps1" @Cases
 
     Write-Host "`n=== Rendering Flutter screenshots ==="
-    & "$ScriptDir/render_flutter.ps1" @Cases
+    if (Get-Command flutter -ErrorAction SilentlyContinue) {
+        & "$ScriptDir/render_flutter.ps1" @Cases
+    } else {
+        Write-Host "  SKIP: flutter not found"
+    }
 
     Write-Host "`n=== Rendering Swift screenshots ==="
-    & "$ScriptDir/render_swift.ps1" @Cases
+    if (Get-Command swift -ErrorAction SilentlyContinue) {
+        & "$ScriptDir/render_swift.ps1" @Cases
+    } else {
+        Write-Host "  SKIP: swift not found (requires macOS)"
+    }
 
     Write-Host "`n=== Rendering Iced screenshots ==="
     & "$ScriptDir/render_iced.ps1" @Cases
