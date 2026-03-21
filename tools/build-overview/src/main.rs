@@ -591,13 +591,24 @@ fn generate_swift_cases(testdata: &Path, swift_dir: &Path) -> Result<()> {
     let re_width = Regex::new(r"UIScreen\.main\.bounds\.width\s*\*\s*([\d.]+)")?;
     let re_height = Regex::new(r"UIScreen\.main\.bounds\.height\s*\*\s*([\d.]+)")?;
 
-    // Generate a view file per case
+    // Generate a view file per case, stripping FlowLayout (emitted as shared file).
+    let mut needs_flow_layout = false;
     for name in &cases {
         let swift_src = fs::read_to_string(testdata.join(name).join("expected.swift"))?;
         let class_name = snake_to_camel(name);
 
+        // Strip the FlowLayout struct — it will be a shared file in the module.
+        let (view_part, has_flow) = if let Some(idx) = swift_src.find("\nstruct FlowLayout: Layout {") {
+            (swift_src[..idx].trim_end().to_string(), true)
+        } else {
+            (swift_src.clone(), false)
+        };
+        if has_flow {
+            needs_flow_layout = true;
+        }
+
         // Adapt: rename ContentView, replace UIScreen references with constants
-        let adapted = swift_src.replace(
+        let adapted = view_part.replace(
             "struct ContentView:",
             &format!("public struct {class_name}View:"),
         );
@@ -617,9 +628,27 @@ fn generate_swift_cases(testdata: &Path, swift_dir: &Path) -> Result<()> {
         let view_code = format!(
             "// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview` to regenerate.\n\
              import SwiftUI\n\n\
-             {adapted}"
+             {adapted}\n"
         );
         fs::write(cases_dir.join(format!("{name}.swift")), view_code)?;
+    }
+
+    // Emit FlowLayout once as a shared file if any case uses it.
+    if needs_flow_layout {
+        // Read the full struct from any case that has it.
+        let flow_src = cases.iter().find_map(|name| {
+            let src = fs::read_to_string(testdata.join(name).join("expected.swift")).ok()?;
+            let idx = src.find("\nstruct FlowLayout: Layout {")?;
+            Some(src[idx + 1..].to_string())
+        });
+        if let Some(flow_struct) = flow_src {
+            let shared = format!(
+                "// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview` to regenerate.\n\
+                 import SwiftUI\n\n\
+                 {flow_struct}"
+            );
+            fs::write(cases_dir.join("FlowLayout.swift"), shared)?;
+        }
     }
 
     // Generate snapshot test file
