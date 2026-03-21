@@ -141,7 +141,11 @@ fn spawn_node(
     };
 
     let node_bevy = Node {
-        display: if node.visible { Display::Flex } else { Display::None },
+        display: if node.visible {
+            Display::Flex
+        } else {
+            Display::None
+        },
         flex_direction: node.flex_direction,
         flex_wrap: node.flex_wrap,
         justify_content: node.justify_content,
@@ -339,9 +343,7 @@ pub fn viz_click(
     // so multiple nodes report Pressed simultaneously.
     let mut best: Option<&Vec<usize>> = None;
     for (interaction, path) in &nodes {
-        if *interaction == Interaction::Pressed
-            && best.is_none_or(|b| path.0.len() > b.len())
-        {
+        if *interaction == Interaction::Pressed && best.is_none_or(|b| path.0.len() > b.len()) {
             best = Some(&path.0);
         }
     }
@@ -369,7 +371,12 @@ pub fn animate_art(
         return;
     }
     *last_t = t;
-    for ((exprs, handle), seed) in art.exprs.iter().zip(art.handles.iter()).zip(art.seeds.iter()) {
+    for ((exprs, handle), seed) in art
+        .exprs
+        .iter()
+        .zip(art.handles.iter())
+        .zip(art.seeds.iter())
+    {
         if let Some(image) = images.get_mut(handle) {
             image.data = Some(cfg.art_style.render(exprs, *seed, t));
         }

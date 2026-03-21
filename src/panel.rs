@@ -2,9 +2,11 @@ use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
 use strum::IntoEnumIterator;
 
-use flexplore::codegen::{emit_bevy_code, emit_flutter, emit_html_css, emit_react, emit_swiftui, emit_tailwind};
-use flexplore::config::*;
 use crate::history::UndoHistory;
+use flexplore::codegen::{
+    emit_bevy_code, emit_flutter, emit_html_css, emit_react, emit_swiftui, emit_tailwind,
+};
+use flexplore::config::*;
 
 type TemplateFn = fn() -> NodeConfig;
 type CodegenFn = fn(&NodeConfig, ColorPalette) -> anyhow::Result<String>;
@@ -24,7 +26,11 @@ fn draw_tree_ui(
     let is_root = path.is_empty();
     ui.horizontal(|ui| {
         ui.add_space(path.len() as f32 * 14.0);
-        let icon = if node.children.is_empty() { "□" } else { "▣" };
+        let icon = if node.children.is_empty() {
+            "□"
+        } else {
+            "▣"
+        };
         if is_selected {
             let _ = ui.selectable_label(true, icon);
             let r = ui.add(egui::TextEdit::singleline(&mut node.label).desired_width(80.0));
@@ -66,7 +72,9 @@ fn apply_hover<T: PartialEq + Clone>(
     set: impl FnOnce(&mut NodeConfig, T),
 ) -> bool {
     let Some(v) = opt else { return false };
-    let Some(node) = cfg.root.get(path) else { return false };
+    let Some(node) = cfg.root.get(path) else {
+        return false;
+    };
     if get(node) != v {
         if preview.is_none() {
             *preview = Some(cfg.clone());
@@ -114,8 +122,10 @@ pub fn panel_system(
     }
 
     // ── Tree navigation shortcuts ────────────────────────────────────────────
-    let key_add_child = ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Enter));
-    let key_add_sibling = ctx.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::Enter));
+    let key_add_child =
+        ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Enter));
+    let key_add_sibling =
+        ctx.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::Enter));
     let key_delete = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete));
     let key_parent = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
     let key_next = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown));
@@ -189,7 +199,10 @@ pub fn panel_system(
         if key_next && !is_root {
             let pidx = sel_path.len() - 1;
             let idx = sel_path[pidx];
-            let sibling_count = cfg.root.get(&sel_path[..pidx]).map_or(0, |p| p.children.len());
+            let sibling_count = cfg
+                .root
+                .get(&sel_path[..pidx])
+                .map_or(0, |p| p.children.len());
             if idx + 1 < sibling_count {
                 sel_path[pidx] = idx + 1;
                 cfg.select(sel_path.clone());
@@ -689,10 +702,15 @@ fn apply_theme(ctx: &egui::Context, theme: Theme) {
         Theme::Mocha => catppuccin::PALETTE.mocha,
     };
     let c = &flavor.colors;
-    let cc = |color: &catppuccin::Color| egui::Color32::from_rgb(color.rgb.r, color.rgb.g, color.rgb.b);
+    let cc =
+        |color: &catppuccin::Color| egui::Color32::from_rgb(color.rgb.r, color.rgb.g, color.rgb.b);
 
     let no_rounding = egui::CornerRadius::ZERO;
-    let mut v = if theme.is_light() { egui::Visuals::light() } else { egui::Visuals::dark() };
+    let mut v = if theme.is_light() {
+        egui::Visuals::light()
+    } else {
+        egui::Visuals::dark()
+    };
 
     let bg = cc(&c.base);
     let fg = cc(&c.text);

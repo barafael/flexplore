@@ -2,8 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use flexplore::codegen::{
-    emit_bevy_code, emit_flutter, emit_html_css, emit_iced, emit_react, emit_swiftui,
-    emit_tailwind,
+    emit_bevy_code, emit_flutter, emit_html_css, emit_iced, emit_react, emit_swiftui, emit_tailwind,
 };
 use flexplore::config::LayoutInput;
 use flexplore::fixtures::all_fixtures;

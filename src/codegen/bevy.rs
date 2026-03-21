@@ -51,37 +51,76 @@ fn emit_node(
     // JustifyContent/AlignItems/AlignContent::Default, gaps Px(0), grow 0, shrink 1,
     // basis/sizes Auto, padding/margin zero.
     if node.flex_direction != FlexDirection::Row {
-        emit_field(buf, &pad, "flex_direction", &format!("FlexDirection::{:?}", node.flex_direction))?;
+        emit_field(
+            buf,
+            &pad,
+            "flex_direction",
+            &format!("FlexDirection::{:?}", node.flex_direction),
+        )?;
     }
     if node.flex_wrap != FlexWrap::NoWrap {
-        emit_field(buf, &pad, "flex_wrap", &format!("FlexWrap::{:?}", node.flex_wrap))?;
+        emit_field(
+            buf,
+            &pad,
+            "flex_wrap",
+            &format!("FlexWrap::{:?}", node.flex_wrap),
+        )?;
     }
     if !matches!(node.justify_content, JustifyContent::Default) {
-        emit_field(buf, &pad, "justify_content", &format!("JustifyContent::{:?}", node.justify_content))?;
+        emit_field(
+            buf,
+            &pad,
+            "justify_content",
+            &format!("JustifyContent::{:?}", node.justify_content),
+        )?;
     }
     if !matches!(node.align_items, AlignItems::Default) {
-        emit_field(buf, &pad, "align_items", &format!("AlignItems::{:?}", node.align_items))?;
+        emit_field(
+            buf,
+            &pad,
+            "align_items",
+            &format!("AlignItems::{:?}", node.align_items),
+        )?;
     }
     if !matches!(node.align_content, AlignContent::Default) {
-        emit_field(buf, &pad, "align_content", &format!("AlignContent::{:?}", node.align_content))?;
+        emit_field(
+            buf,
+            &pad,
+            "align_content",
+            &format!("AlignContent::{:?}", node.align_content),
+        )?;
     }
-    if !matches!(node.row_gap, ValueConfig::Auto) && !matches!(node.row_gap, ValueConfig::Px(v) if v == 0.0) {
+    if !matches!(node.row_gap, ValueConfig::Auto)
+        && !matches!(node.row_gap, ValueConfig::Px(v) if v == 0.0)
+    {
         emit_field(buf, &pad, "row_gap", &emit_bevy_value(&node.row_gap))?;
     }
-    if !matches!(node.column_gap, ValueConfig::Auto) && !matches!(node.column_gap, ValueConfig::Px(v) if v == 0.0) {
+    if !matches!(node.column_gap, ValueConfig::Auto)
+        && !matches!(node.column_gap, ValueConfig::Px(v) if v == 0.0)
+    {
         emit_field(buf, &pad, "column_gap", &emit_bevy_value(&node.column_gap))?;
     }
     if node.flex_grow != 0.0 {
         emit_field(buf, &pad, "flex_grow", &format!("{:.1}", node.flex_grow))?;
     }
     if node.flex_shrink != 1.0 {
-        emit_field(buf, &pad, "flex_shrink", &format!("{:.1}", node.flex_shrink))?;
+        emit_field(
+            buf,
+            &pad,
+            "flex_shrink",
+            &format!("{:.1}", node.flex_shrink),
+        )?;
     }
     if !matches!(node.flex_basis, ValueConfig::Auto) {
         emit_field(buf, &pad, "flex_basis", &emit_bevy_value(&node.flex_basis))?;
     }
     if node.align_self != AlignSelf::Auto {
-        emit_field(buf, &pad, "align_self", &format!("AlignSelf::{:?}", node.align_self))?;
+        emit_field(
+            buf,
+            &pad,
+            "align_self",
+            &format!("AlignSelf::{:?}", node.align_self),
+        )?;
     }
     if !matches!(node.width, ValueConfig::Auto) {
         emit_field(buf, &pad, "width", &emit_bevy_value(&node.width))?;
@@ -102,13 +141,27 @@ fn emit_node(
         emit_field(buf, &pad, "max_height", &emit_bevy_value(&node.max_height))?;
     }
     if !matches!(node.padding, ValueConfig::Px(v) if v == 0.0) {
-        emit_field(buf, &pad, "padding", &format!("UiRect::all({})", emit_bevy_value(&node.padding)))?;
+        emit_field(
+            buf,
+            &pad,
+            "padding",
+            &format!("UiRect::all({})", emit_bevy_value(&node.padding)),
+        )?;
     }
     if !matches!(node.margin, ValueConfig::Px(v) if v == 0.0) {
-        emit_field(buf, &pad, "margin", &format!("UiRect::all({})", emit_bevy_value(&node.margin)))?;
+        emit_field(
+            buf,
+            &pad,
+            "margin",
+            &format!("UiRect::all({})", emit_bevy_value(&node.margin)),
+        )?;
     }
     if node.order != 0 {
-        writeln!(buf, "{pad}        // order: {} (no Bevy equivalent, use entity ordering)", node.order)?;
+        writeln!(
+            buf,
+            "{pad}        // order: {} (no Bevy equivalent, use entity ordering)",
+            node.order
+        )?;
     }
     writeln!(buf, "{pad}        ..default()")?;
     writeln!(buf, "{pad}    }},")?;
@@ -201,8 +254,14 @@ mod tests {
         let mut root = NodeConfig::new_container("root");
         root.children = vec![node];
         let code = emit_bevy_code(&root, ColorPalette::Pastel1).unwrap();
-        assert!(code.contains("Visibility::Hidden"), "should use Visibility::Hidden, not Display::None");
-        assert!(!code.contains("Display::None"), "should not use Display::None");
+        assert!(
+            code.contains("Visibility::Hidden"),
+            "should use Visibility::Hidden, not Display::None"
+        );
+        assert!(
+            !code.contains("Display::None"),
+            "should not use Display::None"
+        );
     }
 
     #[test]

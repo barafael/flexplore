@@ -47,12 +47,8 @@ fn iced_spacing(v: &ValueConfig) -> Option<String> {
         ValueConfig::Percent(n) => Some(format!(
             "{n:.1} /* {n:.0}% — no percentage spacing in Iced */"
         )),
-        ValueConfig::Vw(n) => Some(format!(
-            "{n:.1} /* {n:.0}vw — no viewport units in Iced */"
-        )),
-        ValueConfig::Vh(n) => Some(format!(
-            "{n:.1} /* {n:.0}vh — no viewport units in Iced */"
-        )),
+        ValueConfig::Vw(n) => Some(format!("{n:.1} /* {n:.0}vw — no viewport units in Iced */")),
+        ValueConfig::Vh(n) => Some(format!("{n:.1} /* {n:.0}vh — no viewport units in Iced */")),
     }
 }
 
@@ -64,12 +60,8 @@ fn iced_padding(v: &ValueConfig) -> Option<String> {
         ValueConfig::Percent(n) => Some(format!(
             "{n:.1} /* {n:.0}% — no percentage padding in Iced */"
         )),
-        ValueConfig::Vw(n) => Some(format!(
-            "{n:.1} /* {n:.0}vw — no viewport units in Iced */"
-        )),
-        ValueConfig::Vh(n) => Some(format!(
-            "{n:.1} /* {n:.0}vh — no viewport units in Iced */"
-        )),
+        ValueConfig::Vw(n) => Some(format!("{n:.1} /* {n:.0}vw — no viewport units in Iced */")),
+        ValueConfig::Vh(n) => Some(format!("{n:.1} /* {n:.0}vh — no viewport units in Iced */")),
     }
 }
 
@@ -134,18 +126,14 @@ fn emit_iced_node(
         )?;
 
         // Determine effective width: flex-grow or stretch may override Auto
-        let grow_overrides_width = node.flex_grow > 0.0
-            && parent_is_row
-            && matches!(node.width, ValueConfig::Auto);
-        let stretch_overrides_width = parent_stretch
-            && !parent_is_row
-            && matches!(node.width, ValueConfig::Auto);
-        let grow_overrides_height = node.flex_grow > 0.0
-            && !parent_is_row
-            && matches!(node.height, ValueConfig::Auto);
-        let stretch_overrides_height = parent_stretch
-            && parent_is_row
-            && matches!(node.height, ValueConfig::Auto);
+        let grow_overrides_width =
+            node.flex_grow > 0.0 && parent_is_row && matches!(node.width, ValueConfig::Auto);
+        let stretch_overrides_width =
+            parent_stretch && !parent_is_row && matches!(node.width, ValueConfig::Auto);
+        let grow_overrides_height =
+            node.flex_grow > 0.0 && !parent_is_row && matches!(node.height, ValueConfig::Auto);
+        let stretch_overrides_height =
+            parent_stretch && parent_is_row && matches!(node.height, ValueConfig::Auto);
 
         // Width
         if grow_overrides_width {
@@ -221,10 +209,7 @@ fn emit_iced_node(
         writeln!(buf, "{pad}    .center(Length::Fill)")?;
 
         // Background color
-        writeln!(
-            buf,
-            "{pad}    .style(|_| container::Style {{"
-        )?;
+        writeln!(buf, "{pad}    .style(|_| container::Style {{")?;
         writeln!(
             buf,
             "{pad}        background: Some(Color::from_rgb({r:.2}, {g:.2}, {b:.2}).into()),"
@@ -341,7 +326,10 @@ fn emit_iced_node(
         }
 
         // Align-content note (no Iced equivalent)
-        if !matches!(node.align_content, AlignContent::Default | AlignContent::FlexStart | AlignContent::Start) {
+        if !matches!(
+            node.align_content,
+            AlignContent::Default | AlignContent::FlexStart | AlignContent::Start
+        ) {
             writeln!(
                 buf,
                 "{pad}    // NOTE: align-content: {:?} — no Iced equivalent",
@@ -368,7 +356,10 @@ fn emit_iced_node(
                 FlexDirection::ColumnReverse => "ColumnReverse",
                 _ => unreachable!(),
             };
-            writeln!(buf, "{pad}    // NOTE: flex-direction: {dir_label} — children reversed in source; Iced has no reverse direction")?;
+            writeln!(
+                buf,
+                "{pad}    // NOTE: flex-direction: {dir_label} — children reversed in source; Iced has no reverse direction"
+            )?;
             children.reverse();
             starts.reverse();
         }
@@ -378,22 +369,12 @@ fn emit_iced_node(
 
         match jc {
             JustifyContent::SpaceBetween => {
-                for (i, (child, start)) in
-                    children.iter().zip(starts.iter()).enumerate()
-                {
+                for (i, (child, start)) in children.iter().zip(starts.iter()).enumerate() {
                     if i > 0 {
                         writeln!(buf, "{pad}    {space},")?;
                     }
                     let mut idx = *start;
-                    emit_iced_node(
-                        buf,
-                        child,
-                        depth + 1,
-                        &mut idx,
-                        palette,
-                        is_row,
-                        stretch,
-                    )?;
+                    emit_iced_node(buf, child, depth + 1, &mut idx, palette, is_row, stretch)?;
                     writeln!(buf, ",")?;
                 }
             }
@@ -401,15 +382,7 @@ fn emit_iced_node(
                 writeln!(buf, "{pad}    {space},")?;
                 for (child, start) in children.iter().zip(starts.iter()) {
                     let mut idx = *start;
-                    emit_iced_node(
-                        buf,
-                        child,
-                        depth + 1,
-                        &mut idx,
-                        palette,
-                        is_row,
-                        stretch,
-                    )?;
+                    emit_iced_node(buf, child, depth + 1, &mut idx, palette, is_row, stretch)?;
                     writeln!(buf, ",")?;
                 }
                 writeln!(buf, "{pad}    {space},")?;
@@ -418,15 +391,7 @@ fn emit_iced_node(
                 for (child, start) in children.iter().zip(starts.iter()) {
                     writeln!(buf, "{pad}    {space},")?;
                     let mut idx = *start;
-                    emit_iced_node(
-                        buf,
-                        child,
-                        depth + 1,
-                        &mut idx,
-                        palette,
-                        is_row,
-                        stretch,
-                    )?;
+                    emit_iced_node(buf, child, depth + 1, &mut idx, palette, is_row, stretch)?;
                     writeln!(buf, ",")?;
                 }
                 writeln!(buf, "{pad}    {space},")?;
@@ -435,15 +400,7 @@ fn emit_iced_node(
                 writeln!(buf, "{pad}    {space},")?;
                 for (child, start) in children.iter().zip(starts.iter()) {
                     let mut idx = *start;
-                    emit_iced_node(
-                        buf,
-                        child,
-                        depth + 1,
-                        &mut idx,
-                        palette,
-                        is_row,
-                        stretch,
-                    )?;
+                    emit_iced_node(buf, child, depth + 1, &mut idx, palette, is_row, stretch)?;
                     writeln!(buf, ",")?;
                 }
             }
@@ -451,15 +408,7 @@ fn emit_iced_node(
                 // FlexStart / Start / Default / Stretch
                 for (child, start) in children.iter().zip(starts.iter()) {
                     let mut idx = *start;
-                    emit_iced_node(
-                        buf,
-                        child,
-                        depth + 1,
-                        &mut idx,
-                        palette,
-                        is_row,
-                        stretch,
-                    )?;
+                    emit_iced_node(buf, child, depth + 1, &mut idx, palette, is_row, stretch)?;
                     writeln!(buf, ",")?;
                 }
             }
@@ -489,7 +438,11 @@ fn emit_iced_node(
         } else {
             iced_cross_align_col(node.align_items)
         };
-        let default_align = if is_row { "Vertical::Center" } else { "Horizontal::Center" };
+        let default_align = if is_row {
+            "Vertical::Center"
+        } else {
+            "Horizontal::Center"
+        };
         if align != default_align {
             writeln!(buf)?;
             if is_row {
@@ -501,7 +454,10 @@ fn emit_iced_node(
 
         if node.align_items == AlignItems::Baseline {
             writeln!(buf)?;
-            write!(buf, "{pad}// NOTE: align-items: Baseline — approximated as Top/Left; Iced has no baseline alignment")?;
+            write!(
+                buf,
+                "{pad}// NOTE: align-items: Baseline — approximated as Top/Left; Iced has no baseline alignment"
+            )?;
         }
 
         // Width

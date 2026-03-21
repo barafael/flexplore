@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use iced::widget::{column, container, row, text, Space};
+use iced::widget::{Space, column, container, row, text};
 use iced::window;
 use iced::{Color, Element, Length, Padding, Size, Subscription, Task, Theme};
 
@@ -204,7 +204,14 @@ fn build_widget<'a>(
     let inner = if is_leaf {
         build_leaf(node, leaf_idx, palette, parent_is_row, parent_stretch)
     } else {
-        build_container(node, leaf_idx, palette, parent_is_row, parent_stretch, is_root)
+        build_container(
+            node,
+            leaf_idx,
+            palette,
+            parent_is_row,
+            parent_stretch,
+            is_root,
+        )
     };
 
     // Apply margin as an outer container with padding
@@ -227,7 +234,8 @@ fn build_leaf<'a>(
         .color(Color::from_rgba(0.05, 0.05, 0.1, 0.85));
 
     // Determine effective width
-    let basis_overrides_width = parent_is_row && matches!(node.flex_basis, ValueConfig::Percent(n) if n > 0.0);
+    let basis_overrides_width =
+        parent_is_row && matches!(node.flex_basis, ValueConfig::Percent(n) if n > 0.0);
     let grow_overrides_width =
         node.flex_grow > 0.0 && parent_is_row && matches!(node.width, ValueConfig::Auto);
     let stretch_overrides_width =
@@ -244,7 +252,8 @@ fn build_leaf<'a>(
     };
 
     // Determine effective height
-    let basis_overrides_height = !parent_is_row && matches!(node.flex_basis, ValueConfig::Percent(n) if n > 0.0);
+    let basis_overrides_height =
+        !parent_is_row && matches!(node.flex_basis, ValueConfig::Percent(n) if n > 0.0);
     let grow_overrides_height =
         node.flex_grow > 0.0 && !parent_is_row && matches!(node.height, ValueConfig::Auto);
     let stretch_overrides_height =
@@ -369,10 +378,8 @@ fn build_container<'a>(
         // ── Wrapping layout ──────────────────────────────────────────────
         // Compute available main-axis space for line breaking
         let parent_main = if is_row { VIEWPORT_W } else { VIEWPORT_H };
-        let container_main = resolve_to_px(
-            if is_row { &node.width } else { &node.height },
-            parent_main,
-        );
+        let container_main =
+            resolve_to_px(if is_row { &node.width } else { &node.height }, parent_main);
         // Use viewport if the container has no explicit size
         let container_main = if container_main > 0.0 {
             container_main
@@ -445,7 +452,9 @@ fn build_container<'a>(
                     r = apply_row_align(&node.align_items, r);
                     r.into()
                 } else {
-                    let mut c = column(line_elements).spacing(main_gap_px).width(Length::Fill);
+                    let mut c = column(line_elements)
+                        .spacing(main_gap_px)
+                        .width(Length::Fill);
                     c = apply_column_align(&node.align_items, c);
                     c.into()
                 }
@@ -471,11 +480,14 @@ fn build_container<'a>(
         } else {
             0.0
         };
-        let total_main: f32 = visible.iter().map(|c| {
-            let dim = if is_row { &c.width } else { &c.height };
-            resolve_to_px(dim, parent_main)
-                + resolve_to_px(&c.margin, 0.0) * 2.0
-        }).sum::<f32>() + num_gaps * main_gap_px;
+        let total_main: f32 = visible
+            .iter()
+            .map(|c| {
+                let dim = if is_row { &c.width } else { &c.height };
+                resolve_to_px(dim, parent_main) + resolve_to_px(&c.margin, 0.0) * 2.0
+            })
+            .sum::<f32>()
+            + num_gaps * main_gap_px;
 
         let shrink_ratio = if total_main > available && total_main > 0.0 {
             available / total_main

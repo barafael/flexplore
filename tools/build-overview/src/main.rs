@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Parser;
 use regex::Regex;
 
@@ -55,7 +55,9 @@ fn main() -> Result<()> {
     let run_backend =
         |name: &str| backends.is_empty() || backends.iter().any(|b| b.eq_ignore_ascii_case(name));
 
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize()?;
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()?;
     let testdata = root.join("testdata");
     let tools = root.join("tools");
 
@@ -141,7 +143,9 @@ fn which(name: &str) -> bool {
 
 fn run_cmd(label: &str, cmd: &mut Command) -> Result<()> {
     eprintln!(">>> {label}");
-    let status = cmd.status().with_context(|| format!("failed to launch: {label}"))?;
+    let status = cmd
+        .status()
+        .with_context(|| format!("failed to launch: {label}"))?;
     if !status.success() {
         bail!("{label} failed with {status}");
     }
@@ -178,9 +182,7 @@ fn list_cases(
         .context("cannot read testdata directory")?
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
-        .filter(|e| {
-            require_file.map_or(true, |f| e.path().join(f).exists())
-        })
+        .filter(|e| require_file.map_or(true, |f| e.path().join(f).exists()))
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .filter(|name| filter.is_empty() || filter.contains(name))
         .collect();
@@ -293,8 +295,11 @@ fn render_tailwind(testdata: &Path, filter: &[String]) -> Result<()> {
 
         let fragment = fs::read_to_string(&tw_file)
             .with_context(|| format!("failed to read {}", tw_file.display()))?;
-        fs::write(&tmp_file, format!("{TAILWIND_HEADER}{fragment}{TAILWIND_FOOTER}"))
-            .with_context(|| format!("failed to write {}", tmp_file.display()))?;
+        fs::write(
+            &tmp_file,
+            format!("{TAILWIND_HEADER}{fragment}{TAILWIND_FOOTER}"),
+        )
+        .with_context(|| format!("failed to write {}", tmp_file.display()))?;
 
         let url = path_to_file_url(&tmp_file)?;
         let out = testdata.join(name).join("rendered_tailwind.png");
@@ -317,7 +322,10 @@ fn render_flutter(testdata: &Path, tools: &Path, filter: &[String]) -> Result<()
     let flutter_dir = tools.join("flutter-golden");
 
     // Copy Roboto font from Flutter SDK if needed
-    if let Ok(output) = Command::new(script_cmd("flutter")).args(["--no-color", "sdk-path"]).output() {
+    if let Ok(output) = Command::new(script_cmd("flutter"))
+        .args(["--no-color", "sdk-path"])
+        .output()
+    {
         let sdk = PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
         let font_src = sdk.join("bin/cache/artifacts/material_fonts/roboto-regular.ttf");
         let font_dst = flutter_dir.join("fonts/Roboto-Regular.ttf");
@@ -433,11 +441,17 @@ fn build_overview(testdata: &Path) -> Result<()> {
     );
 
     for name in &cases {
-        html.push_str(&format!("  <section class=\"case\">\n    <h2>{name}</h2>\n    <div class=\"images\">\n"));
+        html.push_str(&format!(
+            "  <section class=\"case\">\n    <h2>{name}</h2>\n    <div class=\"images\">\n"
+        ));
         for (label, filename) in OVERVIEW_IMAGES {
-            html.push_str(&format!("      <div class=\"panel\">\n        <div class=\"label\">{label}</div>\n"));
+            html.push_str(&format!(
+                "      <div class=\"panel\">\n        <div class=\"label\">{label}</div>\n"
+            ));
             if testdata.join(name).join(filename).exists() {
-                html.push_str(&format!("        <img src=\"{name}/{filename}\" loading=\"lazy\">\n"));
+                html.push_str(&format!(
+                    "        <img src=\"{name}/{filename}\" loading=\"lazy\">\n"
+                ));
             } else {
                 html.push_str("        <div class=\"missing\">not rendered</div>\n");
             }
@@ -498,7 +512,10 @@ fn generate_flutter_cases(testdata: &Path, flutter_dir: &Path) -> Result<()> {
     for name in &cases {
         barrel.push_str(&format!("export 'cases/{name}.dart';\n"));
     }
-    fs::write(lib_dir.parent().unwrap().join("flutter_golden.dart"), barrel)?;
+    fs::write(
+        lib_dir.parent().unwrap().join("flutter_golden.dart"),
+        barrel,
+    )?;
 
     // Generate golden test file
     let test_imports: String = cases
@@ -594,11 +611,12 @@ fn generate_swift_cases(testdata: &Path, swift_dir: &Path) -> Result<()> {
         let class_name = snake_to_camel(name);
 
         // Strip the FlowLayout struct — it will be a shared file in the module.
-        let (view_part, has_flow) = if let Some(idx) = swift_src.find("\nstruct FlowLayout: Layout {") {
-            (swift_src[..idx].trim_end().to_string(), true)
-        } else {
-            (swift_src.clone(), false)
-        };
+        let (view_part, has_flow) =
+            if let Some(idx) = swift_src.find("\nstruct FlowLayout: Layout {") {
+                (swift_src[..idx].trim_end().to_string(), true)
+            } else {
+                (swift_src.clone(), false)
+            };
         if has_flow {
             needs_flow_layout = true;
         }

@@ -157,19 +157,37 @@ fn emit_html_node(
         css.push_str("  visibility: hidden;\n");
     }
     if node.flex_direction != FlexDirection::Row {
-        writeln!(css, "  flex-direction: {};", css_flex_direction(node.flex_direction))?;
+        writeln!(
+            css,
+            "  flex-direction: {};",
+            css_flex_direction(node.flex_direction)
+        )?;
     }
     if node.flex_wrap != FlexWrap::NoWrap {
         writeln!(css, "  flex-wrap: {};", css_flex_wrap(node.flex_wrap))?;
     }
-    if !matches!(node.justify_content, JustifyContent::Default | JustifyContent::FlexStart | JustifyContent::Start) {
-        writeln!(css, "  justify-content: {};", css_justify_content(node.justify_content))?;
+    if !matches!(
+        node.justify_content,
+        JustifyContent::Default | JustifyContent::FlexStart | JustifyContent::Start
+    ) {
+        writeln!(
+            css,
+            "  justify-content: {};",
+            css_justify_content(node.justify_content)
+        )?;
     }
     if !matches!(node.align_items, AlignItems::Default | AlignItems::Stretch) {
         writeln!(css, "  align-items: {};", css_align_items(node.align_items))?;
     }
-    if !matches!(node.align_content, AlignContent::Default | AlignContent::Stretch) {
-        writeln!(css, "  align-content: {};", css_align_content(node.align_content))?;
+    if !matches!(
+        node.align_content,
+        AlignContent::Default | AlignContent::Stretch
+    ) {
+        writeln!(
+            css,
+            "  align-content: {};",
+            css_align_content(node.align_content)
+        )?;
     }
     if !is_zero_or_auto(&node.row_gap) {
         writeln!(css, "  row-gap: {};", emit_css_value(&node.row_gap))?;
@@ -280,8 +298,14 @@ mod tests {
         let mut root = NodeConfig::new_container("root");
         root.children = vec![node];
         let code = emit_html_css(&root, ColorPalette::Pastel1).unwrap();
-        assert!(code.contains("visibility: hidden"), "should use visibility:hidden, not display:none");
-        assert!(code.contains("display: flex"), "should keep display:flex alongside visibility:hidden");
+        assert!(
+            code.contains("visibility: hidden"),
+            "should use visibility:hidden, not display:none"
+        );
+        assert!(
+            code.contains("display: flex"),
+            "should keep display:flex alongside visibility:hidden"
+        );
     }
 
     #[test]

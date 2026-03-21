@@ -77,14 +77,8 @@ fn swift_flex_basis_value(v: &ValueConfig, is_width: bool) -> Option<String> {
 fn swift_spacing_value(v: &ValueConfig) -> Option<String> {
     match v {
         ValueConfig::Px(n) => Some(format!("{n:.1}")),
-        ValueConfig::Vw(n) => Some(format!(
-            "UIScreen.main.bounds.width * {:.3}",
-            n / 100.0
-        )),
-        ValueConfig::Vh(n) => Some(format!(
-            "UIScreen.main.bounds.height * {:.3}",
-            n / 100.0
-        )),
+        ValueConfig::Vw(n) => Some(format!("UIScreen.main.bounds.width * {:.3}", n / 100.0)),
+        ValueConfig::Vh(n) => Some(format!("UIScreen.main.bounds.height * {:.3}", n / 100.0)),
         ValueConfig::Percent(n) => Some(format!(
             "{n:.1} /* {n:.1}% — no direct SwiftUI equivalent for percentage spacing */"
         )),
@@ -237,7 +231,11 @@ fn emit_swiftui_node(
             writeln!(buf, "{pad}    .hidden()")?;
         }
         if node.order != 0 {
-            writeln!(buf, "{pad}    // order: {} (no SwiftUI equivalent)", node.order)?;
+            writeln!(
+                buf,
+                "{pad}    // order: {} (no SwiftUI equivalent)",
+                node.order
+            )?;
         }
     } else {
         let is_row = matches!(
@@ -269,8 +267,16 @@ fn emit_swiftui_node(
         if is_wrapping {
             // --- FlowLayout (custom wrapping layout) ---
             let axis = if is_row { ".horizontal" } else { ".vertical" };
-            let item_gap = if is_row { &node.column_gap } else { &node.row_gap };
-            let line_gap = if is_row { &node.row_gap } else { &node.column_gap };
+            let item_gap = if is_row {
+                &node.column_gap
+            } else {
+                &node.row_gap
+            };
+            let line_gap = if is_row {
+                &node.row_gap
+            } else {
+                &node.column_gap
+            };
             let line_align = swift_line_alignment(node.align_content);
             let wrap_reversed = node.flex_wrap == FlexWrap::WrapReverse;
 
@@ -295,20 +301,38 @@ fn emit_swiftui_node(
                     FlexDirection::ColumnReverse => "ColumnReverse",
                     _ => unreachable!(),
                 };
-                writeln!(buf, "{pad}    // NOTE: flex-direction: {dir_label} — children reversed")?;
+                writeln!(
+                    buf,
+                    "{pad}    // NOTE: flex-direction: {dir_label} — children reversed"
+                )?;
             }
 
             for (child, start) in children.iter().zip(starts.iter()) {
                 let mut idx = *start;
-                emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch, false)?;
+                emit_swiftui_node(
+                    buf,
+                    child,
+                    depth + 1,
+                    &mut idx,
+                    palette,
+                    is_row,
+                    node.align_items == AlignItems::Stretch,
+                    false,
+                )?;
             }
         } else {
             // --- HStack / VStack (non-wrapping) ---
-            let gap = if is_row { &node.column_gap } else { &node.row_gap };
+            let gap = if is_row {
+                &node.column_gap
+            } else {
+                &node.row_gap
+            };
             let jc = effective_justify(node.justify_content, is_reversed);
             let uses_zero_spacing = matches!(
                 jc,
-                JustifyContent::SpaceBetween | JustifyContent::SpaceEvenly | JustifyContent::SpaceAround
+                JustifyContent::SpaceBetween
+                    | JustifyContent::SpaceEvenly
+                    | JustifyContent::SpaceAround
             );
             let spacing = if uses_zero_spacing {
                 ", spacing: 0".to_string()
@@ -331,7 +355,10 @@ fn emit_swiftui_node(
                     FlexDirection::ColumnReverse => "ColumnReverse",
                     _ => unreachable!(),
                 };
-                writeln!(buf, "{pad}    // NOTE: flex-direction: {dir_label} — children reversed in source to approximate visual order")?;
+                writeln!(
+                    buf,
+                    "{pad}    // NOTE: flex-direction: {dir_label} — children reversed in source to approximate visual order"
+                )?;
             }
 
             match jc {
@@ -341,14 +368,32 @@ fn emit_swiftui_node(
                             writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
                         }
                         let mut idx = *start;
-                        emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch, false)?;
+                        emit_swiftui_node(
+                            buf,
+                            child,
+                            depth + 1,
+                            &mut idx,
+                            palette,
+                            is_row,
+                            node.align_items == AlignItems::Stretch,
+                            false,
+                        )?;
                     }
                 }
                 JustifyContent::Center => {
                     writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
                     for (child, start) in children.iter().zip(starts.iter()) {
                         let mut idx = *start;
-                        emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch, false)?;
+                        emit_swiftui_node(
+                            buf,
+                            child,
+                            depth + 1,
+                            &mut idx,
+                            palette,
+                            is_row,
+                            node.align_items == AlignItems::Stretch,
+                            false,
+                        )?;
                     }
                     writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
                 }
@@ -356,7 +401,16 @@ fn emit_swiftui_node(
                     for (child, start) in children.iter().zip(starts.iter()) {
                         writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
                         let mut idx = *start;
-                        emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch, false)?;
+                        emit_swiftui_node(
+                            buf,
+                            child,
+                            depth + 1,
+                            &mut idx,
+                            palette,
+                            is_row,
+                            node.align_items == AlignItems::Stretch,
+                            false,
+                        )?;
                     }
                     writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
                 }
@@ -364,13 +418,31 @@ fn emit_swiftui_node(
                     writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
                     for (child, start) in children.iter().zip(starts.iter()) {
                         let mut idx = *start;
-                        emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch, false)?;
+                        emit_swiftui_node(
+                            buf,
+                            child,
+                            depth + 1,
+                            &mut idx,
+                            palette,
+                            is_row,
+                            node.align_items == AlignItems::Stretch,
+                            false,
+                        )?;
                     }
                 }
                 _ => {
                     for (child, start) in children.iter().zip(starts.iter()) {
                         let mut idx = *start;
-                        emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, is_row, node.align_items == AlignItems::Stretch, false)?;
+                        emit_swiftui_node(
+                            buf,
+                            child,
+                            depth + 1,
+                            &mut idx,
+                            palette,
+                            is_row,
+                            node.align_items == AlignItems::Stretch,
+                            false,
+                        )?;
                     }
                 }
             }
@@ -381,7 +453,11 @@ fn emit_swiftui_node(
         // Container frame: map Percent(100%) to maxWidth/maxHeight: .infinity
         let full_w = is_full_percent(&node.width);
         let full_h = is_full_percent(&node.height);
-        let w = if full_w { None } else { swift_optional_value(&node.width) };
+        let w = if full_w {
+            None
+        } else {
+            swift_optional_value(&node.width)
+        };
         // Root with flex_grow fills the viewport height, matching CSS body { height: 100% }
         let h = if is_root && node.flex_grow > 0.0 {
             None
@@ -394,16 +470,31 @@ fn emit_swiftui_node(
         if w.is_some() || h.is_some() {
             let w_str = w.as_deref().unwrap_or("nil");
             let h_str = h.as_deref().unwrap_or("nil");
-            writeln!(buf, "{pad}.frame(width: {w_str}, height: {h_str}, alignment: .topLeading)")?;
+            writeln!(
+                buf,
+                "{pad}.frame(width: {w_str}, height: {h_str}, alignment: .topLeading)"
+            )?;
         }
 
         // Collect all min/max constraints into a single .frame() call.
         // This merges explicit min/max, 100% → .infinity, flex-grow, and
         // parent stretch so later modifiers don't override earlier ones.
-        let min_w = if is_zero_px(&node.min_width) { None } else { swift_optional_value(&node.min_width) };
-        let min_h = if is_zero_px(&node.min_height) { None } else { swift_optional_value(&node.min_height) };
+        let min_w = if is_zero_px(&node.min_width) {
+            None
+        } else {
+            swift_optional_value(&node.min_width)
+        };
+        let min_h = if is_zero_px(&node.min_height) {
+            None
+        } else {
+            swift_optional_value(&node.min_height)
+        };
 
-        let mut max_w = if full_w { Some(".infinity".to_string()) } else { swift_optional_value(&node.max_width) };
+        let mut max_w = if full_w {
+            Some(".infinity".to_string())
+        } else {
+            swift_optional_value(&node.max_width)
+        };
         let mut max_h = if full_h || (is_root && node.flex_grow > 0.0) {
             Some(".infinity".to_string())
         } else {
@@ -420,9 +511,17 @@ fn emit_swiftui_node(
         }
         // align-items: Stretch from parent: merge into max constraints
         if parent_stretch {
-            if parent_is_row && !full_h && matches!(node.height, ValueConfig::Auto) && max_h.is_none() {
+            if parent_is_row
+                && !full_h
+                && matches!(node.height, ValueConfig::Auto)
+                && max_h.is_none()
+            {
                 max_h = Some(".infinity".to_string());
-            } else if !parent_is_row && !full_w && matches!(node.width, ValueConfig::Auto) && max_w.is_none() {
+            } else if !parent_is_row
+                && !full_w
+                && matches!(node.width, ValueConfig::Auto)
+                && max_w.is_none()
+            {
                 max_w = Some(".infinity".to_string());
             }
         }
@@ -631,14 +730,23 @@ mod tests {
     #[test]
     fn percent_100_becomes_infinity() {
         let code = emit_swiftui(&test_container(), ColorPalette::Pastel1).unwrap();
-        assert!(code.contains("maxWidth: .infinity"), "Percent(100) should map to maxWidth: .infinity");
-        assert!(!code.contains("width: 100.0"), "should not emit width: 100.0 for Percent(100)");
+        assert!(
+            code.contains("maxWidth: .infinity"),
+            "Percent(100) should map to maxWidth: .infinity"
+        );
+        assert!(
+            !code.contains("width: 100.0"),
+            "should not emit width: 100.0 for Percent(100)"
+        );
     }
 
     #[test]
     fn skips_zero_margin() {
         let code = emit_swiftui(&test_container(), ColorPalette::Pastel1).unwrap();
-        assert!(!code.contains(".padding(0.0) /* margin */"), "should not emit zero margin");
+        assert!(
+            !code.contains(".padding(0.0) /* margin */"),
+            "should not emit zero margin"
+        );
     }
 
     #[test]
@@ -648,7 +756,10 @@ mod tests {
         let mut root = NodeConfig::new_container("root");
         root.children = vec![leaf];
         let code = emit_swiftui(&root, ColorPalette::Pastel1).unwrap();
-        assert!(code.contains("maxWidth: .infinity"), "flex-grow items should expand");
+        assert!(
+            code.contains("maxWidth: .infinity"),
+            "flex-grow items should expand"
+        );
     }
 
     #[test]
@@ -656,7 +767,10 @@ mod tests {
         let mut root = test_container();
         root.justify_content = JustifyContent::SpaceBetween;
         let code = emit_swiftui(&root, ColorPalette::Pastel1).unwrap();
-        assert!(code.contains("Spacer(minLength: 0)"), "SpaceBetween should use Spacer()");
+        assert!(
+            code.contains("Spacer(minLength: 0)"),
+            "SpaceBetween should use Spacer()"
+        );
     }
 
     #[test]
@@ -665,8 +779,14 @@ mod tests {
         root.flex_wrap = FlexWrap::Wrap;
         let code = emit_swiftui(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("FlowLayout("), "Wrap should emit FlowLayout");
-        assert!(code.contains("struct FlowLayout: Layout"), "Should include FlowLayout definition");
-        assert!(!code.contains("HStack"), "Should not emit HStack when wrapping");
+        assert!(
+            code.contains("struct FlowLayout: Layout"),
+            "Should include FlowLayout definition"
+        );
+        assert!(
+            !code.contains("HStack"),
+            "Should not emit HStack when wrapping"
+        );
     }
 
     #[test]
@@ -675,12 +795,18 @@ mod tests {
         root.flex_wrap = FlexWrap::Wrap;
         root.align_content = AlignContent::SpaceBetween;
         let code = emit_swiftui(&root, ColorPalette::Pastel1).unwrap();
-        assert!(code.contains("lineAlignment: .spaceBetween"), "SpaceBetween align_content should set lineAlignment");
+        assert!(
+            code.contains("lineAlignment: .spaceBetween"),
+            "SpaceBetween align_content should set lineAlignment"
+        );
     }
 
     #[test]
     fn no_flow_layout_without_wrap() {
         let code = emit_swiftui(&test_container(), ColorPalette::Pastel1).unwrap();
-        assert!(!code.contains("FlowLayout"), "Non-wrapping should not include FlowLayout");
+        assert!(
+            !code.contains("FlowLayout"),
+            "Non-wrapping should not include FlowLayout"
+        );
     }
 }

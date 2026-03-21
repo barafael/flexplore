@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 use test_case::test_case;
 
-use crate::config::{ColorPalette, NodeConfig, ValueConfig};
 use crate::codegen::{emit_bevy_code, emit_html_css, emit_iced};
+use crate::config::{ColorPalette, NodeConfig, ValueConfig};
 use crate::templates;
 
 // ─── Procedural graph builders ───────────────────────────────────────────────
@@ -104,10 +104,7 @@ fn hidden_child() -> NodeConfig {
     let mut hidden = NodeConfig::new_leaf("hidden", 80.0, 80.0);
     hidden.visible = false;
     let mut root = NodeConfig::new_container("root");
-    root.children = vec![
-        NodeConfig::new_leaf("visible", 80.0, 80.0),
-        hidden,
-    ];
+    root.children = vec![NodeConfig::new_leaf("visible", 80.0, 80.0), hidden];
     root
 }
 
@@ -221,16 +218,16 @@ fn assert_both_emit(node: &NodeConfig, palette: ColorPalette) {
         iced.contains("fn view(&self) -> iced::Element<'_, Message>"),
         "Iced missing view function"
     );
-    assert!(
-        iced.contains(".into()"),
-        "Iced missing .into() call"
-    );
+    assert!(iced.contains(".into()"), "Iced missing .into() call");
 
     // Leaf count: each leaf produces a <div> with its label AND a Text::new in Bevy
     let leaf_count = count_leaves(node);
     for i in 0..leaf_count {
         // Each leaf has a background color assignment in both targets
-        assert!(html.contains("background:"), "HTML missing background for leaf {i}");
+        assert!(
+            html.contains("background:"),
+            "HTML missing background for leaf {i}"
+        );
     }
 }
 
@@ -302,15 +299,28 @@ fn assert_property_consistency(node: &NodeConfig, palette: ColorPalette) {
             FlexDirection::Column | FlexDirection::ColumnReverse
         );
         if is_col {
-            assert!(iced.contains("column!["), "Iced missing column![ for {:?}", node.flex_direction);
+            assert!(
+                iced.contains("column!["),
+                "Iced missing column![ for {:?}",
+                node.flex_direction
+            );
         }
     }
 
     // visibility: if hidden, all targets should indicate it
     if !node.visible {
-        assert!(html.contains("visibility: hidden"), "HTML missing visibility: hidden");
-        assert!(bevy.contains("Visibility::Hidden"), "Bevy missing Visibility::Hidden");
-        assert!(iced.contains("// NOTE: hidden"), "Iced missing hidden comment");
+        assert!(
+            html.contains("visibility: hidden"),
+            "HTML missing visibility: hidden"
+        );
+        assert!(
+            bevy.contains("Visibility::Hidden"),
+            "Bevy missing Visibility::Hidden"
+        );
+        assert!(
+            iced.contains("// NOTE: hidden"),
+            "Iced missing hidden comment"
+        );
     }
 }
 
@@ -395,19 +405,34 @@ fn value_types_codegen(w: ValueConfig, h: ValueConfig) {
             assert!(bevy.contains("width:"), "Bevy missing width for Px({n})");
         }
         ValueConfig::Percent(n) => {
-            assert!(html.contains(&format!("{n:.1}%")), "HTML missing percent width");
-            assert!(bevy.contains(&format!("Val::Percent({n:.1})")), "Bevy missing Val::Percent");
+            assert!(
+                html.contains(&format!("{n:.1}%")),
+                "HTML missing percent width"
+            );
+            assert!(
+                bevy.contains(&format!("Val::Percent({n:.1})")),
+                "Bevy missing Val::Percent"
+            );
         }
         ValueConfig::Vw(n) => {
             assert!(html.contains(&format!("{n:.1}vw")), "HTML missing vw width");
-            assert!(bevy.contains(&format!("Val::Vw({n:.1})")), "Bevy missing Val::Vw");
+            assert!(
+                bevy.contains(&format!("Val::Vw({n:.1})")),
+                "Bevy missing Val::Vw"
+            );
         }
         _ => {}
     }
     match h {
         ValueConfig::Vh(n) => {
-            assert!(html.contains(&format!("{n:.1}vh")), "HTML missing vh height");
-            assert!(bevy.contains(&format!("Val::Vh({n:.1})")), "Bevy missing Val::Vh");
+            assert!(
+                html.contains(&format!("{n:.1}vh")),
+                "HTML missing vh height"
+            );
+            assert!(
+                bevy.contains(&format!("Val::Vh({n:.1})")),
+                "Bevy missing Val::Vh"
+            );
         }
         _ => {}
     }
@@ -427,8 +452,14 @@ fn grow_shrink_codegen(grow: f32, shrink: f32) {
     let iced = emit_iced(&node, ColorPalette::Pastel1).unwrap();
 
     if grow != 0.0 {
-        assert!(html.contains("flex-grow:"), "HTML missing flex-grow for {grow}");
-        assert!(bevy.contains("flex_grow:"), "Bevy missing flex_grow for {grow}");
+        assert!(
+            html.contains("flex-grow:"),
+            "HTML missing flex-grow for {grow}"
+        );
+        assert!(
+            bevy.contains("flex_grow:"),
+            "Bevy missing flex_grow for {grow}"
+        );
         // Iced maps flex-grow to Length::Fill or Length::FillPortion
         assert!(
             iced.contains("Length::Fill"),
@@ -436,8 +467,14 @@ fn grow_shrink_codegen(grow: f32, shrink: f32) {
         );
     }
     if shrink != 1.0 {
-        assert!(html.contains("flex-shrink:"), "HTML missing flex-shrink for {shrink}");
-        assert!(bevy.contains("flex_shrink:"), "Bevy missing flex_shrink for {shrink}");
+        assert!(
+            html.contains("flex-shrink:"),
+            "HTML missing flex-shrink for {shrink}"
+        );
+        assert!(
+            bevy.contains("flex_shrink:"),
+            "Bevy missing flex_shrink for {shrink}"
+        );
         // Iced has no flex-shrink — should emit a comment
         assert!(
             iced.contains("flex-shrink"),
@@ -459,9 +496,18 @@ fn align_self_codegen(align: AlignSelf) {
     let iced = emit_iced(&node, ColorPalette::Pastel1).unwrap();
 
     if align != AlignSelf::Auto {
-        assert!(html.contains("align-self:"), "HTML missing align-self for {align:?}");
-        assert!(bevy.contains("align_self:"), "Bevy missing align_self for {align:?}");
-        assert!(iced.contains("align-self"), "Iced missing align-self comment for {align:?}");
+        assert!(
+            html.contains("align-self:"),
+            "HTML missing align-self for {align:?}"
+        );
+        assert!(
+            bevy.contains("align_self:"),
+            "Bevy missing align_self for {align:?}"
+        );
+        assert!(
+            iced.contains("align-self"),
+            "Iced missing align-self comment for {align:?}"
+        );
     }
 }
 
@@ -479,7 +525,10 @@ fn flex_basis_codegen(basis: ValueConfig) {
     if !matches!(basis, ValueConfig::Auto) {
         assert!(html.contains("flex-basis:"), "HTML missing flex-basis");
         assert!(bevy.contains("flex_basis:"), "Bevy missing flex_basis");
-        assert!(iced.contains("flex-basis"), "Iced missing flex-basis comment");
+        assert!(
+            iced.contains("flex-basis"),
+            "Iced missing flex-basis comment"
+        );
     }
 }
 
@@ -541,9 +590,18 @@ fn visibility_codegen() {
         let html = emit_html_css(&node, ColorPalette::Pastel1).unwrap();
         let bevy = emit_bevy_code(&node, ColorPalette::Pastel1).unwrap();
         let iced = emit_iced(&node, ColorPalette::Pastel1).unwrap();
-        assert!(html.contains("visibility: hidden"), "HTML missing visibility: hidden");
-        assert!(bevy.contains("Visibility::Hidden"), "Bevy missing Visibility::Hidden");
-        assert!(iced.contains("// NOTE: hidden"), "Iced missing hidden comment");
+        assert!(
+            html.contains("visibility: hidden"),
+            "HTML missing visibility: hidden"
+        );
+        assert!(
+            bevy.contains("Visibility::Hidden"),
+            "Bevy missing Visibility::Hidden"
+        );
+        assert!(
+            iced.contains("// NOTE: hidden"),
+            "Iced missing hidden comment"
+        );
     }
 }
 
@@ -554,8 +612,14 @@ fn order_reflected_in_html() {
     let node = ordered_children();
     let html = emit_html_css(&node, ColorPalette::Pastel1).unwrap();
     // CSS order property should be emitted for non-zero
-    assert!(html.contains("order: 3"), "HTML missing order: 3 for node A");
-    assert!(html.contains("order: -1"), "HTML missing order: -1 for node B");
+    assert!(
+        html.contains("order: 3"),
+        "HTML missing order: 3 for node A"
+    );
+    assert!(
+        html.contains("order: -1"),
+        "HTML missing order: -1 for node B"
+    );
     // The HTML div order follows sort-by-order: B(-1), C(0), A(3)
     let pos_b = html.find(">B<").expect("missing B div");
     let pos_c = html.find(">C<").expect("missing C div");
@@ -569,8 +633,14 @@ fn order_reflected_in_bevy() {
     let node = ordered_children();
     let bevy = emit_bevy_code(&node, ColorPalette::Pastel1).unwrap();
     // Bevy sorts children by order; order itself is a comment
-    assert!(bevy.contains("order: 3"), "Bevy missing order comment for 3");
-    assert!(bevy.contains("order: -1"), "Bevy missing order comment for -1");
+    assert!(
+        bevy.contains("order: 3"),
+        "Bevy missing order comment for 3"
+    );
+    assert!(
+        bevy.contains("order: -1"),
+        "Bevy missing order comment for -1"
+    );
     // Text spawn order should be B, C, A
     let pos_b = bevy.find("Text::new(\"B\")").expect("missing B text");
     let pos_c = bevy.find("Text::new(\"C\")").expect("missing C text");
@@ -584,8 +654,14 @@ fn order_reflected_in_iced() {
     let node = ordered_children();
     let iced = emit_iced(&node, ColorPalette::Pastel1).unwrap();
     // Iced sorts children by order and emits comments for non-zero
-    assert!(iced.contains("order: 3"), "Iced missing order comment for 3");
-    assert!(iced.contains("order: -1"), "Iced missing order comment for -1");
+    assert!(
+        iced.contains("order: 3"),
+        "Iced missing order comment for 3"
+    );
+    assert!(
+        iced.contains("order: -1"),
+        "Iced missing order comment for -1"
+    );
     // text() call order should be B, C, A
     let pos_b = iced.find("text(\"B\")").expect("missing B text");
     let pos_c = iced.find("text(\"C\")").expect("missing C text");
@@ -604,10 +680,19 @@ fn padding_and_margin_emitted() {
     let iced = emit_iced(&node, ColorPalette::Pastel1).unwrap();
     assert!(html.contains("padding: 20.0px"), "HTML missing padding");
     assert!(html.contains("margin: 10.0px"), "HTML missing margin");
-    assert!(bevy.contains("UiRect::all(Val::Px(20.0))"), "Bevy missing padding UiRect");
-    assert!(bevy.contains("UiRect::all(Val::Px(10.0))"), "Bevy missing margin UiRect");
+    assert!(
+        bevy.contains("UiRect::all(Val::Px(20.0))"),
+        "Bevy missing padding UiRect"
+    );
+    assert!(
+        bevy.contains("UiRect::all(Val::Px(10.0))"),
+        "Bevy missing margin UiRect"
+    );
     assert!(iced.contains(".padding(20.0)"), "Iced missing padding");
-    assert!(iced.contains("// NOTE: margin: 10px"), "Iced missing margin comment");
+    assert!(
+        iced.contains("// NOTE: margin: 10px"),
+        "Iced missing margin comment"
+    );
 }
 
 // ─── Tests: min/max sizes ────────────────────────────────────────────────────
@@ -619,18 +704,48 @@ fn min_max_sizes_emitted() {
     let bevy = emit_bevy_code(&node, ColorPalette::Pastel1).unwrap();
     let iced = emit_iced(&node, ColorPalette::Pastel1).unwrap();
     assert!(html.contains("min-width: 40.0px"), "HTML missing min-width");
-    assert!(html.contains("max-width: 200.0px"), "HTML missing max-width");
-    assert!(html.contains("min-height: 30.0px"), "HTML missing min-height");
-    assert!(html.contains("max-height: 150.0px"), "HTML missing max-height");
-    assert!(bevy.contains("Val::Px(40.0)"), "Bevy missing min_width value");
-    assert!(bevy.contains("Val::Px(200.0)"), "Bevy missing max_width value");
-    assert!(bevy.contains("Val::Px(30.0)"), "Bevy missing min_height value");
-    assert!(bevy.contains("Val::Px(150.0)"), "Bevy missing max_height value");
+    assert!(
+        html.contains("max-width: 200.0px"),
+        "HTML missing max-width"
+    );
+    assert!(
+        html.contains("min-height: 30.0px"),
+        "HTML missing min-height"
+    );
+    assert!(
+        html.contains("max-height: 150.0px"),
+        "HTML missing max-height"
+    );
+    assert!(
+        bevy.contains("Val::Px(40.0)"),
+        "Bevy missing min_width value"
+    );
+    assert!(
+        bevy.contains("Val::Px(200.0)"),
+        "Bevy missing max_width value"
+    );
+    assert!(
+        bevy.contains("Val::Px(30.0)"),
+        "Bevy missing min_height value"
+    );
+    assert!(
+        bevy.contains("Val::Px(150.0)"),
+        "Bevy missing max_height value"
+    );
     // Iced: max_width is supported, min/max height via comments
     assert!(iced.contains(".max_width(200.0)"), "Iced missing max_width");
-    assert!(iced.contains("min-width: 40px"), "Iced missing min-width comment");
-    assert!(iced.contains("min-height: 30px"), "Iced missing min-height comment");
-    assert!(iced.contains("max-height: 150px"), "Iced missing max-height comment");
+    assert!(
+        iced.contains("min-width: 40px"),
+        "Iced missing min-width comment"
+    );
+    assert!(
+        iced.contains("min-height: 30px"),
+        "Iced missing min-height comment"
+    );
+    assert!(
+        iced.contains("max-height: 150px"),
+        "Iced missing max-height comment"
+    );
 }
 
 // ─── Tests: template layouts ─────────────────────────────────────────────────

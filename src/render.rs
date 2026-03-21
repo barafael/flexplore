@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
 use bevy::prelude::*;
+use bevy::render::RenderPlugin;
 use bevy::render::settings::{Backends, RenderCreation, WgpuSettings};
 use bevy::render::view::window::screenshot::{Screenshot, ScreenshotCaptured};
-use bevy::render::RenderPlugin;
 use bevy::window::{PrimaryWindow, WindowResolution};
 
 use crate::config::{ColorPalette, NodeConfig};
@@ -29,30 +29,35 @@ pub fn render_to_images(jobs: Vec<RenderJob>, output_dir: PathBuf) {
         eprintln!("No render jobs.");
         return;
     }
-    eprintln!("Will render {} test case(s) to {}", jobs.len(), output_dir.display());
+    eprintln!(
+        "Will render {} test case(s) to {}",
+        jobs.len(),
+        output_dir.display()
+    );
 
     App::new()
-        .add_plugins(DefaultPlugins
-            .set(WindowPlugin {
-                primary_window: Some(Window {
-                    title: "flexplore render".into(),
-                    resolution: WindowResolution::new(400, 300)
-                        .with_scale_factor_override(1.0),
+        .add_plugins(
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: "flexplore render".into(),
+                        resolution: WindowResolution::new(400, 300).with_scale_factor_override(1.0),
+                        ..default()
+                    }),
+                    ..default()
+                })
+                .set(RenderPlugin {
+                    render_creation: RenderCreation::Automatic(WgpuSettings {
+                        backends: if cfg!(windows) {
+                            Some(Backends::DX12)
+                        } else {
+                            None // auto-detect on other platforms
+                        },
+                        ..default()
+                    }),
                     ..default()
                 }),
-                ..default()
-            })
-            .set(RenderPlugin {
-                render_creation: RenderCreation::Automatic(WgpuSettings {
-                    backends: if cfg!(windows) {
-                        Some(Backends::DX12)
-                    } else {
-                        None // auto-detect on other platforms
-                    },
-                    ..default()
-                }),
-                ..default()
-            }))
+        )
         .insert_resource(ClearColor(Color::srgba(0.11, 0.11, 0.17, 1.0)))
         .insert_resource(RenderQueue {
             jobs,
@@ -67,7 +72,6 @@ pub fn render_to_images(jobs: Vec<RenderJob>, output_dir: PathBuf) {
         .add_systems(Update, drive_rendering)
         .run();
 }
-
 
 /// Rendering proceeds in phases for each job.
 enum Phase {

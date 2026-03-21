@@ -8,10 +8,12 @@ class DirectionRowReverse extends StatelessWidget {
   Widget build(BuildContext context) {
   return   Container(
     width: double.infinity,
+    height: double.infinity,
     padding: EdgeInsets.all(12.0),
     margin: EdgeInsets.all(0.0),
     child:     Wrap(
       direction: Axis.horizontal,
+      alignment: WrapAlignment.end,
       spacing: 8.0,
       runSpacing: 8.0,
       children: [

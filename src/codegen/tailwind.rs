@@ -81,14 +81,12 @@ fn tailwind_align_self(a: AlignSelf) -> &'static str {
 
 fn tailwind_value(property: &str, v: &ValueConfig) -> String {
     match v {
-        ValueConfig::Auto => {
-            match property {
-                "w" | "h" | "basis" | "m" => format!("{property}-auto"),
-                "max-w" | "max-h" => format!("{property}-none"),
-                "p" | "gap-x" | "gap-y" | "min-w" | "min-h" => format!("{property}-0"),
-                _ => format!("{property}-auto"),
-            }
-        }
+        ValueConfig::Auto => match property {
+            "w" | "h" | "basis" | "m" => format!("{property}-auto"),
+            "max-w" | "max-h" => format!("{property}-none"),
+            "p" | "gap-x" | "gap-y" | "min-w" | "min-h" => format!("{property}-0"),
+            _ => format!("{property}-auto"),
+        },
         ValueConfig::Px(n) => format!("{property}-[{n:.1}px]"),
         ValueConfig::Percent(n) => format!("{property}-[{n:.1}%]"),
         ValueConfig::Vw(n) => format!("{property}-[{n:.1}vw]"),
@@ -135,19 +133,29 @@ fn emit_tailwind_node(
     if node.flex_wrap != FlexWrap::NoWrap {
         classes.push(tailwind_flex_wrap(node.flex_wrap).into());
     }
-    if !matches!(node.justify_content, JustifyContent::Default | JustifyContent::FlexStart | JustifyContent::Start) {
+    if !matches!(
+        node.justify_content,
+        JustifyContent::Default | JustifyContent::FlexStart | JustifyContent::Start
+    ) {
         classes.push(tailwind_justify_content(node.justify_content).into());
     }
     if !matches!(node.align_items, AlignItems::Default | AlignItems::Stretch) {
         classes.push(tailwind_align_items(node.align_items).into());
     }
-    if !matches!(node.align_content, AlignContent::Default | AlignContent::Stretch) {
+    if !matches!(
+        node.align_content,
+        AlignContent::Default | AlignContent::Stretch
+    ) {
         classes.push(tailwind_align_content(node.align_content).into());
     }
-    if !matches!(node.column_gap, ValueConfig::Auto) && !matches!(node.column_gap, ValueConfig::Px(v) if v == 0.0) {
+    if !matches!(node.column_gap, ValueConfig::Auto)
+        && !matches!(node.column_gap, ValueConfig::Px(v) if v == 0.0)
+    {
         classes.push(tailwind_value("gap-x", &node.column_gap));
     }
-    if !matches!(node.row_gap, ValueConfig::Auto) && !matches!(node.row_gap, ValueConfig::Px(v) if v == 0.0) {
+    if !matches!(node.row_gap, ValueConfig::Auto)
+        && !matches!(node.row_gap, ValueConfig::Px(v) if v == 0.0)
+    {
         classes.push(tailwind_value("gap-y", &node.row_gap));
     }
     if node.flex_grow != 0.0 {
@@ -252,8 +260,14 @@ mod tests {
         let mut root = NodeConfig::new_container("root");
         root.children = vec![node];
         let code = emit_tailwind(&root, ColorPalette::Pastel1).unwrap();
-        assert!(code.contains("invisible"), "should use invisible, not hidden");
-        assert!(code.contains("flex"), "should keep flex alongside invisible");
+        assert!(
+            code.contains("invisible"),
+            "should use invisible, not hidden"
+        );
+        assert!(
+            code.contains("flex"),
+            "should keep flex alongside invisible"
+        );
     }
 
     #[test]

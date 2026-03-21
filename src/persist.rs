@@ -4,7 +4,9 @@ use flexplore::config::FlexConfig;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn auto_save(cfg: &FlexConfig) {
-    let Some(dir) = dirs::config_dir() else { return };
+    let Some(dir) = dirs::config_dir() else {
+        return;
+    };
     let dir = dir.join("flexplore");
     let _ = std::fs::create_dir_all(&dir);
     let path = dir.join("autosave.json");
@@ -35,7 +37,9 @@ fn local_storage() -> Option<web_sys::Storage> {
 
 #[cfg(target_arch = "wasm32")]
 pub fn auto_save(cfg: &FlexConfig) {
-    let Some(storage) = local_storage() else { return };
+    let Some(storage) = local_storage() else {
+        return;
+    };
     if let Ok(json) = serde_json::to_string(cfg) {
         let _ = storage.set_item("flexplore_config", &json);
     }

@@ -1,9 +1,11 @@
 use std::path::PathBuf;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use test_case::test_case;
 
-use crate::codegen::{emit_bevy_code, emit_flutter, emit_html_css, emit_iced, emit_react, emit_swiftui, emit_tailwind};
+use crate::codegen::{
+    emit_bevy_code, emit_flutter, emit_html_css, emit_iced, emit_react, emit_swiftui, emit_tailwind,
+};
 use crate::config::LayoutInput;
 use crate::fixtures::all_fixtures;
 
@@ -15,7 +17,9 @@ fn testdata_dir() -> PathBuf {
 
 fn run_snapshot(name: &str) -> Result<()> {
     let fixtures = all_fixtures();
-    let f = fixtures.iter().find(|f| f.name == name)
+    let f = fixtures
+        .iter()
+        .find(|f| f.name == name)
         .context(format!("unknown fixture: {name}"))?;
 
     let dir = testdata_dir().join(name);
@@ -32,18 +36,43 @@ fn run_snapshot(name: &str) -> Result<()> {
     ];
 
     // Read input JSON back and re-generate to verify round-trip
-    let json_src = std::fs::read_to_string(&input_path)
-        .with_context(|| format!("missing {} (run `cargo run -p update-snapshots` to generate)", input_path.display()))?;
+    let json_src = std::fs::read_to_string(&input_path).with_context(|| {
+        format!(
+            "missing {} (run `cargo run -p update-snapshots` to generate)",
+            input_path.display()
+        )
+    })?;
     let from_json: LayoutInput = serde_json::from_str(&json_src)?;
 
     let roundtrip_targets: Vec<(&str, String)> = vec![
-        ("expected.html", emit_html_css(&from_json.node, from_json.palette)?),
-        ("expected.rs", emit_bevy_code(&from_json.node, from_json.palette)?),
-        ("expected.jsx", emit_react(&from_json.node, from_json.palette)?),
-        ("expected.tailwind.html", emit_tailwind(&from_json.node, from_json.palette)?),
-        ("expected.swift", emit_swiftui(&from_json.node, from_json.palette)?),
-        ("expected.dart", emit_flutter(&from_json.node, from_json.palette)?),
-        ("expected.iced.rs", emit_iced(&from_json.node, from_json.palette)?),
+        (
+            "expected.html",
+            emit_html_css(&from_json.node, from_json.palette)?,
+        ),
+        (
+            "expected.rs",
+            emit_bevy_code(&from_json.node, from_json.palette)?,
+        ),
+        (
+            "expected.jsx",
+            emit_react(&from_json.node, from_json.palette)?,
+        ),
+        (
+            "expected.tailwind.html",
+            emit_tailwind(&from_json.node, from_json.palette)?,
+        ),
+        (
+            "expected.swift",
+            emit_swiftui(&from_json.node, from_json.palette)?,
+        ),
+        (
+            "expected.dart",
+            emit_flutter(&from_json.node, from_json.palette)?,
+        ),
+        (
+            "expected.iced.rs",
+            emit_iced(&from_json.node, from_json.palette)?,
+        ),
     ];
 
     // Verify JSON round-trip produces identical codegen
@@ -57,8 +86,12 @@ fn run_snapshot(name: &str) -> Result<()> {
     // Compare against stored snapshots
     for (filename, actual) in &targets {
         let path = dir.join(filename);
-        let expected = std::fs::read_to_string(&path)
-            .with_context(|| format!("missing {} (run `cargo run -p update-snapshots` to generate)", path.display()))?;
+        let expected = std::fs::read_to_string(&path).with_context(|| {
+            format!(
+                "missing {} (run `cargo run -p update-snapshots` to generate)",
+                path.display()
+            )
+        })?;
         if *actual != expected {
             bail!(
                 "[{name}] {filename} snapshot mismatch.\n\n--- expected ---\n{expected}\n--- actual ---\n{actual}"

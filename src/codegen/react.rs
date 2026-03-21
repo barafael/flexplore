@@ -133,24 +133,50 @@ fn emit_react_node(
         writeln!(buf, "{pad}  visibility: 'hidden',")?;
     }
     if node.flex_direction != FlexDirection::Row {
-        writeln!(buf, "{pad}  flexDirection: {},", camel_direction(node.flex_direction))?;
+        writeln!(
+            buf,
+            "{pad}  flexDirection: {},",
+            camel_direction(node.flex_direction)
+        )?;
     }
     if node.flex_wrap != FlexWrap::NoWrap {
         writeln!(buf, "{pad}  flexWrap: {},", camel_wrap(node.flex_wrap))?;
     }
-    if !matches!(node.justify_content, JustifyContent::Default | JustifyContent::FlexStart | JustifyContent::Start) {
-        writeln!(buf, "{pad}  justifyContent: {},", camel_justify(node.justify_content))?;
+    if !matches!(
+        node.justify_content,
+        JustifyContent::Default | JustifyContent::FlexStart | JustifyContent::Start
+    ) {
+        writeln!(
+            buf,
+            "{pad}  justifyContent: {},",
+            camel_justify(node.justify_content)
+        )?;
     }
     if !matches!(node.align_items, AlignItems::Default | AlignItems::Stretch) {
-        writeln!(buf, "{pad}  alignItems: {},", camel_align_items(node.align_items))?;
+        writeln!(
+            buf,
+            "{pad}  alignItems: {},",
+            camel_align_items(node.align_items)
+        )?;
     }
-    if !matches!(node.align_content, AlignContent::Default | AlignContent::Stretch) {
-        writeln!(buf, "{pad}  alignContent: {},", camel_align_content(node.align_content))?;
+    if !matches!(
+        node.align_content,
+        AlignContent::Default | AlignContent::Stretch
+    ) {
+        writeln!(
+            buf,
+            "{pad}  alignContent: {},",
+            camel_align_content(node.align_content)
+        )?;
     }
-    if !matches!(node.row_gap, ValueConfig::Auto) && !matches!(node.row_gap, ValueConfig::Px(v) if v == 0.0) {
+    if !matches!(node.row_gap, ValueConfig::Auto)
+        && !matches!(node.row_gap, ValueConfig::Px(v) if v == 0.0)
+    {
         writeln!(buf, "{pad}  rowGap: {},", css_value(&node.row_gap))?;
     }
-    if !matches!(node.column_gap, ValueConfig::Auto) && !matches!(node.column_gap, ValueConfig::Px(v) if v == 0.0) {
+    if !matches!(node.column_gap, ValueConfig::Auto)
+        && !matches!(node.column_gap, ValueConfig::Px(v) if v == 0.0)
+    {
         writeln!(buf, "{pad}  columnGap: {},", css_value(&node.column_gap))?;
     }
     if node.flex_grow != 0.0 {
@@ -163,7 +189,11 @@ fn emit_react_node(
         writeln!(buf, "{pad}  flexBasis: {},", css_value(&node.flex_basis))?;
     }
     if node.align_self != AlignSelf::Auto {
-        writeln!(buf, "{pad}  alignSelf: {},", camel_align_self(node.align_self))?;
+        writeln!(
+            buf,
+            "{pad}  alignSelf: {},",
+            camel_align_self(node.align_self)
+        )?;
     }
     if !matches!(node.width, ValueConfig::Auto) {
         writeln!(buf, "{pad}  width: {},", css_value(&node.width))?;
@@ -247,8 +277,14 @@ mod tests {
         let mut root = NodeConfig::new_container("root");
         root.children = vec![node];
         let code = emit_react(&root, ColorPalette::Pastel1).unwrap();
-        assert!(code.contains("visibility: 'hidden'"), "should use visibility:hidden, not display:none");
-        assert!(code.contains("display: 'flex'"), "should keep display:flex alongside visibility:hidden");
+        assert!(
+            code.contains("visibility: 'hidden'"),
+            "should use visibility:hidden, not display:none"
+        );
+        assert!(
+            code.contains("display: 'flex'"),
+            "should keep display:flex alongside visibility:hidden"
+        );
     }
 
     #[test]

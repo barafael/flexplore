@@ -1,7 +1,10 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use flexplore::{config::LayoutInput, render::{RenderJob, render_to_images}};
+use flexplore::{
+    config::LayoutInput,
+    render::{RenderJob, render_to_images},
+};
 
 fn load_jobs(testdata_dir: &Path, filter: &[String]) -> Result<Vec<RenderJob>> {
     let mut jobs = Vec::new();
@@ -24,12 +27,18 @@ fn load_jobs(testdata_dir: &Path, filter: &[String]) -> Result<Vec<RenderJob>> {
         let json = match std::fs::read_to_string(&input_path) {
             Ok(s) => s,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(e) => return Err(e).with_context(|| format!("failed to read {}", input_path.display())),
+            Err(e) => {
+                return Err(e).with_context(|| format!("failed to read {}", input_path.display()));
+            }
         };
         let input: LayoutInput = serde_json::from_str(&json)
             .with_context(|| format!("failed to parse {}", input_path.display()))?;
 
-        jobs.push(RenderJob { name, node: input.node, palette: input.palette });
+        jobs.push(RenderJob {
+            name,
+            node: input.node,
+            palette: input.palette,
+        });
     }
 
     Ok(jobs)

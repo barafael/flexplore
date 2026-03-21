@@ -210,7 +210,10 @@ fn emit_flutter_inner(
         )?;
         writeln!(buf, "{pad}  alignment: Alignment.center,")?;
         writeln!(buf, "{pad}  child: Text('{}',", node.label)?;
-        writeln!(buf, "{pad}    style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),")?;
+        writeln!(
+            buf,
+            "{pad}    style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),"
+        )?;
         writeln!(buf, "{pad}  ),")?;
         writeln!(buf, "{pad})")?;
     } else {
@@ -261,7 +264,11 @@ fn emit_flutter_inner(
             writeln!(
                 buf,
                 "{ipad}  direction: {},",
-                if is_row { "Axis.horizontal" } else { "Axis.vertical" }
+                if is_row {
+                    "Axis.horizontal"
+                } else {
+                    "Axis.vertical"
+                }
             )?;
             if node.flex_wrap == FlexWrap::WrapReverse {
                 if is_row {
@@ -288,8 +295,16 @@ fn emit_flutter_inner(
         } else {
             let widget = if is_row { "Row" } else { "Column" };
             writeln!(buf, "{ipad}{widget}(")?;
-            writeln!(buf, "{ipad}  mainAxisAlignment: {},", dart_main_axis(eff_jc))?;
-            writeln!(buf, "{ipad}  crossAxisAlignment: {},", dart_cross_axis(node.align_items))?;
+            writeln!(
+                buf,
+                "{ipad}  mainAxisAlignment: {},",
+                dart_main_axis(eff_jc)
+            )?;
+            writeln!(
+                buf,
+                "{ipad}  crossAxisAlignment: {},",
+                dart_cross_axis(node.align_items)
+            )?;
         }
 
         writeln!(buf, "{ipad}  children: [")?;
@@ -312,7 +327,10 @@ fn emit_flutter_inner(
                 FlexDirection::ColumnReverse => "ColumnReverse",
                 _ => unreachable!(),
             };
-            writeln!(buf, "{ipad}    // NOTE: flex-direction: {dir_label} — children reversed in source to approximate visual order")?;
+            writeln!(
+                buf,
+                "{ipad}    // NOTE: flex-direction: {dir_label} — children reversed in source to approximate visual order"
+            )?;
             children.reverse();
             starts.reverse();
         }
@@ -322,7 +340,11 @@ fn emit_flutter_inner(
                 && node.flex_wrap == FlexWrap::NoWrap;
             if child.flex_grow > 0.0 && node.flex_wrap == FlexWrap::NoWrap {
                 writeln!(buf, "{ipad}    Expanded(")?;
-                writeln!(buf, "{ipad}      flex: {},", child.flex_grow.round().max(1.0) as i32)?;
+                writeln!(
+                    buf,
+                    "{ipad}      flex: {},",
+                    child.flex_grow.round().max(1.0) as i32
+                )?;
                 write!(buf, "{ipad}      child: ")?;
                 if needs_align {
                     let align = dart_align_self(child.align_self, is_row).unwrap();
@@ -335,8 +357,13 @@ fn emit_flutter_inner(
                     emit_flutter_node(buf, child, inner_depth + 3, &mut idx, palette, false)?;
                 }
                 writeln!(buf, "{ipad}    ),")?;
-            } else if matches!(child.flex_basis, ValueConfig::Percent(n) if n > 0.0) && node.flex_wrap == FlexWrap::NoWrap {
-                let n = match child.flex_basis { ValueConfig::Percent(n) => n, _ => unreachable!() };
+            } else if matches!(child.flex_basis, ValueConfig::Percent(n) if n > 0.0)
+                && node.flex_wrap == FlexWrap::NoWrap
+            {
+                let n = match child.flex_basis {
+                    ValueConfig::Percent(n) => n,
+                    _ => unreachable!(),
+                };
                 writeln!(buf, "{ipad}    Expanded(")?;
                 writeln!(buf, "{ipad}      flex: {},", n.round() as i32)?;
                 write!(buf, "{ipad}      child: ")?;
@@ -422,7 +449,13 @@ mod tests {
         root.children = vec![node];
         let code = emit_flutter(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("Visibility("), "should use Visibility widget");
-        assert!(code.contains("visible: false"), "should set visible to false");
-        assert!(code.contains("maintainSize: true"), "should maintain size for layout");
+        assert!(
+            code.contains("visible: false"),
+            "should set visible to false"
+        );
+        assert!(
+            code.contains("maintainSize: true"),
+            "should maintain size for layout"
+        );
     }
 }
