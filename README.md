@@ -2,7 +2,7 @@
 
 Interactive flexbox layout explorer. Build node trees, tweak every flexbox property, and see the results instantly. Export equivalent code in six frameworks.
 
-<!-- TODO: add screenshot of the running app -->
+![Screenshot](screenshot.png)
 
 ## Features
 
