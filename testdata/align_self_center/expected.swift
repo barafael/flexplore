@@ -13,7 +13,7 @@ struct ContentView: View {
                 .frame(width: 120.0, height: 60.0)
                 .padding(8.0)
                 .background(Color(red: 0.70, green: 0.80, blue: 0.89))
-                /* align-self: Center — override manually with .alignmentGuide() */
+                .frame(maxHeight: .infinity, alignment: .center)
             Text("top")
                 .font(.system(size: 26))
                 .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))

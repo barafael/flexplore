@@ -112,6 +112,18 @@ fn effective_justify(jc: JustifyContent, is_reversed: bool) -> JustifyContent {
     }
 }
 
+fn swift_align_self(a: AlignSelf, parent_is_row: bool) -> Option<&'static str> {
+    match (a, parent_is_row) {
+        (AlignSelf::Auto, _) => None,
+        (AlignSelf::Center, _) => Some(".center"),
+        (AlignSelf::FlexStart | AlignSelf::Start, true) => Some(".top"),
+        (AlignSelf::FlexStart | AlignSelf::Start, false) => Some(".leading"),
+        (AlignSelf::FlexEnd | AlignSelf::End, true) => Some(".bottom"),
+        (AlignSelf::FlexEnd | AlignSelf::End, false) => Some(".trailing"),
+        _ => None,
+    }
+}
+
 fn swift_h_alignment(a: AlignItems) -> &'static str {
     match a {
         AlignItems::FlexStart | AlignItems::Start => ".leading",
@@ -221,7 +233,13 @@ fn emit_swiftui_node(
         {
             writeln!(buf, "{pad}    .padding({m}) /* margin */",)?;
         }
-        if node.align_self != AlignSelf::Auto {
+        if let Some(alignment) = swift_align_self(node.align_self, parent_is_row) {
+            if parent_is_row {
+                writeln!(buf, "{pad}    .frame(maxHeight: .infinity, alignment: {alignment})")?;
+            } else {
+                writeln!(buf, "{pad}    .frame(maxWidth: .infinity, alignment: {alignment})")?;
+            }
+        } else if node.align_self != AlignSelf::Auto {
             writeln!(
                 buf,
                 "{pad}    /* align-self: {:?} — override manually with .alignmentGuide() */",

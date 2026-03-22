@@ -14,7 +14,7 @@ use crate::fixtures::all_fixtures;
 
 fn testdata_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
+        .join("..")
         .join("testdata")
 }
 

@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/flexplore-core", "tools/update-snapshots", "tools/bevy-golden", "tools/iced-golden", "tools/egui-golden", "tools/dioxus-golden", "tools/react-native-golden", "tools/build-overview"]
+members = [".", "flexplore-core", "tools/update-snapshots", "tools/bevy-golden", "tools/iced-golden", "tools/egui-golden", "tools/dioxus-golden", "tools/react-native-golden", "tools/build-overview"]
 
 [package]
 name = "flexplore"
@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-flexplore-core = { path = "crates/flexplore-core", features = ["bevy"] }
+flexplore-core = { path = "flexplore-core", features = ["bevy"] }
 bevy = { version = "0.18", features = ["serialize"] }
 bevy_egui = "0.39"
 rand = "0.8"

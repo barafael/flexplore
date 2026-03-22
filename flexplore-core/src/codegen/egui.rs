@@ -18,6 +18,15 @@ fn is_zero_px(v: &ValueConfig) -> bool {
     matches!(v, ValueConfig::Px(n) if *n == 0.0)
 }
 
+fn egui_align_self_main(a: AlignSelf) -> Option<&'static str> {
+    match a {
+        AlignSelf::Center => Some("egui::Align::Center"),
+        AlignSelf::FlexStart | AlignSelf::Start => Some("egui::Align::Min"),
+        AlignSelf::FlexEnd | AlignSelf::End => Some("egui::Align::Max"),
+        _ => None,
+    }
+}
+
 fn egui_size(v: &ValueConfig, axis: &str) -> String {
     match v {
         ValueConfig::Auto => format!("/* auto {axis} */"),
@@ -209,7 +218,7 @@ fn emit_egui_node(
                 node.flex_basis.display_short()
             )?;
         }
-        if node.align_self != AlignSelf::Auto {
+        if egui_align_self_main(node.align_self).is_none() && node.align_self != AlignSelf::Auto {
             writeln!(buf)?;
             write!(
                 buf,
@@ -342,13 +351,14 @@ fn emit_egui_node(
         }
         if needs_justify {
             writeln!(buf)?;
-            write!(
+            writeln!(
                 buf,
-                "{pad}            .with_main_justify(true) // approximate {:?}",
+                "{pad}            .with_main_justify(true); // approximate {:?}",
                 jc
             )?;
+        } else {
+            writeln!(buf, ";")?;
         }
-        writeln!(buf, ";")?;
 
         if needs_center {
             writeln!(
@@ -420,16 +430,44 @@ fn emit_egui_node(
 
         for (child, start) in children.iter().zip(starts.iter()) {
             let mut idx = *start;
-            emit_egui_node(
-                buf,
-                child,
-                depth + 3,
-                &mut idx,
-                palette,
-                is_row,
-                stretch,
-                false,
-            )?;
+            if let Some(main_align) = egui_align_self_main(child.align_self) {
+                let child_pad = "    ".repeat(depth + 3);
+                let wrapper_dir = if is_row {
+                    "egui::Layout::top_down(egui::Align::Min)"
+                } else {
+                    "egui::Layout::left_to_right(egui::Align::Min)"
+                };
+                let fill_axis = if is_row {
+                    "ui.set_min_height(ui.available_height());"
+                } else {
+                    "ui.set_min_width(ui.available_width());"
+                };
+                writeln!(buf, "{child_pad}ui.with_layout({wrapper_dir}.with_main_align({main_align}), |ui| {{")?;
+                writeln!(buf, "{child_pad}    {fill_axis}")?;
+                emit_egui_node(
+                    buf,
+                    child,
+                    depth + 4,
+                    &mut idx,
+                    palette,
+                    is_row,
+                    stretch,
+                    false,
+                )?;
+                writeln!(buf, ";")?;
+                write!(buf, "{child_pad}}})")?;
+            } else {
+                emit_egui_node(
+                    buf,
+                    child,
+                    depth + 3,
+                    &mut idx,
+                    palette,
+                    is_row,
+                    stretch,
+                    false,
+                )?;
+            }
             writeln!(buf, ";")?;
         }
 
@@ -457,7 +495,7 @@ fn emit_egui_node(
                 node.flex_basis.display_short()
             )?;
         }
-        if node.align_self != AlignSelf::Auto {
+        if egui_align_self_main(node.align_self).is_none() && node.align_self != AlignSelf::Auto {
             writeln!(
                 buf,
                 "{pad}        // NOTE: align-self: {:?} — no per-child override in egui",

@@ -5,5 +5,5 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1"
-flexplore-core = { path = "../../crates/flexplore-core" }
+flexplore-core = { path = "../../flexplore-core" }
 serde_json = "1"

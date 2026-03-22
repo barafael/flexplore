@@ -16,16 +16,18 @@ fn build_ui(ui: &mut egui::Ui) {
                             ui.label(egui::RichText::new("top").size(26.0).color(egui::Color32::from_rgba_premultiplied(13, 13, 26, 217)));
                         });
                     });
-                egui::Frame::none()
-                    .fill(egui::Color32::from_rgb(179, 205, 227))
-                    .inner_margin(8.0)
-                    .show(ui, |ui| {
-                        ui.set_min_size(egui::vec2(120.0, 60.0));
-                        ui.centered_and_justified(|ui| {
-                            ui.label(egui::RichText::new("centered").size(26.0).color(egui::Color32::from_rgba_premultiplied(13, 13, 26, 217)));
+                ui.with_layout(egui::Layout::top_down(egui::Align::Min).with_main_align(egui::Align::Center), |ui| {
+                    ui.set_min_height(ui.available_height());
+                    egui::Frame::none()
+                        .fill(egui::Color32::from_rgb(179, 205, 227))
+                        .inner_margin(8.0)
+                        .show(ui, |ui| {
+                            ui.set_min_size(egui::vec2(120.0, 60.0));
+                            ui.centered_and_justified(|ui| {
+                                ui.label(egui::RichText::new("centered").size(26.0).color(egui::Color32::from_rgba_premultiplied(13, 13, 26, 217)));
+                            });
                         });
-                    })
-                    // NOTE: align-self: Center — no per-child cross-axis override in egui;
+                });
                 egui::Frame::none()
                     .fill(egui::Color32::from_rgb(204, 235, 197))
                     .inner_margin(8.0)

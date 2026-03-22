@@ -6,7 +6,7 @@ fn build_ui(ui: &mut egui::Ui) {
             ui.set_min_size(ui.available_size());
             ui.spacing_mut().item_spacing = egui::vec2(8.0, 0.0);
             let layout = egui::Layout::left_to_right(egui::Align::Min)
-                .with_main_justify(true) // approximate SpaceEvenly;
+                .with_main_justify(true); // approximate SpaceEvenly
             ui.with_layout(layout, |ui| {
                 egui::Frame::none()
                     .fill(egui::Color32::from_rgb(251, 180, 174))

@@ -5,8 +5,8 @@ on:
   push:
     branches: [main]
     paths:
-      - 'testdata/*/expected.swift'
-      - 'src/codegen/swiftui.rs'
+      - 'crates/flexplore-core/src/**'
+      - 'tools/build-overview/**'
       - 'tools/swift-golden/**'
       - '.github/workflows/swift-golden.yml'
 
@@ -26,7 +26,7 @@ jobs:
           persist-credentials: false
 
       - name: Render Swift golden screenshots and rebuild overview
-        run: cargo run -p build-overview -- --skip-codegen --backend swift
+        run: cargo run -p build-overview -- --backend swift
 
       - name: Commit rendered PNGs and overview
         run: |

@@ -16,8 +16,8 @@ use egui::{Align, Color32, Layout, Vec2};
 
 mod config;
 use config::{
-    AlignItems, ColorPalette, FlexDirection, FlexWrap, JustifyContent, LayoutInput, NodeConfig,
-    ValueConfig,
+    AlignItems, AlignSelf, ColorPalette, FlexDirection, FlexWrap, JustifyContent, LayoutInput,
+    NodeConfig, ValueConfig,
 };
 
 /// Render flexplore golden screenshots with egui.
@@ -233,6 +233,56 @@ fn load_jobs(testdata_dir: &Path, filter: &[&str]) -> Result<Vec<RenderJob>> {
 
 // ─── Widget building ────────────────────────────────────────────────────────
 
+/// Allocate space for a widget, applying align-self positioning if needed.
+///
+/// When `align_self` overrides the parent's cross-axis alignment, we allocate
+/// the full cross-axis space and position the child within it.
+fn allocate_with_align_self(
+    ui: &mut egui::Ui,
+    outer_size: Vec2,
+    align_self: AlignSelf,
+    parent_is_row: bool,
+) -> egui::Rect {
+    match align_self {
+        AlignSelf::Center | AlignSelf::FlexStart | AlignSelf::Start | AlignSelf::FlexEnd | AlignSelf::End => {
+            if parent_is_row {
+                let cross_avail = ui.available_height();
+                let alloc_size = Vec2::new(outer_size.x, cross_avail);
+                let (alloc_rect, _) =
+                    ui.allocate_exact_size(alloc_size, egui::Sense::hover());
+
+                let y_offset = match align_self {
+                    AlignSelf::Center => (cross_avail - outer_size.y) / 2.0,
+                    AlignSelf::FlexEnd | AlignSelf::End => cross_avail - outer_size.y,
+                    _ => 0.0,
+                };
+
+                egui::Rect::from_min_size(
+                    alloc_rect.min + Vec2::new(0.0, y_offset),
+                    outer_size,
+                )
+            } else {
+                let cross_avail = ui.available_width();
+                let alloc_size = Vec2::new(cross_avail, outer_size.y);
+                let (alloc_rect, _) =
+                    ui.allocate_exact_size(alloc_size, egui::Sense::hover());
+
+                let x_offset = match align_self {
+                    AlignSelf::Center => (cross_avail - outer_size.x) / 2.0,
+                    AlignSelf::FlexEnd | AlignSelf::End => cross_avail - outer_size.x,
+                    _ => 0.0,
+                };
+
+                egui::Rect::from_min_size(
+                    alloc_rect.min + Vec2::new(x_offset, 0.0),
+                    outer_size,
+                )
+            }
+        }
+        _ => ui.allocate_exact_size(outer_size, egui::Sense::hover()).0,
+    }
+}
+
 /// Get the fixed main-axis size of a child (0.0 if the child uses flex-grow).
 fn child_fixed_main(child: &NodeConfig, is_row: bool) -> f32 {
     if !child.visible {
@@ -401,7 +451,8 @@ fn build_leaf(
     }
 
     let outer_size = Vec2::new(eff_w + margin * 2.0, eff_h + margin * 2.0);
-    let (outer_rect, _) = ui.allocate_exact_size(outer_size, egui::Sense::hover());
+    let outer_rect =
+        allocate_with_align_self(ui, outer_size, node.align_self, parent_is_row);
     let inner_rect = outer_rect.shrink(margin);
 
     ui.painter().rect_filled(inner_rect, 0.0, bg);
@@ -533,7 +584,8 @@ fn build_container(
 
     // Reserve space including margin
     let outer_size = Vec2::new(container_w + margin * 2.0, container_h + margin * 2.0);
-    let (outer_rect, _) = ui.allocate_exact_size(outer_size, egui::Sense::hover());
+    let outer_rect =
+        allocate_with_align_self(ui, outer_size, node.align_self, parent_is_row);
     let inner_rect = outer_rect.shrink(margin + padding);
 
     // Paint background

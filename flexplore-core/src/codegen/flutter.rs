@@ -257,9 +257,9 @@ fn emit_flutter_inner(
         let inner_depth = if has_container { depth + 1 } else { depth };
         let ipad = "  ".repeat(inner_depth);
 
-        let eff_jc = effective_justify(node.justify_content, is_reversed);
-
         if node.flex_wrap != FlexWrap::NoWrap {
+            // For Wrap, textDirection/verticalDirection handles axis reversal
+            // natively, so no effective_justify swap or child reversal needed.
             writeln!(buf, "{ipad}Wrap(")?;
             writeln!(
                 buf,
@@ -270,6 +270,13 @@ fn emit_flutter_inner(
                     "Axis.vertical"
                 }
             )?;
+            if is_reversed {
+                if is_row {
+                    writeln!(buf, "{ipad}  textDirection: TextDirection.rtl,")?;
+                } else {
+                    writeln!(buf, "{ipad}  verticalDirection: VerticalDirection.up,")?;
+                }
+            }
             if node.flex_wrap == FlexWrap::WrapReverse {
                 if is_row {
                     writeln!(buf, "{ipad}  verticalDirection: VerticalDirection.up,")?;
@@ -277,7 +284,7 @@ fn emit_flutter_inner(
                     writeln!(buf, "{ipad}  textDirection: TextDirection.rtl,")?;
                 }
             }
-            if let Some(a) = dart_wrap_alignment(eff_jc) {
+            if let Some(a) = dart_wrap_alignment(node.justify_content) {
                 writeln!(buf, "{ipad}  alignment: {a},")?;
             }
             if let Some(ra) = dart_wrap_run_alignment(node.align_content) {
