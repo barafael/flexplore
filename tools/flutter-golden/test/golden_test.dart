@@ -51,11 +51,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: AlignContentSpaceBetween(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: AlignContentSpaceBetween(),
+          ),
         ),
       ),
     );
@@ -72,11 +75,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: AlignItemsCenter(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: AlignItemsCenter(),
+          ),
         ),
       ),
     );
@@ -93,11 +99,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: AlignItemsStretch(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: AlignItemsStretch(),
+          ),
         ),
       ),
     );
@@ -114,11 +123,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: AlignSelfCenter(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: AlignSelfCenter(),
+          ),
         ),
       ),
     );
@@ -135,11 +147,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: AllHidden(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: AllHidden(),
+          ),
         ),
       ),
     );
@@ -156,11 +171,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: Dark2Palette(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: Dark2Palette(),
+          ),
         ),
       ),
     );
@@ -177,11 +195,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: DeepChain3(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: DeepChain3(),
+          ),
         ),
       ),
     );
@@ -198,11 +219,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: DirectionColumn(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: DirectionColumn(),
+          ),
         ),
       ),
     );
@@ -219,11 +243,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: DirectionColumnReverse(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: DirectionColumnReverse(),
+          ),
         ),
       ),
     );
@@ -240,11 +267,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: DirectionRowReverse(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: DirectionRowReverse(),
+          ),
         ),
       ),
     );
@@ -261,11 +291,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: FlexBasisPercent(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: FlexBasisPercent(),
+          ),
         ),
       ),
     );
@@ -282,11 +315,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: GapsMixed(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: GapsMixed(),
+          ),
         ),
       ),
     );
@@ -303,11 +339,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: GrowShrink(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: GrowShrink(),
+          ),
         ),
       ),
     );
@@ -324,11 +363,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: HiddenChild(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: HiddenChild(),
+          ),
         ),
       ),
     );
@@ -345,11 +387,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: JustifyCenter(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: JustifyCenter(),
+          ),
         ),
       ),
     );
@@ -366,11 +411,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: JustifySpaceBetween(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: JustifySpaceBetween(),
+          ),
         ),
       ),
     );
@@ -387,11 +435,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: JustifySpaceEvenly(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: JustifySpaceEvenly(),
+          ),
         ),
       ),
     );
@@ -408,11 +459,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: MinMaxSizes(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: MinMaxSizes(),
+          ),
         ),
       ),
     );
@@ -429,11 +483,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: NestedMixed(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: NestedMixed(),
+          ),
         ),
       ),
     );
@@ -450,11 +507,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: OrderedChildren(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: OrderedChildren(),
+          ),
         ),
       ),
     );
@@ -471,11 +531,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: PaddingMargin(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: PaddingMargin(),
+          ),
         ),
       ),
     );
@@ -492,11 +555,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: SingleLeaf(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: SingleLeaf(),
+          ),
         ),
       ),
     );
@@ -513,11 +579,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: TplCardGrid(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: TplCardGrid(),
+          ),
         ),
       ),
     );
@@ -534,11 +603,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: TplHolyGrail(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: TplHolyGrail(),
+          ),
         ),
       ),
     );
@@ -555,11 +627,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: TplNavBar(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: TplNavBar(),
+          ),
         ),
       ),
     );
@@ -576,11 +651,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: TplSidebarContent(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: TplSidebarContent(),
+          ),
         ),
       ),
     );
@@ -597,11 +675,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: TwoChildren(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: TwoChildren(),
+          ),
         ),
       ),
     );
@@ -618,11 +699,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: VwVhSizes(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: VwVhSizes(),
+          ),
         ),
       ),
     );
@@ -639,11 +723,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: WideFlat5(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: WideFlat5(),
+          ),
         ),
       ),
     );
@@ -660,11 +747,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: WrapNowrap(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: WrapNowrap(),
+          ),
         ),
       ),
     );
@@ -681,11 +771,14 @@ void main() {
     addTearDown(() => tester.view.resetDevicePixelRatio());
     await tester.binding.setSurfaceSize(const Size(400, 300));
     await tester.pumpWidget(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF1C1C2E),
-          body: WrapReverse(),
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: WrapReverse(),
+          ),
         ),
       ),
     );
