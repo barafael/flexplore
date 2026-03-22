@@ -1,5 +1,6 @@
 mod bevy;
 mod css;
+mod egui;
 mod flutter;
 mod iced;
 mod react;
@@ -13,6 +14,7 @@ mod snapshot_tests;
 
 pub use bevy::emit_bevy_code;
 pub use css::emit_html_css;
+pub use egui::emit_egui;
 pub use flutter::emit_flutter;
 pub use iced::emit_iced;
 pub use react::emit_react;

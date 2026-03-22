@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "tools/update-snapshots", "tools/bevy-golden", "tools/iced-golden", "tools/build-overview"]
+members = [".", "tools/update-snapshots", "tools/bevy-golden", "tools/iced-golden", "tools/egui-golden", "tools/build-overview"]
 
 [package]
 name = "flexplore"

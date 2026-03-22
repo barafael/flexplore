@@ -45,6 +45,7 @@ const OVERVIEW_IMAGES: &[(&str, &str)] = &[
     ("Flutter", "rendered_flutter.png"),
     ("SwiftUI", "rendered_swift.png"),
     ("Iced", "rendered_iced.png"),
+    ("egui", "rendered_egui.png"),
 ];
 
 fn main() -> Result<()> {
@@ -106,6 +107,10 @@ fn main() -> Result<()> {
 
     if run_backend("iced") {
         render_iced(&testdata, &root, &filter)?;
+    }
+
+    if run_backend("egui") {
+        render_egui(&testdata, &root, &filter)?;
     }
 
     build_overview(&testdata)?;
@@ -398,6 +403,16 @@ fn render_iced(testdata: &Path, root: &Path, filter: &[String]) -> Result<()> {
         .args(filter)
         .current_dir(root);
     run_cmd("Rendering Iced screenshots", &mut cmd)?;
+    Ok(())
+}
+
+fn render_egui(testdata: &Path, root: &Path, filter: &[String]) -> Result<()> {
+    let mut cmd = Command::new("cargo");
+    cmd.args(["run", "--release", "-p", "egui-golden", "--"])
+        .arg(testdata)
+        .args(filter)
+        .current_dir(root);
+    run_cmd("Rendering egui screenshots", &mut cmd)?;
     Ok(())
 }
 
