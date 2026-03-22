@@ -300,6 +300,9 @@ fn emit_flutter_inner(
                 writeln!(buf, "{ipad}  runSpacing: {s},")?;
             }
         } else {
+            // For Row/Column (NoWrap), reverse children + swap justify to
+            // approximate reversed direction.
+            let eff_jc = effective_justify(node.justify_content, is_reversed);
             let widget = if is_row { "Row" } else { "Column" };
             writeln!(buf, "{ipad}{widget}(")?;
             writeln!(
@@ -334,12 +337,19 @@ fn emit_flutter_inner(
                 FlexDirection::ColumnReverse => "ColumnReverse",
                 _ => unreachable!(),
             };
-            writeln!(
-                buf,
-                "{ipad}    // NOTE: flex-direction: {dir_label} — children reversed in source to approximate visual order"
-            )?;
-            children.reverse();
-            starts.reverse();
+            if node.flex_wrap == FlexWrap::NoWrap {
+                writeln!(
+                    buf,
+                    "{ipad}    // NOTE: flex-direction: {dir_label} — children reversed in source to approximate visual order"
+                )?;
+                children.reverse();
+                starts.reverse();
+            } else {
+                writeln!(
+                    buf,
+                    "{ipad}    // NOTE: flex-direction: {dir_label} — handled by textDirection/verticalDirection"
+                )?;
+            }
         }
         for (child, start) in children.iter().zip(starts.iter()) {
             let mut idx = *start;

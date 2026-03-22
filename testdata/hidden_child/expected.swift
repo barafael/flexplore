@@ -26,6 +26,7 @@ struct FlowLayout: Layout {
     var spacing: CGFloat = 0
     var lineSpacing: CGFloat = 0
     var lineAlignment: LineAlignment = .start
+    var mainReversed: Bool = false
     var reversed: Bool = false
 
     enum LineAlignment: Sendable {
@@ -107,13 +108,18 @@ struct FlowLayout: Layout {
 
         var cross = crossStart
         for line in lines {
-            var main: CGFloat = 0
+            var main: CGFloat = mainReversed ? maxMain : 0
             for idx in line.range {
+                if mainReversed { main -= mainLength(sizes[idx]) }
                 let pt = axis == .horizontal
                     ? CGPoint(x: bounds.minX + main, y: bounds.minY + cross)
                     : CGPoint(x: bounds.minX + cross, y: bounds.minY + main)
                 subviews[idx].place(at: pt, proposal: .unspecified)
-                main += mainLength(sizes[idx]) + spacing
+                if mainReversed {
+                    main -= spacing
+                } else {
+                    main += mainLength(sizes[idx]) + spacing
+                }
             }
             cross += line.crossLength + gap
         }

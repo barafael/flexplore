@@ -338,17 +338,6 @@ fn build_container<'a>(
     let stretch = node.align_items == AlignItems::Stretch;
     let wraps = matches!(node.flex_wrap, FlexWrap::Wrap | FlexWrap::WrapReverse);
 
-    let jc = effective_justify(&node.justify_content, is_reversed);
-    let uses_space_justification = matches!(
-        jc,
-        JustifyContent::SpaceBetween
-            | JustifyContent::SpaceEvenly
-            | JustifyContent::SpaceAround
-            | JustifyContent::Center
-            | JustifyContent::FlexEnd
-            | JustifyContent::End
-    );
-
     // Sort children by order and pre-compute leaf_idx starts so palette
     // colours track with original nodes even when reversed.
     let mut children: Vec<&NodeConfig> = node.children.iter().collect();
@@ -360,10 +349,29 @@ fn build_container<'a>(
         acc += leaf_count(child);
     }
     *leaf_idx = acc;
-    if is_reversed {
+
+    // For non-wrapping layouts, reverse children + swap justify to approximate
+    // reversed direction. For wrapping, handle direction in the line builder.
+    if is_reversed && !wraps {
         children.reverse();
         starts.reverse();
     }
+    let jc = if wraps {
+        // Wrapping + reversed: direction handled by reversing items within
+        // each line, so no justify swap needed.
+        node.justify_content.clone()
+    } else {
+        effective_justify(&node.justify_content, is_reversed)
+    };
+    let uses_space_justification = matches!(
+        jc,
+        JustifyContent::SpaceBetween
+            | JustifyContent::SpaceEvenly
+            | JustifyContent::SpaceAround
+            | JustifyContent::Center
+            | JustifyContent::FlexEnd
+            | JustifyContent::End
+    );
 
     // Gap values (main-axis and cross-axis)
     let main_gap = if is_row {
@@ -454,16 +462,31 @@ fn build_container<'a>(
             lines.reverse();
         }
 
-        // Build each line as a Row/Column, then stack lines in the cross direction
+        // Build each line as a Row/Column, then stack lines in the cross direction.
+        // For reversed direction, reverse items within each line and right-align
+        // (a Space widget pushes items to the end, matching CSS row-reverse flex-start).
         let line_widgets: Vec<Element<'a, Message>> = lines
             .into_iter()
-            .map(|line_elements| {
+            .map(|mut line_elements| {
+                if is_reversed {
+                    line_elements.reverse();
+                }
                 if is_row {
-                    let mut r = row(line_elements).spacing(main_gap_px).height(Length::Fill);
+                    let mut elements: Vec<Element<'a, Message>> = Vec::new();
+                    if is_reversed {
+                        elements.push(Space::new(Length::Fill, Length::Shrink).into());
+                    }
+                    elements.extend(line_elements);
+                    let mut r = row(elements).spacing(main_gap_px).height(Length::Fill);
                     r = apply_row_align(&node.align_items, r);
                     r.into()
                 } else {
-                    let mut c = column(line_elements)
+                    let mut elements: Vec<Element<'a, Message>> = Vec::new();
+                    if is_reversed {
+                        elements.push(Space::new(Length::Shrink, Length::Fill).into());
+                    }
+                    elements.extend(line_elements);
+                    let mut c = column(elements)
                         .spacing(main_gap_px)
                         .width(Length::Fill);
                     c = apply_column_align(&node.align_items, c);

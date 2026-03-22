@@ -222,6 +222,7 @@ pub fn panel_system(
     egui::SidePanel::left("flex_panel")
         .exact_width(PANEL_WIDTH)
         .resizable(false)
+        .show_separator_line(false)
         .show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.add_space(4.0);
@@ -629,7 +630,7 @@ pub fn panel_system(
 
                 ui.add_space(4.0);
                 ui.label("Copy code:");
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     let pal = cfg.palette;
                     let copy_targets: &[(&str, CodegenFn)] = &[
                         ("Bevy", emit_bevy_code),

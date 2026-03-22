@@ -1,25 +1,24 @@
 struct ContentView: View {
     public var body: some View {
-        FlowLayout(axis: .vertical, spacing: 8.0, lineSpacing: 8.0) {
-            // NOTE: flex-direction: ColumnReverse — children reversed
-            Text("C")
-                .font(.system(size: 26))
-                .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
-                .frame(width: 60.0, height: 40.0)
-                .padding(8.0)
-                .background(Color(red: 0.80, green: 0.92, blue: 0.77))
-            Text("B")
-                .font(.system(size: 26))
-                .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
-                .frame(width: 120.0, height: 80.0)
-                .padding(8.0)
-                .background(Color(red: 0.70, green: 0.80, blue: 0.89))
+        FlowLayout(axis: .vertical, spacing: 8.0, lineSpacing: 8.0, mainReversed: true) {
             Text("A")
                 .font(.system(size: 26))
                 .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
                 .frame(width: 200.0, height: 60.0)
                 .padding(8.0)
                 .background(Color(red: 0.98, green: 0.71, blue: 0.68))
+            Text("B")
+                .font(.system(size: 26))
+                .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
+                .frame(width: 120.0, height: 80.0)
+                .padding(8.0)
+                .background(Color(red: 0.70, green: 0.80, blue: 0.89))
+            Text("C")
+                .font(.system(size: 26))
+                .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
+                .frame(width: 60.0, height: 40.0)
+                .padding(8.0)
+                .background(Color(red: 0.80, green: 0.92, blue: 0.77))
         }
         .frame(minWidth: nil, maxWidth: .infinity, minHeight: nil, maxHeight: .infinity, alignment: .topLeading)
         .padding(12.0)
@@ -32,6 +31,7 @@ struct FlowLayout: Layout {
     var spacing: CGFloat = 0
     var lineSpacing: CGFloat = 0
     var lineAlignment: LineAlignment = .start
+    var mainReversed: Bool = false
     var reversed: Bool = false
 
     enum LineAlignment: Sendable {
@@ -113,13 +113,18 @@ struct FlowLayout: Layout {
 
         var cross = crossStart
         for line in lines {
-            var main: CGFloat = 0
+            var main: CGFloat = mainReversed ? maxMain : 0
             for idx in line.range {
+                if mainReversed { main -= mainLength(sizes[idx]) }
                 let pt = axis == .horizontal
                     ? CGPoint(x: bounds.minX + main, y: bounds.minY + cross)
                     : CGPoint(x: bounds.minX + cross, y: bounds.minY + main)
                 subviews[idx].place(at: pt, proposal: .unspecified)
-                main += mainLength(sizes[idx]) + spacing
+                if mainReversed {
+                    main -= spacing
+                } else {
+                    main += mainLength(sizes[idx]) + spacing
+                }
             }
             cross += line.crossLength + gap
         }

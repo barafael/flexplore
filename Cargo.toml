@@ -1,36 +1,8 @@
 [workspace]
-members = [".", "flexplore-core", "tools/update-snapshots", "tools/bevy-golden", "tools/iced-golden", "tools/egui-golden", "tools/dioxus-golden", "tools/react-native-golden", "tools/build-overview"]
 
-[package]
-name = "flexplore"
-version = "0.1.0"
-edition = "2024"
+resolver = "3"
 
-[dependencies]
-flexplore-core = { path = "flexplore-core", features = ["bevy"] }
-bevy = { version = "0.18", features = ["serialize"] }
-bevy_egui = "0.39"
-rand = "0.8"
-getrandom = { version = "0.2", features = ["js"] }
-getrandom_0_3 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
-strum = { version = "0.28.0", features = ["derive"] }
-anyhow = "1.0.102"
-catppuccin = { version = "2", features = ["serde"] }
-colorous = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-image = { version = "0.25.10", default-features = false, features = ["png"] }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-dirs = "6"
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3", features = ["Window", "Storage", "Blob", "Url", "HtmlAnchorElement", "Document"] }
-wasm-bindgen = "0.2"
-js-sys = "0.3"
-
-[dev-dependencies]
-test-case = "3"
+members = ["flexplore", "flexplore-core", "tools/update-snapshots", "tools/bevy-golden", "tools/iced-golden", "tools/egui-golden", "tools/dioxus-golden", "tools/react-native-golden", "tools/build-overview"]
 
 [profile.dev]
 opt-level = 1

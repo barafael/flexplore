@@ -6,19 +6,19 @@ Widget build(BuildContext context) {
     margin: EdgeInsets.all(0.0),
     child:     Wrap(
       direction: Axis.horizontal,
-      alignment: WrapAlignment.end,
+      textDirection: TextDirection.rtl,
       spacing: 8.0,
       runSpacing: 8.0,
       children: [
-        // NOTE: flex-direction: RowReverse — children reversed in source to approximate visual order
+        // NOTE: flex-direction: RowReverse — handled by textDirection/verticalDirection
         Container(
-          width: 60.0,
-          height: 40.0,
+          width: 200.0,
+          height: 60.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
-          color: Color.fromRGBO(204, 235, 197, 1.0),
+          color: Color.fromRGBO(251, 180, 174, 1.0),
           alignment: Alignment.center,
-          child: Text('C',
+          child: Text('A',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
         )
@@ -36,13 +36,13 @@ Widget build(BuildContext context) {
         )
         ,
         Container(
-          width: 200.0,
-          height: 60.0,
+          width: 60.0,
+          height: 40.0,
           padding: EdgeInsets.all(8.0),
           margin: EdgeInsets.all(0.0),
-          color: Color.fromRGBO(251, 180, 174, 1.0),
+          color: Color.fromRGBO(204, 235, 197, 1.0),
           alignment: Alignment.center,
-          child: Text('A',
+          child: Text('C',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
         )

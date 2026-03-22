@@ -190,16 +190,19 @@ fn spawn_node(
         }
         let scale = node.text_scale();
         let overlay = commands
-            .spawn(Node {
-                position_type: PositionType::Absolute,
-                top: Val::Px(0.0),
-                left: Val::Px(0.0),
-                right: Val::Px(0.0),
-                bottom: Val::Px(0.0),
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
-                ..default()
-            })
+            .spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    top: Val::Px(0.0),
+                    left: Val::Px(0.0),
+                    right: Val::Px(0.0),
+                    bottom: Val::Px(0.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ))
             .with_child((
                 Text::new(node.label.clone()),
                 TextFont {
@@ -207,6 +210,7 @@ fn spawn_node(
                     ..default()
                 },
                 TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
+                Pickable::IGNORE,
             ))
             .id();
         commands.entity(entity).add_child(overlay);
@@ -237,6 +241,7 @@ fn spawn_node(
                     left: Val::Px(4.0),
                     ..default()
                 },
+                Pickable::IGNORE,
             ))
             .id();
         commands.entity(entity).add_child(lbl);

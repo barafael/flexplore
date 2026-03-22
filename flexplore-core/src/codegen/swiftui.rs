@@ -278,7 +278,9 @@ fn emit_swiftui_node(
         }
         *leaf_idx = acc;
 
-        if is_reversed {
+        // Only reverse children for HStack/VStack (non-wrapping).
+        // FlowLayout handles reversal natively via mainReversed.
+        if is_reversed && !is_wrapping {
             children.reverse();
             starts.reverse();
         }
@@ -309,22 +311,13 @@ fn emit_swiftui_node(
             if line_align != ".start" {
                 args.push(format!("lineAlignment: {line_align}"));
             }
+            if is_reversed {
+                args.push("mainReversed: true".to_string());
+            }
             if wrap_reversed {
                 args.push("reversed: true".to_string());
             }
             writeln!(buf, "{pad}FlowLayout({}) {{", args.join(", "))?;
-
-            if is_reversed {
-                let dir_label = match node.flex_direction {
-                    FlexDirection::RowReverse => "RowReverse",
-                    FlexDirection::ColumnReverse => "ColumnReverse",
-                    _ => unreachable!(),
-                };
-                writeln!(
-                    buf,
-                    "{pad}    // NOTE: flex-direction: {dir_label} — children reversed"
-                )?;
-            }
 
             for (child, start) in children.iter().zip(starts.iter()) {
                 let mut idx = *start;
@@ -598,6 +591,7 @@ const FLOW_LAYOUT_STRUCT: &str = r#"struct FlowLayout: Layout {
     var spacing: CGFloat = 0
     var lineSpacing: CGFloat = 0
     var lineAlignment: LineAlignment = .start
+    var mainReversed: Bool = false
     var reversed: Bool = false
 
     enum LineAlignment: Sendable {
@@ -679,13 +673,18 @@ const FLOW_LAYOUT_STRUCT: &str = r#"struct FlowLayout: Layout {
 
         var cross = crossStart
         for line in lines {
-            var main: CGFloat = 0
+            var main: CGFloat = mainReversed ? maxMain : 0
             for idx in line.range {
+                if mainReversed { main -= mainLength(sizes[idx]) }
                 let pt = axis == .horizontal
                     ? CGPoint(x: bounds.minX + main, y: bounds.minY + cross)
                     : CGPoint(x: bounds.minX + cross, y: bounds.minY + main)
                 subviews[idx].place(at: pt, proposal: .unspecified)
-                main += mainLength(sizes[idx]) + spacing
+                if mainReversed {
+                    main -= spacing
+                } else {
+                    main += mainLength(sizes[idx]) + spacing
+                }
             }
             cross += line.crossLength + gap
         }

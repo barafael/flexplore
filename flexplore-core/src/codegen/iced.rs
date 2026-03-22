@@ -309,20 +309,12 @@ fn emit_iced_node(
         writeln!(buf, "{pad}{macro_name}[")?;
 
         // Flex-wrap note
-        if node.flex_wrap != FlexWrap::NoWrap {
-            if is_row {
-                writeln!(
-                    buf,
-                    "{pad}    // NOTE: flex-wrap: {:?} — call .wrap() on the Row for wrapping support",
-                    node.flex_wrap
-                )?;
-            } else {
-                writeln!(
-                    buf,
-                    "{pad}    // NOTE: flex-wrap: {:?} — Iced Column does not support wrapping",
-                    node.flex_wrap
-                )?;
-            }
+        if node.flex_wrap != FlexWrap::NoWrap && !is_row {
+            writeln!(
+                buf,
+                "{pad}    // NOTE: flex-wrap: {:?} — Iced Column does not support wrapping",
+                node.flex_wrap
+            )?;
         }
 
         // Align-content note (no Iced equivalent)
@@ -415,6 +407,12 @@ fn emit_iced_node(
         }
 
         write!(buf, "{pad}]")?;
+
+        // Wrapping — emit .wrap() on Row
+        if node.flex_wrap != FlexWrap::NoWrap && is_row {
+            writeln!(buf)?;
+            write!(buf, "{pad}.wrap()")?;
+        }
 
         // Spacing
         if uses_space_justification {

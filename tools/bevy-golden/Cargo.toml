@@ -6,5 +6,5 @@ edition = "2024"
 [dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
-flexplore = { path = "../.." }
+flexplore = { path = "../../flexplore" }
 serde_json = "1"
