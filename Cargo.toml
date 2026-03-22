@@ -4,6 +4,8 @@ resolver = "3"
 
 members = ["flexplore", "flexplore-core", "tools/update-snapshots", "tools/bevy-golden", "tools/iced-golden", "tools/egui-golden", "tools/dioxus-golden", "tools/react-native-golden", "tools/build-overview"]
 
+default-members = ["flexplore"]
+
 [profile.dev]
 opt-level = 1
 
