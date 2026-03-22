@@ -4,8 +4,8 @@ use strum::IntoEnumIterator;
 
 use crate::history::UndoHistory;
 use flexplore::codegen::{
-    emit_bevy_code, emit_dioxus, emit_flutter, emit_html_css, emit_react, emit_swiftui,
-    emit_tailwind,
+    emit_bevy_code, emit_dioxus, emit_flutter, emit_html_css, emit_react, emit_react_native,
+    emit_swiftui, emit_tailwind,
 };
 use flexplore::config::*;
 
@@ -638,6 +638,7 @@ pub fn panel_system(
                         ("React", emit_react),
                         ("SwiftUI", emit_swiftui),
                         ("Flutter", emit_flutter),
+                        ("React Native", emit_react_native),
                         ("Dioxus", emit_dioxus),
                     ];
                     for (name, emitter) in copy_targets {

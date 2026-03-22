@@ -45,6 +45,7 @@ const OVERVIEW_IMAGES: &[(&str, &str)] = &[
     ("Flutter", "rendered_flutter.png"),
     ("SwiftUI", "rendered_swift.png"),
     ("Iced", "rendered_iced.png"),
+    ("React Native", "rendered_react_native.png"),
     ("Dioxus", "rendered_dioxus.png"),
     ("egui", "rendered_egui.png"),
 ];
@@ -116,6 +117,10 @@ fn main() -> Result<()> {
 
     if run_backend("dioxus") {
         render_dioxus(&testdata, &root, &filter)?;
+    }
+
+    if run_backend("react-native") {
+        render_react_native(&testdata, &root, &filter)?;
     }
 
     build_overview(&testdata)?;
@@ -408,6 +413,16 @@ fn render_iced(testdata: &Path, root: &Path, filter: &[String]) -> Result<()> {
         .args(filter)
         .current_dir(root);
     run_cmd("Rendering Iced screenshots", &mut cmd)?;
+    Ok(())
+}
+
+fn render_react_native(testdata: &Path, root: &Path, filter: &[String]) -> Result<()> {
+    let mut cmd = Command::new("cargo");
+    cmd.args(["run", "--release", "-p", "react-native-golden", "--"])
+        .arg(testdata)
+        .args(filter)
+        .current_dir(root);
+    run_cmd("Rendering React Native screenshots", &mut cmd)?;
     Ok(())
 }
 

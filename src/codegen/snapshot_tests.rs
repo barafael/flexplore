@@ -5,7 +5,7 @@ use test_case::test_case;
 
 use crate::codegen::{
     emit_bevy_code, emit_dioxus, emit_egui, emit_flutter, emit_html_css, emit_iced, emit_react,
-    emit_swiftui, emit_tailwind,
+    emit_react_native, emit_swiftui, emit_tailwind,
 };
 use crate::config::LayoutInput;
 use crate::fixtures::all_fixtures;
@@ -34,6 +34,7 @@ fn run_snapshot(name: &str) -> Result<()> {
         ("expected.swift", emit_swiftui(&f.node, f.palette)?),
         ("expected.dart", emit_flutter(&f.node, f.palette)?),
         ("expected.iced.rs", emit_iced(&f.node, f.palette)?),
+        ("expected.rn.jsx", emit_react_native(&f.node, f.palette)?),
         ("expected.dioxus.rs", emit_dioxus(&f.node, f.palette)?),
         ("expected.egui.rs", emit_egui(&f.node, f.palette)?),
     ];
@@ -75,6 +76,10 @@ fn run_snapshot(name: &str) -> Result<()> {
         (
             "expected.iced.rs",
             emit_iced(&from_json.node, from_json.palette)?,
+        ),
+        (
+            "expected.rn.jsx",
+            emit_react_native(&from_json.node, from_json.palette)?,
         ),
         (
             "expected.dioxus.rs",

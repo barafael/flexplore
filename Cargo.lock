@@ -6200,6 +6200,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "react-native-golden"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "colorous",
+ "headless_chrome",
+ "image 0.25.10",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "read-fonts"
 version = "0.22.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
