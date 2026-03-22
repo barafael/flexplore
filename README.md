@@ -21,13 +21,13 @@ Interactive flexbox layout explorer. Build node trees, tweak every flexbox prope
 
 ## Keyboard Shortcuts
 
-| Action           | Shortcut               |
-|------------------|------------------------|
-| Undo             | Ctrl+Z                 |
-| Redo             | Ctrl+Y / Ctrl+Shift+Z  |
-| Add child        | Ctrl+Enter             |
-| Add sibling      | Shift+Enter            |
-| Delete node      | Delete                 |
-| Select parent    | Escape                 |
-| Next sibling     | Down                   |
-| Previous sibling | Up                     |
+| Action           | Shortcut              |
+| ---------------- | --------------------- |
+| Undo             | Ctrl+Z                |
+| Redo             | Ctrl+Y / Ctrl+Shift+Z |
+| Add child        | Ctrl+Enter            |
+| Add sibling      | Shift+Enter           |
+| Delete node      | Delete                |
+| Select parent    | Escape                |
+| Next sibling     | Down                  |
+| Previous sibling | Up                    |

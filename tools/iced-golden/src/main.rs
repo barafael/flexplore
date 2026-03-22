@@ -3,14 +3,18 @@
 //! Reads `testdata/{case}/input.json`, renders the layout with Iced,
 //! captures a screenshot, and saves `rendered_iced.png`.
 
-use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use iced::widget::{Space, column, container, row, text};
-use iced::window;
 use iced::{Color, Element, Length, Padding, Size, Subscription, Task, Theme};
+use iced::{
+    widget::{Space, column, container, row, text},
+    window,
+};
 
 mod config;
 use config::{
@@ -33,7 +37,7 @@ struct Arguments {
 const VIEWPORT_W: f32 = 400.0;
 const VIEWPORT_H: f32 = 300.0;
 
-// ─── Application state ──────────────────────────────────────────────────────
+// --- Application state ---
 
 struct App {
     jobs: Vec<RenderJob>,
@@ -137,7 +141,7 @@ impl App {
     }
 }
 
-// ─── Screenshot saving ──────────────────────────────────────────────────────
+// --- Screenshot saving ---
 
 fn save_screenshot(path: &Path, screenshot: &window::Screenshot) {
     let size = screenshot.size;
@@ -156,7 +160,7 @@ fn save_screenshot(path: &Path, screenshot: &window::Screenshot) {
     }
 }
 
-// ─── Job loading ────────────────────────────────────────────────────────────
+// --- Job loading ---
 
 fn load_jobs(testdata_dir: &Path, filter: &[&str]) -> Result<Vec<RenderJob>> {
     let mut jobs = Vec::new();
@@ -196,7 +200,7 @@ fn load_jobs(testdata_dir: &Path, filter: &[&str]) -> Result<Vec<RenderJob>> {
     Ok(jobs)
 }
 
-// ─── Widget building ────────────────────────────────────────────────────────
+// --- Widget building ---
 
 fn build_widget<'a>(
     node: &NodeConfig,
@@ -382,7 +386,7 @@ fn build_container<'a>(
     };
 
     let layout: Element<'a, Message> = if wraps {
-        // ── Wrapping layout ──────────────────────────────────────────────
+        // --- Wrapping layout ---
         // Compute available main-axis space for line breaking
         let parent_main = if is_row { VIEWPORT_W } else { VIEWPORT_H };
         let container_main =
@@ -475,7 +479,7 @@ fn build_container<'a>(
             row(line_widgets).spacing(cross_gap_px).into()
         }
     } else {
-        // ── Single-line layout ───────────────────────────────────────────
+        // --- Single-line layout ---
 
         // Pre-compute flex-shrink: if children overflow, shrink them proportionally.
         let parent_main = if is_row { VIEWPORT_W } else { VIEWPORT_H };
@@ -707,7 +711,7 @@ fn fill_portion(grow: f32) -> Length {
     }
 }
 
-// ─── Value conversion helpers ───────────────────────────────────────────────
+// --- Value conversion helpers ---
 
 fn to_length(v: &ValueConfig) -> Length {
     match v {
@@ -737,15 +741,15 @@ fn apply_min_max<'a>(
     mut c: iced::widget::Container<'a, Message>,
     node: &NodeConfig,
 ) -> iced::widget::Container<'a, Message> {
-    if let ValueConfig::Px(n) = node.max_width {
-        if n > 0.0 {
-            c = c.max_width(n);
-        }
+    if let ValueConfig::Px(n) = node.max_width
+        && n > 0.0
+    {
+        c = c.max_width(n);
     }
-    if let ValueConfig::Px(n) = node.max_height {
-        if n > 0.0 {
-            c = c.max_height(n);
-        }
+    if let ValueConfig::Px(n) = node.max_height
+        && n > 0.0
+    {
+        c = c.max_height(n);
     }
     // Iced doesn't have min_width/min_height on Container, but we can
     // approximate via a minimum-sized Space inside a wrapper if needed.
@@ -836,7 +840,7 @@ fn flex_basis_length(basis: &ValueConfig) -> Length {
     }
 }
 
-// ─── Palette colors (mirrors flexplore's art::palette_color) ────────────────
+// --- Palette colors (mirrors flexplore's art::palette_color) ---
 
 fn palette_color(palette: ColorPalette, idx: usize) -> (f32, f32, f32) {
     let c = match palette {

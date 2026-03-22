@@ -11,7 +11,7 @@ fn build_ui(ui: &mut egui::Ui) {
                     .fill(egui::Color32::from_rgb(251, 180, 174))
                     .inner_margin(8.0)
                     .show(ui, |ui| {
-                        ui.set_min_size(egui::vec2(200.0 /* flex-basis: 50% of parent */, 80.0));
+                        ui.set_min_size(egui::vec2(40.0, 80.0));
                         ui.centered_and_justified(|ui| {
                             ui.label(egui::RichText::new("50%").size(26.0).color(egui::Color32::from_rgba_premultiplied(13, 13, 26, 217)));
                         });
@@ -21,7 +21,7 @@ fn build_ui(ui: &mut egui::Ui) {
                     .fill(egui::Color32::from_rgb(179, 205, 227))
                     .inner_margin(8.0)
                     .show(ui, |ui| {
-                        ui.set_min_size(egui::vec2(100.0 /* flex-basis: 25% of parent */, 80.0));
+                        ui.set_min_size(egui::vec2(40.0, 80.0));
                         ui.centered_and_justified(|ui| {
                             ui.label(egui::RichText::new("25%").size(26.0).color(egui::Color32::from_rgba_premultiplied(13, 13, 26, 217)));
                         });
@@ -31,7 +31,7 @@ fn build_ui(ui: &mut egui::Ui) {
                     .fill(egui::Color32::from_rgb(204, 235, 197))
                     .inner_margin(8.0)
                     .show(ui, |ui| {
-                        ui.set_min_size(egui::vec2(100.0 /* flex-basis: 25% of parent */, 80.0));
+                        ui.set_min_size(egui::vec2(40.0, 80.0));
                         ui.centered_and_justified(|ui| {
                             ui.label(egui::RichText::new("25%").size(26.0).color(egui::Color32::from_rgba_premultiplied(13, 13, 26, 217)));
                         });

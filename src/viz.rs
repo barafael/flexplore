@@ -5,8 +5,8 @@ use bevy::{
 };
 use bevy_egui::EguiContexts;
 
-use flexplore::art::{ArtExpressions, ArtState, palette_bevy_color};
-use flexplore::config::*;
+use flexplore::art::{ArtExpressions, ArtState, palette_bevy_color, render_art};
+use flexplore::config::{ART_TEXTURE_SIZE, BackgroundMode, FlexConfig, NodeConfig, PANEL_WIDTH};
 
 // ─── Components ───────────────────────────────────────────────────────────────
 
@@ -46,7 +46,7 @@ pub fn rebuild_viz(
         for i in 0..n {
             let iseed = base.wrapping_add((i as u64).wrapping_mul(0x9e3779b97f4a7c15));
             let exprs = ArtExpressions::generate(iseed, depth);
-            let pixels = style.render(&exprs, iseed, 0.0);
+            let pixels = render_art(style, &exprs, iseed, 0.0);
             let image = Image::new(
                 Extent3d {
                     width: ART_TEXTURE_SIZE,
@@ -146,25 +146,25 @@ fn spawn_node(
         } else {
             Display::None
         },
-        flex_direction: node.flex_direction,
-        flex_wrap: node.flex_wrap,
-        justify_content: node.justify_content,
-        align_items: node.align_items,
-        align_content: node.align_content,
-        row_gap: node.row_gap.to_val(),
-        column_gap: node.column_gap.to_val(),
+        flex_direction: node.flex_direction.into(),
+        flex_wrap: node.flex_wrap.into(),
+        justify_content: node.justify_content.into(),
+        align_items: node.align_items.into(),
+        align_content: node.align_content.into(),
+        row_gap: node.row_gap.to_bevy_val(),
+        column_gap: node.column_gap.to_bevy_val(),
         flex_grow: node.flex_grow,
         flex_shrink: node.flex_shrink,
-        flex_basis: node.flex_basis.to_val(),
-        align_self: node.align_self,
-        width: node.width.to_val(),
-        height: node.height.to_val(),
-        min_width: node.min_width.to_val(),
-        min_height: node.min_height.to_val(),
-        max_width: node.max_width.to_val(),
-        max_height: node.max_height.to_val(),
-        padding: UiRect::all(node.padding.to_val()),
-        margin: UiRect::all(node.margin.to_val()),
+        flex_basis: node.flex_basis.to_bevy_val(),
+        align_self: node.align_self.into(),
+        width: node.width.to_bevy_val(),
+        height: node.height.to_bevy_val(),
+        min_width: node.min_width.to_bevy_val(),
+        min_height: node.min_height.to_bevy_val(),
+        max_width: node.max_width.to_bevy_val(),
+        max_height: node.max_height.to_bevy_val(),
+        padding: UiRect::all(node.padding.to_bevy_val()),
+        margin: UiRect::all(node.margin.to_bevy_val()),
         border: UiRect::all(Val::Px(border_width)),
         overflow: Overflow::clip(),
         ..default()
@@ -378,7 +378,7 @@ pub fn animate_art(
         .zip(art.seeds.iter())
     {
         if let Some(image) = images.get_mut(handle) {
-            image.data = Some(cfg.art_style.render(exprs, *seed, t));
+            image.data = Some(render_art(cfg.art_style, exprs, *seed, t));
         }
     }
 }

@@ -1,12 +1,12 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use flexplore::codegen::{
+use flexplore_core::codegen::{
     emit_bevy_code, emit_dioxus, emit_egui, emit_flutter, emit_html_css, emit_iced, emit_react,
     emit_react_native, emit_swiftui, emit_tailwind,
 };
-use flexplore::config::LayoutInput;
-use flexplore::fixtures::all_fixtures;
+use flexplore_core::config::LayoutInput;
+use flexplore_core::fixtures::all_fixtures;
 
 fn testdata_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

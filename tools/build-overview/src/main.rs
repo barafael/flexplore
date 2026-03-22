@@ -1,6 +1,8 @@
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
@@ -17,6 +19,11 @@ struct Arguments {
     /// Default: all backends.
     #[arg(long = "backend")]
     backends: Vec<String>,
+
+    /// Skip the `cargo run -p update-snapshots` codegen step.
+    /// Useful in CI when the expected files are already committed.
+    #[arg(long)]
+    skip_codegen: bool,
 }
 
 const VIEWPORT_W: f64 = 400.0;
@@ -66,12 +73,16 @@ fn main() -> Result<()> {
 
     check_wsl()?;
 
-    run_cmd(
-        "Regenerating golden files",
-        Command::new("cargo")
-            .args(["run", "-p", "update-snapshots"])
-            .current_dir(&root),
-    )?;
+    if cli.skip_codegen {
+        eprintln!(">>> Skipping codegen (--skip-codegen)");
+    } else {
+        run_cmd(
+            "Regenerating golden files",
+            Command::new("cargo")
+                .args(["run", "-p", "update-snapshots"])
+                .current_dir(&root),
+        )?;
+    }
 
     if run_backend("bevy") {
         run_cmd(
@@ -177,13 +188,13 @@ fn tool_available(name: &str) -> bool {
 }
 
 fn check_wsl() -> Result<()> {
-    if let Ok(version) = fs::read_to_string("/proc/version") {
-        if version.to_lowercase().contains("microsoft") {
-            bail!(
-                "This tool must run from Git Bash, not WSL.\n\
+    if let Ok(version) = fs::read_to_string("/proc/version")
+        && version.to_lowercase().contains("microsoft")
+    {
+        bail!(
+            "This tool must run from Git Bash, not WSL.\n\
                  Bevy rendering requires native GPU access (DX12)."
-            );
-        }
+        );
     }
     Ok(())
 }
@@ -197,7 +208,7 @@ fn list_cases(
         .context("cannot read testdata directory")?
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
-        .filter(|e| require_file.map_or(true, |f| e.path().join(f).exists()))
+        .filter(|e| require_file.is_none_or(|f| e.path().join(f).exists()))
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .filter(|name| filter.is_empty() || filter.contains(name))
         .collect();

@@ -6,7 +6,6 @@ export default function FlexLayout() {
     <View style={{
       flexDirection: 'column-reverse',
       flexWrap: 'wrap',
-      justifyContent: 'flex-end',
       alignItems: 'flex-start',
       rowGap: 8,
       columnGap: 8,

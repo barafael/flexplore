@@ -1,10 +1,14 @@
 use std::path::PathBuf;
 
-use bevy::prelude::*;
-use bevy::render::RenderPlugin;
-use bevy::render::settings::{Backends, RenderCreation, WgpuSettings};
-use bevy::render::view::window::screenshot::{Screenshot, ScreenshotCaptured};
-use bevy::window::{PrimaryWindow, WindowResolution};
+use bevy::{
+    prelude::*,
+    render::{
+        RenderPlugin,
+        settings::{Backends, RenderCreation, WgpuSettings},
+        view::window::screenshot::{Screenshot, ScreenshotCaptured},
+    },
+    window::{PrimaryWindow, WindowResolution},
+};
 
 use crate::config::{ColorPalette, NodeConfig};
 
@@ -149,7 +153,6 @@ fn drive_rendering(
                         PIPELINE_TIMEOUT_FRAMES
                     );
                     exit.write(AppExit::error());
-                    return;
                 }
             }
         }
@@ -247,12 +250,12 @@ fn spawn_node_entity(
     };
 
     let style = Node {
-        flex_direction: node.flex_direction,
-        flex_wrap: node.flex_wrap,
-        justify_content: node.justify_content,
-        align_items: node.align_items,
-        align_content: node.align_content,
-        align_self: node.align_self,
+        flex_direction: node.flex_direction.into(),
+        flex_wrap: node.flex_wrap.into(),
+        justify_content: node.justify_content.into(),
+        align_items: node.align_items.into(),
+        align_content: node.align_content.into(),
+        align_self: node.align_self.into(),
         flex_grow: node.flex_grow,
         flex_shrink: node.flex_shrink,
         flex_basis: to_val(&node.flex_basis),

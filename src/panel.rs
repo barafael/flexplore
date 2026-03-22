@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::prelude::{Local, ResMut, Result};
 use bevy_egui::{EguiContexts, egui};
 use strum::IntoEnumIterator;
 

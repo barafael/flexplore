@@ -3446,6 +3446,7 @@ dependencies = [
  "catppuccin",
  "colorous",
  "dirs 6.0.0",
+ "flexplore-core",
  "getrandom 0.2.17",
  "getrandom 0.3.4",
  "image 0.25.10",
@@ -3457,6 +3458,19 @@ dependencies = [
  "test-case",
  "wasm-bindgen",
  "web-sys",
+]
+
+[[package]]
+name = "flexplore-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bevy",
+ "colorous",
+ "serde",
+ "serde_json",
+ "strum",
+ "test-case",
 ]
 
 [[package]]
@@ -7511,7 +7525,7 @@ name = "update-snapshots"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "flexplore",
+ "flexplore-core",
  "serde_json",
 ]
 

@@ -1,8 +1,9 @@
 //! Flexplore — flexbox layout code generator library.
 
+pub use flexplore_core::codegen;
+pub use flexplore_core::fixtures;
+pub use flexplore_core::templates;
+
 pub mod art;
-pub mod codegen;
 pub mod config;
-pub mod fixtures;
 pub mod render;
-pub mod templates;

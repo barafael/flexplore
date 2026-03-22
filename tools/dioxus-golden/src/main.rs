@@ -71,8 +71,7 @@ fn main() -> Result<()> {
         std::thread::sleep(Duration::from_millis(100));
 
         let png = tab.capture_screenshot(CaptureScreenshotFormatOption::Png, None, None, true)?;
-        std::fs::write(&out, png)
-            .with_context(|| format!("failed to write {}", out.display()))?;
+        std::fs::write(&out, png).with_context(|| format!("failed to write {}", out.display()))?;
 
         // Clean up temp file
         let _ = std::fs::remove_file(&tmp_html);
@@ -219,11 +218,11 @@ fn emit_node(
     if !node.visible {
         styles.push("visibility: hidden".into());
     }
-    if !matches!(
-        node.flex_direction,
-        config::FlexDirection::Row
-    ) {
-        styles.push(format!("flex-direction: {}", css_direction(node.flex_direction)));
+    if !matches!(node.flex_direction, config::FlexDirection::Row) {
+        styles.push(format!(
+            "flex-direction: {}",
+            css_direction(node.flex_direction)
+        ));
     }
     if !matches!(node.flex_wrap, config::FlexWrap::NoWrap) {
         styles.push(format!("flex-wrap: {}", css_wrap(node.flex_wrap)));
@@ -243,7 +242,10 @@ fn emit_node(
         node.align_items,
         config::AlignItems::Default | config::AlignItems::Stretch
     ) {
-        styles.push(format!("align-items: {}", css_align_items(node.align_items)));
+        styles.push(format!(
+            "align-items: {}",
+            css_align_items(node.align_items)
+        ));
     }
     if !matches!(
         node.align_content,
@@ -274,10 +276,7 @@ fn emit_node(
         styles.push(format!("flex-basis: {}", css_value(&node.flex_basis)));
     }
     if !matches!(node.align_self, config::AlignSelf::Auto) {
-        styles.push(format!(
-            "align-self: {}",
-            css_align_self(node.align_self)
-        ));
+        styles.push(format!("align-self: {}", css_align_self(node.align_self)));
     }
     if !matches!(node.width, ValueConfig::Auto) {
         styles.push(format!("width: {}", css_value(&node.width)));
@@ -319,7 +318,10 @@ fn emit_node(
     let style_str = styles.join("; ");
 
     if is_leaf {
-        buf.push_str(&format!("{pad}<div style=\"{style_str}\">{}</div>\n", node.label));
+        buf.push_str(&format!(
+            "{pad}<div style=\"{style_str}\">{}</div>\n",
+            node.label
+        ));
     } else {
         buf.push_str(&format!("{pad}<div style=\"{style_str}\">\n"));
         let mut sorted: Vec<&NodeConfig> = node.children.iter().collect();

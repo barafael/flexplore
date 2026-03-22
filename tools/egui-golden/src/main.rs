@@ -4,7 +4,10 @@
 //! captures a screenshot via `ViewportCommand::Screenshot`, and saves
 //! `rendered_egui.png`.
 
-use std::{path::{Path, PathBuf}, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -169,7 +172,12 @@ fn save_color_image(image: &egui::ColorImage, path: &Path) {
     let target_w = VIEWPORT_W as u32;
     let target_h = VIEWPORT_H as u32;
     let final_img = if w != target_w || h != target_h {
-        image::imageops::resize(&img, target_w, target_h, image::imageops::FilterType::Lanczos3)
+        image::imageops::resize(
+            &img,
+            target_w,
+            target_h,
+            image::imageops::FilterType::Lanczos3,
+        )
     } else {
         img
     };
@@ -255,7 +263,16 @@ fn build_widget(
     parent_stretch: bool,
     is_root: bool,
 ) {
-    build_widget_sized(ui, node, leaf_idx, palette, parent_is_row, parent_stretch, is_root, None);
+    build_widget_sized(
+        ui,
+        node,
+        leaf_idx,
+        palette,
+        parent_is_row,
+        parent_stretch,
+        is_root,
+        None,
+    );
 }
 
 /// Build a widget with an optional override for its main-axis size (used for flex-grow distribution).
@@ -275,9 +292,26 @@ fn build_widget_sized(
     }
 
     if node.children.is_empty() {
-        build_leaf(ui, node, leaf_idx, palette, parent_is_row, parent_stretch, main_override);
+        build_leaf(
+            ui,
+            node,
+            leaf_idx,
+            palette,
+            parent_is_row,
+            parent_stretch,
+            main_override,
+        );
     } else {
-        build_container(ui, node, leaf_idx, palette, parent_is_row, parent_stretch, is_root, main_override);
+        build_container(
+            ui,
+            node,
+            leaf_idx,
+            palette,
+            parent_is_row,
+            parent_stretch,
+            is_root,
+            main_override,
+        );
     }
 }
 
@@ -292,11 +326,7 @@ fn build_leaf(
 ) {
     let (r, g, b) = palette_color(palette, *leaf_idx);
     *leaf_idx += 1;
-    let bg = Color32::from_rgb(
-        (r * 255.0) as u8,
-        (g * 255.0) as u8,
-        (b * 255.0) as u8,
-    );
+    let bg = Color32::from_rgb((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8);
 
     let w = resolve_to_px(&node.width, VIEWPORT_W);
     let h = resolve_to_px(&node.height, VIEWPORT_H);
@@ -461,10 +491,14 @@ fn build_container(
     let container_w = if is_root {
         VIEWPORT_W
     } else if parent_is_row {
-        main_override.unwrap_or_else(|| {
-            if w > 0.0 { w }
-            else if node.flex_grow > 0.0 { avail_w }
-            else { avail_w }
+        main_override.unwrap_or({
+            if w > 0.0 {
+                w
+            } else if node.flex_grow > 0.0 {
+                avail_w
+            } else {
+                avail_w
+            }
         })
     } else if w > 0.0 {
         w
@@ -477,10 +511,14 @@ fn build_container(
     let container_h = if is_root {
         VIEWPORT_H
     } else if !parent_is_row {
-        main_override.unwrap_or_else(|| {
-            if h > 0.0 { h }
-            else if node.flex_grow > 0.0 { avail_h }
-            else { avail_h }
+        main_override.unwrap_or({
+            if h > 0.0 {
+                h
+            } else if node.flex_grow > 0.0 {
+                avail_h
+            } else {
+                avail_h
+            }
         })
     } else if h > 0.0 {
         h
@@ -524,17 +562,19 @@ fn build_container(
     // Pre-compute flex-grow distribution: calculate how much main-axis space
     // each flex-grow child gets, so they don't greedily consume everything.
     let visible: Vec<&&NodeConfig> = children.iter().filter(|c| c.visible).collect();
-    let num_gaps = if visible.len() > 1 { visible.len() - 1 } else { 0 };
+    let num_gaps = if visible.len() > 1 {
+        visible.len() - 1
+    } else {
+        0
+    };
     let total_gap = num_gaps as f32 * main_gap;
-    let total_fixed: f32 = visible
-        .iter()
-        .map(|c| child_fixed_main(c, is_row))
-        .sum();
+    let total_fixed: f32 = visible.iter().map(|c| child_fixed_main(c, is_row)).sum();
     let total_grow: f32 = visible
         .iter()
         .filter(|c| {
             let dim = if is_row { &c.width } else { &c.height };
-            c.flex_grow > 0.0 && resolve_to_px(dim, if is_row { VIEWPORT_W } else { VIEWPORT_H }) == 0.0
+            c.flex_grow > 0.0
+                && resolve_to_px(dim, if is_row { VIEWPORT_W } else { VIEWPORT_H }) == 0.0
         })
         .map(|c| c.flex_grow)
         .sum();
@@ -555,7 +595,16 @@ fn build_container(
             } else {
                 None
             };
-            build_widget_sized(ui, child, leaf_idx, palette, is_row, stretch, false, main_override);
+            build_widget_sized(
+                ui,
+                child,
+                leaf_idx,
+                palette,
+                is_row,
+                stretch,
+                false,
+                main_override,
+            );
         }
     });
 }

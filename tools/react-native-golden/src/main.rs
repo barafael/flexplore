@@ -8,10 +8,13 @@
 //!   - flexDirection: column  (CSS default: row)
 //!   - flexShrink: 0          (CSS default: 1)
 //!   - alignContent: flex-start (CSS default: stretch)
+//!
 //! We emit explicit CSS to reproduce these semantics in a browser.
 
-use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -59,9 +62,15 @@ fn main() -> Result<()> {
 
     for job in &jobs {
         let html = generate_html(&job.node, job.palette);
-        let out = job.output_dir.join(&job.name).join("rendered_react_native.png");
+        let out = job
+            .output_dir
+            .join(&job.name)
+            .join("rendered_react_native.png");
 
-        let tmp_html = job.output_dir.join(&job.name).join("_tmp_react_native.html");
+        let tmp_html = job
+            .output_dir
+            .join(&job.name)
+            .join("_tmp_react_native.html");
         std::fs::write(&tmp_html, &html)
             .with_context(|| format!("failed to write {}", tmp_html.display()))?;
 
@@ -73,8 +82,7 @@ fn main() -> Result<()> {
         std::thread::sleep(Duration::from_millis(100));
 
         let png = tab.capture_screenshot(CaptureScreenshotFormatOption::Png, None, None, true)?;
-        std::fs::write(&out, png)
-            .with_context(|| format!("failed to write {}", out.display()))?;
+        std::fs::write(&out, png).with_context(|| format!("failed to write {}", out.display()))?;
 
         let _ = std::fs::remove_file(&tmp_html);
 
@@ -188,7 +196,7 @@ fn generate_html(root: &NodeConfig, palette: ColorPalette) -> String {
 <html>
 <head>
 <meta charset="UTF-8">
-<style>html,body{margin:0;padding:0;height:100%;width:100%}</style>
+<style>html,body{margin:0;padding:0;height:100%;width:100%;background:rgba(28,28,43,1)}</style>
 </head>
 <body>
 "#,
@@ -293,10 +301,7 @@ fn emit_node(
         styles.push(format!("flex-basis: {}", css_value(&node.flex_basis)));
     }
     if !matches!(node.align_self, config::AlignSelf::Auto) {
-        styles.push(format!(
-            "align-self: {}",
-            css_align_self(node.align_self)
-        ));
+        styles.push(format!("align-self: {}", css_align_self(node.align_self)));
     }
     if !matches!(node.width, ValueConfig::Auto) {
         styles.push(format!("width: {}", css_value(&node.width)));

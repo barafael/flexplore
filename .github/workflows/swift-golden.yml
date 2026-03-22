@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Render Swift golden screenshots and rebuild overview
-        run: cargo run -p build-overview -- --backend swift
+        run: cargo run -p build-overview -- --skip-codegen --backend swift
 
       - name: Commit rendered PNGs and overview
         run: |
