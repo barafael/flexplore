@@ -2845,6 +2845,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-golden"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "colorous",
+ "headless_chrome",
+ "image 0.25.10",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "dirs"
 version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -4,7 +4,8 @@ use strum::IntoEnumIterator;
 
 use crate::history::UndoHistory;
 use flexplore::codegen::{
-    emit_bevy_code, emit_flutter, emit_html_css, emit_react, emit_swiftui, emit_tailwind,
+    emit_bevy_code, emit_dioxus, emit_flutter, emit_html_css, emit_react, emit_swiftui,
+    emit_tailwind,
 };
 use flexplore::config::*;
 
@@ -637,6 +638,7 @@ pub fn panel_system(
                         ("React", emit_react),
                         ("SwiftUI", emit_swiftui),
                         ("Flutter", emit_flutter),
+                        ("Dioxus", emit_dioxus),
                     ];
                     for (name, emitter) in copy_targets {
                         if ui.button(*name).on_hover_text(format!("Copy {name} code to clipboard")).clicked() {

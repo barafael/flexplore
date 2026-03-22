@@ -45,6 +45,7 @@ const OVERVIEW_IMAGES: &[(&str, &str)] = &[
     ("Flutter", "rendered_flutter.png"),
     ("SwiftUI", "rendered_swift.png"),
     ("Iced", "rendered_iced.png"),
+    ("Dioxus", "rendered_dioxus.png"),
     ("egui", "rendered_egui.png"),
 ];
 
@@ -111,6 +112,10 @@ fn main() -> Result<()> {
 
     if run_backend("egui") {
         render_egui(&testdata, &root, &filter)?;
+    }
+
+    if run_backend("dioxus") {
+        render_dioxus(&testdata, &root, &filter)?;
     }
 
     build_overview(&testdata)?;
@@ -403,6 +408,16 @@ fn render_iced(testdata: &Path, root: &Path, filter: &[String]) -> Result<()> {
         .args(filter)
         .current_dir(root);
     run_cmd("Rendering Iced screenshots", &mut cmd)?;
+    Ok(())
+}
+
+fn render_dioxus(testdata: &Path, root: &Path, filter: &[String]) -> Result<()> {
+    let mut cmd = Command::new("cargo");
+    cmd.args(["run", "--release", "-p", "dioxus-golden", "--"])
+        .arg(testdata)
+        .args(filter)
+        .current_dir(root);
+    run_cmd("Rendering Dioxus screenshots", &mut cmd)?;
     Ok(())
 }
 
