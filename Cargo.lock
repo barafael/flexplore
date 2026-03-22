@@ -521,7 +521,7 @@ dependencies = [
 
 [[package]]
 name = "bevy-golden"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2006,7 +2006,7 @@ dependencies = [
 
 [[package]]
 name = "build-overview"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2846,7 +2846,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-golden"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -3101,7 +3101,7 @@ dependencies = [
 
 [[package]]
 name = "egui-golden"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -3438,7 +3438,7 @@ dependencies = [
 
 [[package]]
 name = "flexplore"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "bevy",
@@ -3462,7 +3462,7 @@ dependencies = [
 
 [[package]]
 name = "flexplore-core"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "bevy",
@@ -4261,7 +4261,7 @@ dependencies = [
 
 [[package]]
 name = "iced-golden"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -6215,7 +6215,7 @@ dependencies = [
 
 [[package]]
 name = "react-native-golden"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -7522,7 +7522,7 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "update-snapshots"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "flexplore-core",
