@@ -9,7 +9,7 @@ use regex::Regex;
 /// Regenerate golden files, render every backend, and build the HTML overview.
 #[derive(Parser)]
 #[command(name = "build-overview")]
-struct Cli {
+struct Arguments {
     /// Only render these test cases (default: all).
     cases: Vec<String>,
 
@@ -48,7 +48,7 @@ const OVERVIEW_IMAGES: &[(&str, &str)] = &[
 ];
 
 fn main() -> Result<()> {
-    let cli = Cli::parse();
+    let cli = Arguments::parse();
     let filter = cli.cases;
     let backends = cli.backends;
 

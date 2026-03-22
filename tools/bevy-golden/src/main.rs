@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use clap::Parser;
 use flexplore::{
     config::LayoutInput,
     render::{RenderJob, render_to_images},
@@ -44,15 +45,22 @@ fn load_jobs(testdata_dir: &Path, filter: &[String]) -> Result<Vec<RenderJob>> {
     Ok(jobs)
 }
 
+/// Render flexplore golden screenshots with Bevy.
+#[derive(clap::Parser)]
+#[command(name = "bevy-golden")]
+struct Arguments {
+    /// Only render these test cases (default: all).
+    cases: Vec<String>,
+}
+
 fn main() -> Result<()> {
-    let args: Vec<String> = std::env::args().collect();
-    let filter: Vec<String> = args[1..].to_vec();
+    let cli = Arguments::parse();
     let testdata_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../testdata")
         .canonicalize()
         .context("cannot find testdata directory")?;
 
-    let jobs = load_jobs(&testdata_dir, &filter)?;
+    let jobs = load_jobs(&testdata_dir, &cli.cases)?;
     render_to_images(jobs, testdata_dir);
     Ok(())
 }

@@ -3,10 +3,11 @@
 //! Reads `testdata/{case}/input.json`, renders the layout with Iced,
 //! captures a screenshot, and saves `rendered_iced.png`.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use clap::Parser;
 use iced::widget::{Space, column, container, row, text};
 use iced::window;
 use iced::{Color, Element, Length, Padding, Size, Subscription, Task, Theme};
@@ -16,6 +17,18 @@ use config::{
     AlignItems, AlignSelf, ColorPalette, FlexDirection, FlexWrap, JustifyContent, LayoutInput,
     NodeConfig, ValueConfig,
 };
+
+/// Render flexplore golden screenshots with Iced.
+#[derive(Parser)]
+#[command(name = "iced-golden")]
+struct Arguments {
+    /// Path to the testdata directory.
+    #[arg(default_value = "testdata")]
+    testdata: PathBuf,
+
+    /// Only render these test cases (default: all).
+    cases: Vec<String>,
+}
 
 const VIEWPORT_W: f32 = 400.0;
 const VIEWPORT_H: f32 = 300.0;
@@ -42,17 +55,11 @@ enum Message {
 }
 
 fn main() -> iced::Result {
-    let args: Vec<String> = std::env::args().collect();
+    let cli = Arguments::parse();
 
-    let testdata_dir = if args.len() > 1 {
-        PathBuf::from(&args[1])
-    } else {
-        PathBuf::from("testdata")
-    };
+    let filter: Vec<&str> = cli.cases.iter().map(|s| s.as_str()).collect();
 
-    let filter: Vec<&str> = args[2..].iter().map(|s| s.as_str()).collect();
-
-    let jobs = load_jobs(&testdata_dir, &filter).expect("failed to load test jobs");
+    let jobs = load_jobs(&cli.testdata, &filter).expect("failed to load test jobs");
     if jobs.is_empty() {
         eprintln!("No render jobs found.");
         return Ok(());
@@ -60,7 +67,7 @@ fn main() -> iced::Result {
     eprintln!(
         "Will render {} case(s) from {}",
         jobs.len(),
-        testdata_dir.display()
+        cli.testdata.display()
     );
 
     iced::application("iced-golden", App::update, App::view)
@@ -132,7 +139,7 @@ impl App {
 
 // ─── Screenshot saving ──────────────────────────────────────────────────────
 
-fn save_screenshot(path: &PathBuf, screenshot: &window::Screenshot) {
+fn save_screenshot(path: &Path, screenshot: &window::Screenshot) {
     let size = screenshot.size;
     let bytes = screenshot.bytes.clone();
 
@@ -151,7 +158,7 @@ fn save_screenshot(path: &PathBuf, screenshot: &window::Screenshot) {
 
 // ─── Job loading ────────────────────────────────────────────────────────────
 
-fn load_jobs(testdata_dir: &PathBuf, filter: &[&str]) -> Result<Vec<RenderJob>> {
+fn load_jobs(testdata_dir: &Path, filter: &[&str]) -> Result<Vec<RenderJob>> {
     let mut jobs = Vec::new();
 
     let mut entries: Vec<_> = std::fs::read_dir(testdata_dir)
