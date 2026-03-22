@@ -133,6 +133,7 @@ pub fn emit_swiftui(root: &NodeConfig, palette: ColorPalette) -> Result<String> 
     Ok(buf)
 }
 
+#[allow(clippy::too_many_arguments)] // recursive tree-walker; leaf_idx varies per call site
 fn emit_swiftui_node(
     buf: &mut String,
     node: &NodeConfig,
@@ -458,10 +459,9 @@ fn emit_swiftui_node(
         } else {
             swift_optional_value(&node.width)
         };
-        // Root with flex_grow fills the viewport height, matching CSS body { height: 100% }
-        let h = if is_root && node.flex_grow > 0.0 {
-            None
-        } else if full_h {
+        // Root with flex_grow fills the viewport height (matching CSS body { height: 100% }),
+        // and Percent(100%) maps to .infinity in the min/max frame below — skip both.
+        let h = if full_h || (is_root && node.flex_grow > 0.0) {
             None
         } else {
             swift_optional_value(&node.height)

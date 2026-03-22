@@ -84,6 +84,7 @@ pub fn emit_egui(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
     Ok(buf)
 }
 
+#[allow(clippy::too_many_arguments)] // recursive tree-walker; leaf_idx varies per call site
 fn emit_egui_node(
     buf: &mut String,
     node: &NodeConfig,

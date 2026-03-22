@@ -10,8 +10,8 @@ use std::{
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use iced::{Color, Element, Length, Padding, Size, Subscription, Task, Theme};
 use iced::{
+    Color, Element, Length, Padding, Size, Subscription, Task, Theme,
     widget::{Space, column, container, row, text},
     window,
 };

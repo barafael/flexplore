@@ -7,8 +7,10 @@
 //! Dioxus renders through a webview using standard HTML+CSS, so we generate
 //! the equivalent HTML with inline styles and screenshot it directly.
 
-use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use anyhow::{Context, Result};
 use clap::Parser;
