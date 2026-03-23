@@ -338,6 +338,57 @@ pub fn viz_tooltip(
     }
 }
 
+// ─── Arrow-key spatial navigation ─────────────────────────────────────────
+
+/// Direction request produced by the egui panel (which owns keyboard input)
+/// and consumed here (which owns the GlobalTransform positions).
+#[derive(Resource, Default)]
+pub struct ArrowNav(pub Option<Vec2>);
+
+pub fn viz_arrow_nav(
+    mut nav: ResMut<ArrowNav>,
+    nodes: Query<(&UiGlobalTransform, &VizNodePath)>,
+    mut cfg: ResMut<FlexConfig>,
+) {
+    let Some(dir) = nav.0.take() else { return };
+
+    let selected = cfg.selected();
+    if selected.is_empty() {
+        return;
+    }
+
+    let Some(sel_pos) = nodes
+        .iter()
+        .find(|(_, path)| path.0.as_slice() == selected)
+        .map(|(gt, _)| gt.translation)
+    else {
+        return;
+    };
+
+    let mut best: Option<(f32, &Vec<usize>)> = None;
+    for (gt, path) in &nodes {
+        if path.0.as_slice() == selected || path.0.is_empty() {
+            continue;
+        }
+        let pos = gt.translation;
+        let offset = pos - sel_pos;
+        let forward = offset.dot(dir);
+        if forward < 1.0 {
+            continue;
+        }
+        let lateral = (offset - forward * dir).length();
+        // Prefer close nodes in the arrow direction; penalise off-axis drift.
+        let cost = forward + lateral * 2.0;
+        if best.is_none_or(|(b, _)| cost < b) {
+            best = Some((cost, &path.0));
+        }
+    }
+
+    if let Some((_, path)) = best {
+        cfg.select(path.clone());
+    }
+}
+
 // ─── Click-to-select ──────────────────────────────────────────────────────────
 
 pub fn viz_click(

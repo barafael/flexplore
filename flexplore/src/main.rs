@@ -27,6 +27,7 @@ fn main() {
         ))
         .init_resource::<FlexConfig>()
         .init_resource::<ArtState>()
+        .init_resource::<viz::ArrowNav>()
         .insert_resource(UndoHistory::new(FlexConfig::default()))
         .add_systems(Startup, (setup, load_autosave))
         .add_systems(EguiPrimaryContextPass, panel::panel_system)
@@ -34,6 +35,7 @@ fn main() {
         .add_systems(
             Update,
             (
+                viz::viz_arrow_nav,
                 viz::viz_click,
                 viz::viz_tooltip,
                 viz::rebuild_viz,

@@ -1,8 +1,9 @@
-use bevy::prelude::{Local, ResMut, Result};
+use bevy::prelude::{Local, ResMut, Result, Vec2};
 use bevy_egui::{EguiContexts, egui};
 use strum::IntoEnumIterator;
 
 use crate::history::UndoHistory;
+use crate::viz::ArrowNav;
 use flexplore::codegen::{
     emit_bevy_code, emit_dioxus, emit_flutter, emit_html_css, emit_react, emit_react_native,
     emit_swiftui, emit_tailwind,
@@ -95,6 +96,7 @@ pub fn panel_system(
     mut contexts: EguiContexts,
     mut cfg: ResMut<FlexConfig>,
     mut history: ResMut<UndoHistory>,
+    mut arrow_nav: ResMut<ArrowNav>,
     mut preview: Local<Option<FlexConfig>>,
     mut applied_theme: Local<Option<Theme>>,
     mut import_buf: Local<String>,
@@ -129,8 +131,24 @@ pub fn panel_system(
         ctx.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::Enter));
     let key_delete = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete));
     let key_parent = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
-    let key_next = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown));
-    let key_prev = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp));
+    // Consume arrow keys unconditionally (prevents egui widgets from using them),
+    // then forward the direction to viz_arrow_nav for spatial navigation.
+    // UiGlobalTransform is screen-space: x→right, y→down.
+    let arrow_up = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp));
+    let arrow_down = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown));
+    let arrow_left = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft));
+    let arrow_right = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowRight));
+    arrow_nav.0 = if arrow_up {
+        Some(Vec2::new(0.0, -1.0))
+    } else if arrow_down {
+        Some(Vec2::new(0.0, 1.0))
+    } else if arrow_left {
+        Some(Vec2::new(-1.0, 0.0))
+    } else if arrow_right {
+        Some(Vec2::new(1.0, 0.0))
+    } else {
+        None
+    };
 
     if *applied_theme != Some(cfg.theme) {
         apply_theme(ctx, cfg.theme);
@@ -196,26 +214,6 @@ pub fn panel_system(
             sel_path.pop();
             is_root = sel_path.is_empty();
             cfg.select(sel_path.clone());
-        }
-        if key_next && !is_root {
-            let pidx = sel_path.len() - 1;
-            let idx = sel_path[pidx];
-            let sibling_count = cfg
-                .root
-                .get(&sel_path[..pidx])
-                .map_or(0, |p| p.children.len());
-            if idx + 1 < sibling_count {
-                sel_path[pidx] = idx + 1;
-                cfg.select(sel_path.clone());
-            }
-        }
-        if key_prev && !is_root {
-            let pidx = sel_path.len() - 1;
-            let idx = sel_path[pidx];
-            if idx > 0 {
-                sel_path[pidx] = idx - 1;
-                cfg.select(sel_path.clone());
-            }
         }
     }
 
