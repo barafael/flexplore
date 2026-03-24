@@ -40,7 +40,7 @@ fn egui_size(v: &ValueConfig, axis: &str) -> String {
     }
 }
 
-fn egui_margin(v: &ValueConfig) -> Option<String> {
+fn egui_margin_value(v: &ValueConfig) -> Option<String> {
     match v {
         ValueConfig::Auto => None,
         ValueConfig::Px(n) if *n == 0.0 => None,
@@ -51,6 +51,23 @@ fn egui_margin(v: &ValueConfig) -> Option<String> {
         ValueConfig::Vw(n) => Some(format!("{n:.1} /* {n:.0}vw */")),
         ValueConfig::Vh(n) => Some(format!("{n:.1} /* {n:.0}vh */")),
     }
+}
+
+fn egui_margin(sides: &Sides) -> Option<String> {
+    if sides.is_zero() {
+        return None;
+    }
+    if sides.is_uniform() {
+        return egui_margin_value(&sides.first());
+    }
+    // Per-side margin: Margin { top, bottom, left, right }
+    let t = sides.top.num().unwrap_or(0.0);
+    let r = sides.right.num().unwrap_or(0.0);
+    let b = sides.bottom.num().unwrap_or(0.0);
+    let l = sides.left.num().unwrap_or(0.0);
+    Some(format!(
+        "Margin {{ top: {t:.1}, bottom: {b:.1}, left: {l:.1}, right: {r:.1} }}"
+    ))
 }
 
 fn egui_direction(dir: FlexDirection) -> &'static str {
@@ -185,14 +202,54 @@ fn emit_egui_node(
         writeln!(buf, "{pad}        }});")?;
         write!(buf, "{pad}    }})")?;
 
-        // Notes for unsupported features
-        if !is_zero_px(&node.margin) && !matches!(node.margin, ValueConfig::Auto) {
+        // Border support
+        if !node.border_width.is_zero() {
+            let w = node.border_width.first().num().unwrap_or(0.0);
             writeln!(buf)?;
             write!(
                 buf,
-                "{pad}    // NOTE: margin: {} — use outer_margin() on Frame or add spacing",
-                node.margin.display_short()
+                "{pad}    // NOTE: border — add .stroke(Stroke::new({w:.1}, Color32::WHITE)) to Frame"
             )?;
+        }
+        if !node.border_radius.is_zero() {
+            writeln!(buf)?;
+            if node.border_radius.is_uniform() {
+                write!(
+                    buf,
+                    "{pad}    // NOTE: border-radius — add .rounding({:.1}) to Frame",
+                    node.border_radius.top_left
+                )?;
+            } else {
+                write!(
+                    buf,
+                    "{pad}    // NOTE: border-radius — add .rounding(Rounding {{ nw: {:.1}, ne: {:.1}, se: {:.1}, sw: {:.1} }}) to Frame",
+                    node.border_radius.top_left,
+                    node.border_radius.top_right,
+                    node.border_radius.bottom_right,
+                    node.border_radius.bottom_left
+                )?;
+            }
+        }
+
+        // Notes for unsupported features
+        if !node.margin.is_zero() {
+            writeln!(buf)?;
+            if node.margin.is_uniform() {
+                write!(
+                    buf,
+                    "{pad}    // NOTE: margin: {} — use outer_margin() on Frame or add spacing",
+                    node.margin.first().display_short()
+                )?;
+            } else {
+                write!(
+                    buf,
+                    "{pad}    // NOTE: margin: {}/{}/{}/{} — use outer_margin() on Frame or add spacing",
+                    node.margin.top.display_short(),
+                    node.margin.right.display_short(),
+                    node.margin.bottom.display_short(),
+                    node.margin.left.display_short()
+                )?;
+            }
         }
         if node.flex_grow > 0.0 {
             writeln!(buf)?;
@@ -502,12 +559,49 @@ fn emit_egui_node(
                 node.align_self
             )?;
         }
-        if !is_zero_px(&node.margin) && !matches!(node.margin, ValueConfig::Auto) {
+        if !node.margin.is_zero() {
+            if node.margin.is_uniform() {
+                writeln!(
+                    buf,
+                    "{pad}        // NOTE: margin: {} — use outer_margin() on Frame",
+                    node.margin.first().display_short()
+                )?;
+            } else {
+                writeln!(
+                    buf,
+                    "{pad}        // NOTE: margin: {}/{}/{}/{} — use outer_margin() on Frame",
+                    node.margin.top.display_short(),
+                    node.margin.right.display_short(),
+                    node.margin.bottom.display_short(),
+                    node.margin.left.display_short()
+                )?;
+            }
+        }
+        // Border support
+        if !node.border_width.is_zero() {
+            let w = node.border_width.first().num().unwrap_or(0.0);
             writeln!(
                 buf,
-                "{pad}        // NOTE: margin: {} — use outer_margin() on Frame",
-                node.margin.display_short()
+                "{pad}        // NOTE: border — add .stroke(Stroke::new({w:.1}, Color32::WHITE)) to Frame"
             )?;
+        }
+        if !node.border_radius.is_zero() {
+            if node.border_radius.is_uniform() {
+                writeln!(
+                    buf,
+                    "{pad}        // NOTE: border-radius — add .rounding({:.1}) to Frame",
+                    node.border_radius.top_left
+                )?;
+            } else {
+                writeln!(
+                    buf,
+                    "{pad}        // NOTE: border-radius — add .rounding(Rounding {{ nw: {:.1}, ne: {:.1}, se: {:.1}, sw: {:.1} }}) to Frame",
+                    node.border_radius.top_left,
+                    node.border_radius.top_right,
+                    node.border_radius.bottom_right,
+                    node.border_radius.bottom_left
+                )?;
+            }
         }
         if !node.visible {
             writeln!(

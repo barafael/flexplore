@@ -3,7 +3,6 @@ Widget build(BuildContext context) {
     width: double.infinity,
     height: double.infinity,
     padding: EdgeInsets.all(12.0),
-    margin: EdgeInsets.all(0.0),
     child:     Wrap(
       direction: Axis.vertical,
       spacing: 8.0,
@@ -13,7 +12,6 @@ Widget build(BuildContext context) {
           width: MediaQuery.of(context).size.width * 0.500,
           height: MediaQuery.of(context).size.height * 0.200,
           padding: EdgeInsets.all(8.0),
-          margin: EdgeInsets.all(0.0),
           color: Color.fromRGBO(251, 180, 174, 1.0),
           alignment: Alignment.center,
           child: Text('50vw x 20vh',
@@ -25,7 +23,6 @@ Widget build(BuildContext context) {
           width: MediaQuery.of(context).size.width * 0.750,
           height: MediaQuery.of(context).size.height * 0.300,
           padding: EdgeInsets.all(8.0),
-          margin: EdgeInsets.all(0.0),
           color: Color.fromRGBO(179, 205, 227, 1.0),
           alignment: Alignment.center,
           child: Text('75vw x 30vh',

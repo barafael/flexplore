@@ -3,7 +3,6 @@ Widget build(BuildContext context) {
     width: double.infinity,
     height: double.infinity,
     padding: EdgeInsets.all(20.0),
-    margin: EdgeInsets.all(0.0),
     child:     Row(
       mainAxisAlignment: MainAxisAlignment.start,
       crossAxisAlignment: CrossAxisAlignment.start,

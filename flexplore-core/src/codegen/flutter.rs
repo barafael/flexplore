@@ -4,7 +4,7 @@ use crate::config::*;
 use anyhow::Result;
 
 use crate::art::palette_color;
-use crate::config::{ColorPalette, NodeConfig, ValueConfig};
+use crate::config::{ColorPalette, Corners, NodeConfig, Sides, ValueConfig};
 
 fn count_leaves(node: &NodeConfig) -> usize {
     if node.children.is_empty() {
@@ -29,6 +29,95 @@ fn dart_value(v: &ValueConfig) -> Option<String> {
             n / 100.0
         )),
     }
+}
+
+fn dart_edge_insets(sides: &Sides) -> Option<String> {
+    if sides.is_zero() {
+        return None;
+    }
+    if sides.is_uniform() {
+        dart_value(&sides.first()).map(|v| format!("EdgeInsets.all({v})"))
+    } else {
+        let t = dart_value(&sides.top);
+        let r = dart_value(&sides.right);
+        let b = dart_value(&sides.bottom);
+        let l = dart_value(&sides.left);
+        if t.is_none() && r.is_none() && b.is_none() && l.is_none() {
+            return None;
+        }
+        let mut parts = Vec::new();
+        if let Some(v) = &t {
+            parts.push(format!("top: {v}"));
+        }
+        if let Some(v) = &r {
+            parts.push(format!("right: {v}"));
+        }
+        if let Some(v) = &b {
+            parts.push(format!("bottom: {v}"));
+        }
+        if let Some(v) = &l {
+            parts.push(format!("left: {v}"));
+        }
+        Some(format!("EdgeInsets.only({})", parts.join(", ")))
+    }
+}
+
+fn dart_box_decoration(
+    border_width: &Sides,
+    border_radius: &Corners,
+    bg_color: Option<&str>,
+) -> Option<String> {
+    let has_border = !border_width.is_zero();
+    let has_radius = !border_radius.is_zero();
+    if !has_border && !has_radius && bg_color.is_none() {
+        return None;
+    }
+    let mut parts = Vec::new();
+    if let Some(color) = bg_color {
+        parts.push(format!("color: {color}"));
+    }
+    if has_border {
+        if border_width.is_uniform() {
+            if let Some(w) = dart_value(&border_width.first()) {
+                parts.push(format!("border: Border.all(width: {w})"));
+            }
+        } else {
+            let mut sides = Vec::new();
+            if let Some(v) = dart_value(&border_width.top) {
+                sides.push(format!("top: BorderSide(width: {v})"));
+            }
+            if let Some(v) = dart_value(&border_width.right) {
+                sides.push(format!("right: BorderSide(width: {v})"));
+            }
+            if let Some(v) = dart_value(&border_width.bottom) {
+                sides.push(format!("bottom: BorderSide(width: {v})"));
+            }
+            if let Some(v) = dart_value(&border_width.left) {
+                sides.push(format!("left: BorderSide(width: {v})"));
+            }
+            if !sides.is_empty() {
+                parts.push(format!("border: Border({})", sides.join(", ")));
+            }
+        }
+    }
+    if has_radius {
+        if border_radius.is_uniform() {
+            parts.push(format!(
+                "borderRadius: BorderRadius.circular({:.1})",
+                border_radius.top_left
+            ));
+        } else {
+            let corners = format!(
+                "borderRadius: BorderRadius.only(topLeft: Radius.circular({:.1}), topRight: Radius.circular({:.1}), bottomRight: Radius.circular({:.1}), bottomLeft: Radius.circular({:.1}))",
+                border_radius.top_left,
+                border_radius.top_right,
+                border_radius.bottom_right,
+                border_radius.bottom_left,
+            );
+            parts.push(corners);
+        }
+    }
+    Some(format!("BoxDecoration({})", parts.join(", ")))
 }
 
 /// When direction is reversed, flex-start/end swap so items anchor to the
@@ -174,11 +263,11 @@ fn emit_flutter_inner(
         if let Some(h) = &h {
             writeln!(buf, "{pad}  height: {h},")?;
         }
-        if let Some(p) = dart_value(&node.padding) {
-            writeln!(buf, "{pad}  padding: EdgeInsets.all({p}),")?;
+        if let Some(p) = dart_edge_insets(&node.padding) {
+            writeln!(buf, "{pad}  padding: {p},")?;
         }
-        if let Some(m) = dart_value(&node.margin) {
-            writeln!(buf, "{pad}  margin: EdgeInsets.all({m}),")?;
+        if let Some(m) = dart_edge_insets(&node.margin) {
+            writeln!(buf, "{pad}  margin: {m},")?;
         }
         // Constraints
         let min_w = dart_value(&node.min_width);
@@ -201,13 +290,21 @@ fn emit_flutter_inner(
             }
             writeln!(buf, "{pad}  ),")?;
         }
-        writeln!(
-            buf,
-            "{pad}  color: Color.fromRGBO({}, {}, {}, 1.0),",
+        let bg_str = format!(
+            "Color.fromRGBO({}, {}, {}, 1.0)",
             (r * 255.0) as u8,
             (g * 255.0) as u8,
             (b * 255.0) as u8,
-        )?;
+        );
+        let has_border_or_radius =
+            !node.border_width.is_zero() || !node.border_radius.is_zero();
+        if has_border_or_radius {
+            if let Some(deco) = dart_box_decoration(&node.border_width, &node.border_radius, Some(&bg_str)) {
+                writeln!(buf, "{pad}  decoration: {deco},")?;
+            }
+        } else {
+            writeln!(buf, "{pad}  color: {bg_str},")?;
+        }
         writeln!(buf, "{pad}  alignment: Alignment.center,")?;
         writeln!(buf, "{pad}  child: Text('{}',", node.label)?;
         writeln!(
@@ -233,9 +330,11 @@ fn emit_flutter_inner(
         } else {
             dart_value(&node.height)
         };
-        let p = dart_value(&node.padding);
-        let m = dart_value(&node.margin);
-        let has_container = w.is_some() || h.is_some() || p.is_some() || m.is_some() || is_root;
+        let p = dart_edge_insets(&node.padding);
+        let m = dart_edge_insets(&node.margin);
+        let deco = dart_box_decoration(&node.border_width, &node.border_radius, None);
+        let has_container =
+            w.is_some() || h.is_some() || p.is_some() || m.is_some() || deco.is_some() || is_root;
 
         if has_container {
             writeln!(buf, "{pad}Container(")?;
@@ -246,10 +345,13 @@ fn emit_flutter_inner(
                 writeln!(buf, "{pad}  height: {v},")?;
             }
             if let Some(v) = &p {
-                writeln!(buf, "{pad}  padding: EdgeInsets.all({v}),")?;
+                writeln!(buf, "{pad}  padding: {v},")?;
             }
             if let Some(v) = &m {
-                writeln!(buf, "{pad}  margin: EdgeInsets.all({v}),")?;
+                writeln!(buf, "{pad}  margin: {v},")?;
+            }
+            if let Some(d) = &deco {
+                writeln!(buf, "{pad}  decoration: {d},")?;
             }
             write!(buf, "{pad}  child: ")?;
         }

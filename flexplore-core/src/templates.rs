@@ -7,7 +7,7 @@ pub fn holy_grail() -> NodeConfig {
     root.align_items = AlignItems::Stretch;
     root.width = ValueConfig::Percent(100.0);
     root.height = ValueConfig::Percent(100.0);
-    root.padding = ValueConfig::Px(0.0);
+    root.padding = Sides::zero();
     root.row_gap = ValueConfig::Px(0.0);
     root.column_gap = ValueConfig::Px(0.0);
 
@@ -24,7 +24,7 @@ pub fn holy_grail() -> NodeConfig {
     middle.flex_grow = 1.0;
     middle.width = ValueConfig::Auto;
     middle.height = ValueConfig::Auto;
-    middle.padding = ValueConfig::Px(0.0);
+    middle.padding = Sides::zero();
     middle.row_gap = ValueConfig::Px(0.0);
     middle.column_gap = ValueConfig::Px(0.0);
 
@@ -64,7 +64,7 @@ pub fn sidebar_content() -> NodeConfig {
     root.align_items = AlignItems::Stretch;
     root.width = ValueConfig::Percent(100.0);
     root.height = ValueConfig::Percent(100.0);
-    root.padding = ValueConfig::Px(0.0);
+    root.padding = Sides::zero();
     root.column_gap = ValueConfig::Px(0.0);
 
     let mut sidebar = NodeConfig::new_container("sidebar");
@@ -75,7 +75,7 @@ pub fn sidebar_content() -> NodeConfig {
     sidebar.height = ValueConfig::Auto;
     sidebar.flex_shrink = 0.0;
     sidebar.flex_grow = 0.0;
-    sidebar.padding = ValueConfig::Px(8.0);
+    sidebar.padding = Sides::uniform(ValueConfig::Px(8.0));
     sidebar.row_gap = ValueConfig::Px(4.0);
     let nav_items: Vec<_> = (1..=3)
         .map(|i| {
@@ -106,7 +106,7 @@ pub fn card_grid() -> NodeConfig {
     root.width = ValueConfig::Percent(100.0);
     root.height = ValueConfig::Auto;
     root.justify_content = JustifyContent::FlexStart;
-    root.padding = ValueConfig::Px(16.0);
+    root.padding = Sides::uniform(ValueConfig::Px(16.0));
 
     root.children = (1..=6)
         .map(|i| NodeConfig::new_leaf(format!("card-{i}"), 170.0, 80.0))
@@ -123,7 +123,7 @@ pub fn nav_bar() -> NodeConfig {
     root.height = ValueConfig::Px(56.0);
     root.justify_content = JustifyContent::SpaceBetween;
     root.align_items = AlignItems::Center;
-    root.padding = ValueConfig::Px(12.0);
+    root.padding = Sides::uniform(ValueConfig::Px(12.0));
     root.column_gap = ValueConfig::Px(0.0);
 
     let logo = NodeConfig::new_leaf("logo", 48.0, 48.0);
@@ -137,7 +137,7 @@ pub fn nav_bar() -> NodeConfig {
     links.width = ValueConfig::Auto;
     links.height = ValueConfig::Auto;
     links.flex_grow = 0.0;
-    links.padding = ValueConfig::Px(0.0);
+    links.padding = Sides::zero();
     links.children = vec![
         NodeConfig::new_leaf("link-1", 80.0, 36.0),
         NodeConfig::new_leaf("link-2", 80.0, 36.0),
@@ -153,7 +153,7 @@ pub fn nav_bar() -> NodeConfig {
     actions.width = ValueConfig::Auto;
     actions.height = ValueConfig::Auto;
     actions.flex_grow = 0.0;
-    actions.padding = ValueConfig::Px(0.0);
+    actions.padding = Sides::zero();
     actions.children = vec![
         NodeConfig::new_leaf("btn-1", 36.0, 36.0),
         NodeConfig::new_leaf("btn-2", 36.0, 36.0),

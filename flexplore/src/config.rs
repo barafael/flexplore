@@ -4,7 +4,12 @@ use bevy::prelude::Resource;
 use serde::{Deserialize, Serialize};
 
 pub const PANEL_WIDTH: f32 = 390.0;
+pub const RIGHT_PANEL_WIDTH: f32 = 340.0;
 pub const ART_TEXTURE_SIZE: u32 = 128;
+
+/// Tracks whether the right-hand codegen panel is open (read by viz.rs for spacing).
+#[derive(Resource, Default)]
+pub struct RightPanelOpen(pub bool);
 
 // ─── Main resource (Bevy ECS) ────────────────────────────────────────────────
 

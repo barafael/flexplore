@@ -4,7 +4,7 @@ use crate::config::*;
 use anyhow::Result;
 
 use crate::art::palette_color;
-use crate::config::{ColorPalette, NodeConfig, ValueConfig};
+use crate::config::{ColorPalette, Corners, NodeConfig, Sides, ValueConfig};
 
 fn emit_bevy_value(v: &ValueConfig) -> String {
     match v {
@@ -13,6 +13,34 @@ fn emit_bevy_value(v: &ValueConfig) -> String {
         ValueConfig::Percent(n) => format!("Val::Percent({n:.1})"),
         ValueConfig::Vw(n) => format!("Val::Vw({n:.1})"),
         ValueConfig::Vh(n) => format!("Val::Vh({n:.1})"),
+    }
+}
+
+fn emit_bevy_sides(sides: &Sides) -> String {
+    if sides.is_uniform() {
+        format!("UiRect::all({})", emit_bevy_value(&sides.first()))
+    } else {
+        format!(
+            "UiRect {{ top: {}, right: {}, bottom: {}, left: {} }}",
+            emit_bevy_value(&sides.top),
+            emit_bevy_value(&sides.right),
+            emit_bevy_value(&sides.bottom),
+            emit_bevy_value(&sides.left),
+        )
+    }
+}
+
+fn emit_bevy_corners(corners: &Corners) -> String {
+    if corners.is_uniform() {
+        format!("BorderRadius::all(Val::Px({:.1}))", corners.top_left)
+    } else {
+        format!(
+            "BorderRadius {{ top_left: Val::Px({:.1}), top_right: Val::Px({:.1}), bottom_right: Val::Px({:.1}), bottom_left: Val::Px({:.1}) }}",
+            corners.top_left,
+            corners.top_right,
+            corners.bottom_right,
+            corners.bottom_left,
+        )
     }
 }
 
@@ -140,20 +168,36 @@ fn emit_node(
     if !matches!(node.max_height, ValueConfig::Auto) {
         emit_field(buf, &pad, "max_height", &emit_bevy_value(&node.max_height))?;
     }
-    if !matches!(node.padding, ValueConfig::Px(v) if v == 0.0) {
+    if !node.padding.is_zero() {
         emit_field(
             buf,
             &pad,
             "padding",
-            &format!("UiRect::all({})", emit_bevy_value(&node.padding)),
+            &emit_bevy_sides(&node.padding),
         )?;
     }
-    if !matches!(node.margin, ValueConfig::Px(v) if v == 0.0) {
+    if !node.margin.is_zero() {
         emit_field(
             buf,
             &pad,
             "margin",
-            &format!("UiRect::all({})", emit_bevy_value(&node.margin)),
+            &emit_bevy_sides(&node.margin),
+        )?;
+    }
+    if !node.border_width.is_zero() {
+        emit_field(
+            buf,
+            &pad,
+            "border",
+            &emit_bevy_sides(&node.border_width),
+        )?;
+    }
+    if !node.border_radius.is_zero() {
+        emit_field(
+            buf,
+            &pad,
+            "border_radius",
+            &emit_bevy_corners(&node.border_radius),
         )?;
     }
     if node.order != 0 {

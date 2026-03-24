@@ -143,6 +143,131 @@ impl ValueConfig {
             ValueConfig::Vh(n) => format!("{n:.0}vh"),
         }
     }
+    pub fn is_zero_px(&self) -> bool {
+        matches!(self, ValueConfig::Px(v) if *v == 0.0)
+    }
+}
+
+// ─── Per-side values ────────────────────────────────────────────────────────
+
+#[derive(Clone, Copy, PartialEq, Debug, Serialize)]
+pub struct Sides {
+    pub top: ValueConfig,
+    pub right: ValueConfig,
+    pub bottom: ValueConfig,
+    pub left: ValueConfig,
+}
+
+impl Sides {
+    pub fn uniform(v: ValueConfig) -> Self {
+        Self { top: v, right: v, bottom: v, left: v }
+    }
+
+    pub fn zero() -> Self {
+        Self::uniform(ValueConfig::Px(0.0))
+    }
+
+    pub fn is_uniform(&self) -> bool {
+        self.top == self.right && self.right == self.bottom && self.bottom == self.left
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.top.is_zero_px() && self.right.is_zero_px() && self.bottom.is_zero_px() && self.left.is_zero_px()
+    }
+
+    /// First side value — use when only uniform values are supported.
+    pub fn first(&self) -> ValueConfig {
+        self.top
+    }
+}
+
+impl Default for Sides {
+    fn default() -> Self {
+        Self::zero()
+    }
+}
+
+impl<'de> Deserialize<'de> for Sides {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Helper {
+            PerSide {
+                top: ValueConfig,
+                right: ValueConfig,
+                bottom: ValueConfig,
+                left: ValueConfig,
+            },
+            Uniform(ValueConfig),
+        }
+        match Helper::deserialize(deserializer)? {
+            Helper::PerSide { top, right, bottom, left } => Ok(Sides { top, right, bottom, left }),
+            Helper::Uniform(v) => Ok(Sides::uniform(v)),
+        }
+    }
+}
+
+// ─── Per-corner values ──────────────────────────────────────────────────────
+
+#[derive(Clone, Copy, PartialEq, Debug, Serialize)]
+pub struct Corners {
+    pub top_left: f32,
+    pub top_right: f32,
+    pub bottom_right: f32,
+    pub bottom_left: f32,
+}
+
+impl Corners {
+    pub fn uniform(v: f32) -> Self {
+        Self { top_left: v, top_right: v, bottom_right: v, bottom_left: v }
+    }
+
+    pub fn is_uniform(&self) -> bool {
+        self.top_left == self.top_right
+            && self.top_right == self.bottom_right
+            && self.bottom_right == self.bottom_left
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.top_left == 0.0
+            && self.top_right == 0.0
+            && self.bottom_right == 0.0
+            && self.bottom_left == 0.0
+    }
+}
+
+impl Default for Corners {
+    fn default() -> Self {
+        Self::uniform(0.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for Corners {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Helper {
+            PerCorner {
+                top_left: f32,
+                top_right: f32,
+                bottom_right: f32,
+                bottom_left: f32,
+            },
+            Uniform(f32),
+        }
+        match Helper::deserialize(deserializer)? {
+            Helper::PerCorner { top_left, top_right, bottom_right, bottom_left } => {
+                Ok(Corners { top_left, top_right, bottom_right, bottom_left })
+            }
+            Helper::Uniform(v) => Ok(Corners::uniform(v)),
+        }
+    }
 }
 
 // ─── Node config (recursive tree) ────────────────────────────────────────────
@@ -167,11 +292,17 @@ pub struct NodeConfig {
     pub min_height: ValueConfig,
     pub max_width: ValueConfig,
     pub max_height: ValueConfig,
-    pub padding: ValueConfig,
-    pub margin: ValueConfig,
+    pub padding: Sides,
+    pub margin: Sides,
+    #[serde(default)]
+    pub border_width: Sides,
+    #[serde(default)]
+    pub border_radius: Corners,
     pub order: i32,
     #[serde(default = "default_true")]
     pub visible: bool,
+    #[serde(default)]
+    pub text_content: String,
     pub children: Vec<NodeConfig>,
 }
 
@@ -200,10 +331,13 @@ impl NodeConfig {
             min_height: ValueConfig::Auto,
             max_width: ValueConfig::Auto,
             max_height: ValueConfig::Auto,
-            padding: ValueConfig::Px(8.0),
-            margin: ValueConfig::Px(0.0),
+            padding: Sides::uniform(ValueConfig::Px(8.0)),
+            margin: Sides::zero(),
+            border_width: Sides::zero(),
+            border_radius: Corners::uniform(0.0),
             order: 0,
             visible: true,
+            text_content: String::new(),
             children: vec![],
         }
     }
@@ -228,10 +362,13 @@ impl NodeConfig {
             min_height: ValueConfig::Px(0.0),
             max_width: ValueConfig::Auto,
             max_height: ValueConfig::Auto,
-            padding: ValueConfig::Px(12.0),
-            margin: ValueConfig::Px(0.0),
+            padding: Sides::uniform(ValueConfig::Px(12.0)),
+            margin: Sides::zero(),
+            border_width: Sides::zero(),
+            border_radius: Corners::uniform(0.0),
             order: 0,
             visible: true,
+            text_content: String::new(),
             children: vec![],
         }
     }
@@ -279,6 +416,15 @@ impl NodeConfig {
             (None, None) => 120.0,
         };
         (min_dim / 120.0).clamp(0.25, 1.5)
+    }
+
+    /// The text to display in the node. Uses label if text_content is empty.
+    pub fn display_text(&self) -> &str {
+        if self.text_content.is_empty() {
+            &self.label
+        } else {
+            &self.text_content
+        }
     }
 
     pub fn info(&self) -> String {
@@ -359,7 +505,7 @@ pub fn default_palette() -> ColorPalette {
     ColorPalette::Pastel1
 }
 
-fn format_float(v: f32) -> String {
+pub fn format_float(v: f32) -> String {
     if (v - v.round()).abs() < 0.005 {
         format!("{}", v as i32)
     } else {
@@ -451,6 +597,28 @@ mod bevy_bridge {
                 ValueConfig::Percent(n) => bevy::prelude::Val::Percent(n),
                 ValueConfig::Vw(n) => bevy::prelude::Val::Vw(n),
                 ValueConfig::Vh(n) => bevy::prelude::Val::Vh(n),
+            }
+        }
+    }
+
+    impl Sides {
+        pub fn to_bevy_ui_rect(&self) -> bevy::prelude::UiRect {
+            bevy::prelude::UiRect {
+                top: self.top.to_bevy_val(),
+                right: self.right.to_bevy_val(),
+                bottom: self.bottom.to_bevy_val(),
+                left: self.left.to_bevy_val(),
+            }
+        }
+    }
+
+    impl Corners {
+        pub fn to_bevy_border_radius(&self) -> bevy::prelude::BorderRadius {
+            bevy::prelude::BorderRadius {
+                top_left: bevy::prelude::Val::Px(self.top_left),
+                top_right: bevy::prelude::Val::Px(self.top_right),
+                bottom_right: bevy::prelude::Val::Px(self.bottom_right),
+                bottom_left: bevy::prelude::Val::Px(self.bottom_left),
             }
         }
     }

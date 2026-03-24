@@ -4,7 +4,7 @@ use crate::config::*;
 use anyhow::Result;
 
 use crate::art::palette_color;
-use crate::config::{ColorPalette, NodeConfig, ValueConfig};
+use crate::config::{ColorPalette, Corners, NodeConfig, Sides, ValueConfig};
 
 fn format_num(v: f32) -> String {
     if (v - v.round()).abs() < 0.005 {
@@ -21,6 +21,44 @@ fn css_value(v: &ValueConfig) -> String {
         ValueConfig::Percent(n) => format!("{n:.1}%"),
         ValueConfig::Vw(n) => format!("{n:.1}vw"),
         ValueConfig::Vh(n) => format!("{n:.1}vh"),
+    }
+}
+
+fn emit_dioxus_sides(
+    buf: &mut String,
+    pad: &str,
+    prop: &str,
+    sides: &Sides,
+) -> std::fmt::Result {
+    if sides.is_zero() {
+        return Ok(());
+    }
+    if sides.is_uniform() {
+        writeln!(buf, "{pad}    {prop}: \"{}\",", css_value(&sides.first()))
+    } else {
+        writeln!(
+            buf,
+            "{pad}    {prop}: \"{} {} {} {}\",",
+            css_value(&sides.top),
+            css_value(&sides.right),
+            css_value(&sides.bottom),
+            css_value(&sides.left),
+        )
+    }
+}
+
+fn emit_dioxus_corners(buf: &mut String, pad: &str, corners: &Corners) -> std::fmt::Result {
+    if corners.is_zero() {
+        return Ok(());
+    }
+    if corners.is_uniform() {
+        writeln!(buf, "{pad}    border_radius: \"{:.1}px\",", corners.top_left)
+    } else {
+        writeln!(
+            buf,
+            "{pad}    border_radius: \"{:.1}px {:.1}px {:.1}px {:.1}px\",",
+            corners.top_left, corners.top_right, corners.bottom_right, corners.bottom_left,
+        )
     }
 }
 
@@ -246,11 +284,12 @@ fn emit_dioxus_node(
             css_value(&node.max_height)
         )?;
     }
-    if !matches!(node.padding, ValueConfig::Px(v) if v == 0.0) {
-        writeln!(buf, "{pad}    padding: \"{}\",", css_value(&node.padding))?;
-    }
-    if !matches!(node.margin, ValueConfig::Px(v) if v == 0.0) {
-        writeln!(buf, "{pad}    margin: \"{}\",", css_value(&node.margin))?;
+    emit_dioxus_sides(buf, &pad, "padding", &node.padding)?;
+    emit_dioxus_sides(buf, &pad, "margin", &node.margin)?;
+    emit_dioxus_sides(buf, &pad, "border_width", &node.border_width)?;
+    emit_dioxus_corners(buf, &pad, &node.border_radius)?;
+    if !node.border_width.is_zero() {
+        writeln!(buf, "{pad}    border_style: \"solid\",")?;
     }
     if node.order != 0 {
         writeln!(buf, "{pad}    order: \"{}\",", node.order)?;

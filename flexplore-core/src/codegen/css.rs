@@ -4,14 +4,10 @@ use crate::config::*;
 use anyhow::Result;
 
 use crate::art::palette_color;
-use crate::config::{ColorPalette, NodeConfig, ValueConfig};
+use crate::config::{ColorPalette, Corners, NodeConfig, Sides, ValueConfig};
 
 fn is_zero_or_auto(v: &ValueConfig) -> bool {
     matches!(v, ValueConfig::Auto) || matches!(v, ValueConfig::Px(n) if *n == 0.0)
-}
-
-fn is_zero_px(v: &ValueConfig) -> bool {
-    matches!(v, ValueConfig::Px(n) if *n == 0.0)
 }
 
 fn format_num(v: f32) -> String {
@@ -29,6 +25,39 @@ fn emit_css_value(v: &ValueConfig) -> String {
         ValueConfig::Percent(n) => format!("{n:.1}%"),
         ValueConfig::Vw(n) => format!("{n:.1}vw"),
         ValueConfig::Vh(n) => format!("{n:.1}vh"),
+    }
+}
+
+fn emit_css_sides(css: &mut String, prop: &str, sides: &Sides) -> std::fmt::Result {
+    if sides.is_zero() {
+        return Ok(());
+    }
+    if sides.is_uniform() {
+        writeln!(css, "  {prop}: {};", emit_css_value(&sides.first()))
+    } else {
+        writeln!(
+            css,
+            "  {prop}: {} {} {} {};",
+            emit_css_value(&sides.top),
+            emit_css_value(&sides.right),
+            emit_css_value(&sides.bottom),
+            emit_css_value(&sides.left),
+        )
+    }
+}
+
+fn emit_css_corners(css: &mut String, prop: &str, corners: &Corners) -> std::fmt::Result {
+    if corners.is_zero() {
+        return Ok(());
+    }
+    if corners.is_uniform() {
+        writeln!(css, "  {prop}: {:.1}px;", corners.top_left)
+    } else {
+        writeln!(
+            css,
+            "  {prop}: {:.1}px {:.1}px {:.1}px {:.1}px;",
+            corners.top_left, corners.top_right, corners.bottom_right, corners.bottom_left,
+        )
     }
 }
 
@@ -225,11 +254,12 @@ fn emit_html_node(
     if !matches!(node.max_height, ValueConfig::Auto) {
         writeln!(css, "  max-height: {};", emit_css_value(&node.max_height))?;
     }
-    if !is_zero_px(&node.padding) {
-        writeln!(css, "  padding: {};", emit_css_value(&node.padding))?;
-    }
-    if !is_zero_px(&node.margin) {
-        writeln!(css, "  margin: {};", emit_css_value(&node.margin))?;
+    emit_css_sides(css, "padding", &node.padding)?;
+    emit_css_sides(css, "margin", &node.margin)?;
+    emit_css_sides(css, "border-width", &node.border_width)?;
+    emit_css_corners(css, "border-radius", &node.border_radius)?;
+    if !node.border_width.is_zero() {
+        css.push_str("  border-style: solid;\n");
     }
     if node.order != 0 {
         writeln!(css, "  order: {};", node.order)?;

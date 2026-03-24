@@ -267,8 +267,8 @@ fn spawn_node_entity(
         min_height: to_val(&node.min_height),
         max_width: to_val(&node.max_width),
         max_height: to_val(&node.max_height),
-        padding: UiRect::all(to_val(&node.padding)),
-        margin: UiRect::all(to_val(&node.margin)),
+        padding: node.padding.to_bevy_ui_rect(),
+        margin: node.margin.to_bevy_ui_rect(),
         ..default()
     };
 

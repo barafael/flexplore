@@ -6,7 +6,10 @@ use bevy::{
 use bevy_egui::EguiContexts;
 
 use flexplore::art::{ArtExpressions, ArtState, palette_bevy_color, render_art};
-use flexplore::config::{ART_TEXTURE_SIZE, BackgroundMode, FlexConfig, NodeConfig, PANEL_WIDTH};
+use flexplore::config::{
+    ART_TEXTURE_SIZE, BackgroundMode, FlexConfig, NodeConfig, PANEL_WIDTH, RIGHT_PANEL_WIDTH,
+    RightPanelOpen,
+};
 
 // ─── Components ───────────────────────────────────────────────────────────────
 
@@ -29,6 +32,7 @@ pub fn rebuild_viz(
     mut images: ResMut<Assets<Image>>,
     mut cfg: ResMut<FlexConfig>,
     mut art: ResMut<ArtState>,
+    right_panel: Res<RightPanelOpen>,
     roots: Query<Entity, With<VizRoot>>,
 ) {
     if !cfg.take_rebuild() {
@@ -63,10 +67,10 @@ pub fn rebuild_viz(
             art.exprs.push(exprs);
         }
     }
-    spawn_viz(&mut commands, &cfg, &art);
+    spawn_viz(&mut commands, &cfg, &art, right_panel.0);
 }
 
-fn spawn_viz(commands: &mut Commands, cfg: &FlexConfig, art: &ArtState) {
+fn spawn_viz(commands: &mut Commands, cfg: &FlexConfig, art: &ArtState, right_open: bool) {
     let viz_root = commands
         .spawn((
             VizRoot,
@@ -96,7 +100,21 @@ fn spawn_viz(commands: &mut Commands, cfg: &FlexConfig, art: &ArtState) {
             ..default()
         })
         .id();
-    commands.entity(viz_root).add_children(&[spacer, area]);
+
+    let mut children = vec![spacer, area];
+
+    if right_open {
+        let right_spacer = commands
+            .spawn(Node {
+                width: Val::Px(RIGHT_PANEL_WIDTH),
+                flex_shrink: 0.0,
+                ..default()
+            })
+            .id();
+        children.push(right_spacer);
+    }
+
+    commands.entity(viz_root).add_children(&children);
 
     let mut ctx = SpawnCtx {
         cfg,
@@ -124,12 +142,6 @@ fn spawn_node(
     let is_selected = current_path == ctx.selected_path;
     let is_leaf = node.children.is_empty();
 
-    let (border_width, border_color) = if is_selected {
-        (3.0, Color::srgba(1.0, 0.85, 0.1, 1.0))
-    } else {
-        (1.5, Color::srgba(0.0, 0.0, 0.0, 0.35))
-    };
-
     let bg_color = if is_leaf {
         if ctx.cfg.bg_mode == BackgroundMode::Pastel {
             palette_bevy_color(ctx.cfg.palette, ctx.leaf_idx)
@@ -139,6 +151,10 @@ fn spawn_node(
     } else {
         Color::srgba(0.11, 0.11, 0.17, 1.0)
     };
+
+    // User-defined border + selection highlight via outline
+    let user_border = node.border_width.to_bevy_ui_rect();
+    let user_border_color = Color::srgba(0.4, 0.4, 0.5, 0.8);
 
     let node_bevy = Node {
         display: if node.visible {
@@ -163,12 +179,30 @@ fn spawn_node(
         min_height: node.min_height.to_bevy_val(),
         max_width: node.max_width.to_bevy_val(),
         max_height: node.max_height.to_bevy_val(),
-        padding: UiRect::all(node.padding.to_bevy_val()),
-        margin: UiRect::all(node.margin.to_bevy_val()),
-        border: UiRect::all(Val::Px(border_width)),
+        padding: node.padding.to_bevy_ui_rect(),
+        margin: node.margin.to_bevy_ui_rect(),
+        border: user_border,
+        border_radius: node.border_radius.to_bevy_border_radius(),
         overflow: Overflow::clip(),
         ..default()
     };
+
+    // Selection uses Outline so it doesn't compete with user-defined border
+    let outline = if is_selected {
+        Outline {
+            width: Val::Px(3.0),
+            color: Color::srgba(1.0, 0.85, 0.1, 1.0),
+            offset: Val::Px(0.0),
+        }
+    } else {
+        Outline {
+            width: Val::Px(0.0),
+            color: Color::NONE,
+            offset: Val::Px(0.0),
+        }
+    };
+
+    let display_text = node.display_text().to_owned();
 
     if is_leaf {
         let my_idx = ctx.leaf_idx;
@@ -177,11 +211,12 @@ fn spawn_node(
             .spawn((
                 node_bevy,
                 BackgroundColor(bg_color),
-                BorderColor::all(border_color),
+                BorderColor::all(user_border_color),
                 Interaction::None,
                 VizNodePath(current_path.to_vec()),
                 VizNodeInfo(node.info()),
             ))
+            .insert(outline)
             .id();
         if ctx.cfg.bg_mode == BackgroundMode::RandomArt
             && let Some(h) = ctx.art.handles.get(my_idx)
@@ -204,7 +239,7 @@ fn spawn_node(
                 Pickable::IGNORE,
             ))
             .with_child((
-                Text::new(node.label.clone()),
+                Text::new(display_text),
                 TextFont {
                     font_size: (26.0_f32 * scale).clamp(1.0, 52.0),
                     ..default()
@@ -220,16 +255,17 @@ fn spawn_node(
             .spawn((
                 node_bevy,
                 BackgroundColor(bg_color),
-                BorderColor::all(border_color),
+                BorderColor::all(user_border_color),
                 Interaction::None,
                 VizNodePath(current_path.to_vec()),
                 VizNodeInfo(node.info()),
             ))
+            .insert(outline)
             .id();
         let cscale = node.text_scale();
         let lbl = commands
             .spawn((
-                Text::new(node.label.clone()),
+                Text::new(display_text),
                 TextFont {
                     font_size: (10.0_f32 * cscale).clamp(1.0, 20.0),
                     ..default()

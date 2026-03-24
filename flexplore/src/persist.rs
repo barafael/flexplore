@@ -47,6 +47,10 @@ pub fn auto_save(cfg: &FlexConfig) {
 
 #[cfg(target_arch = "wasm32")]
 pub fn auto_load() -> Option<FlexConfig> {
+    // Try URL hash first (shared layout link), then localStorage
+    if let Some(cfg) = load_from_url_hash() {
+        return Some(cfg);
+    }
     let storage = local_storage()?;
     let json = storage.get_item("flexplore_config").ok()??;
     serde_json::from_str(&json).ok()
@@ -95,6 +99,31 @@ pub fn trigger_download(json: &str) {
     }
 
     let _ = web_sys::Url::revoke_object_url(&url);
+}
+
+// ─── WASM URL sharing ────────────────────────────────────────────────────────
+
+#[cfg(target_arch = "wasm32")]
+pub fn make_share_url(cfg: &FlexConfig) -> Option<String> {
+    let json = serde_json::to_string(cfg).ok()?;
+    let window = web_sys::window()?;
+    let encoded: String = window.btoa(&json).ok()?;
+    let location = window.location();
+    let origin = location.origin().ok()?;
+    let pathname = location.pathname().ok()?;
+    Some(format!("{origin}{pathname}#layout={encoded}"))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn load_from_url_hash() -> Option<FlexConfig> {
+    let window = web_sys::window()?;
+    let hash = window.location().hash().ok()?;
+    let hash = hash.strip_prefix('#')?;
+    let encoded = hash.strip_prefix("layout=")?;
+    let json: String = window.atob(encoded).ok()?;
+    // Clear the hash after loading so refreshing doesn't re-apply it
+    let _ = window.location().set_hash("");
+    serde_json::from_str(&json).ok()
 }
 
 /// Try to parse a JSON string as FlexConfig.

@@ -52,7 +52,7 @@ fn iced_spacing(v: &ValueConfig) -> Option<String> {
     }
 }
 
-fn iced_padding(v: &ValueConfig) -> Option<String> {
+fn iced_padding_value(v: &ValueConfig) -> Option<String> {
     match v {
         ValueConfig::Auto => None,
         ValueConfig::Px(n) if *n == 0.0 => None,
@@ -63,6 +63,21 @@ fn iced_padding(v: &ValueConfig) -> Option<String> {
         ValueConfig::Vw(n) => Some(format!("{n:.1} /* {n:.0}vw — no viewport units in Iced */")),
         ValueConfig::Vh(n) => Some(format!("{n:.1} /* {n:.0}vh — no viewport units in Iced */")),
     }
+}
+
+fn iced_padding(sides: &Sides) -> Option<String> {
+    if sides.is_zero() {
+        return None;
+    }
+    if sides.is_uniform() {
+        return iced_padding_value(&sides.first());
+    }
+    // Per-side padding: Padding::from([top, right, bottom, left])
+    let t = sides.top.num().unwrap_or(0.0);
+    let r = sides.right.num().unwrap_or(0.0);
+    let b = sides.bottom.num().unwrap_or(0.0);
+    let l = sides.left.num().unwrap_or(0.0);
+    Some(format!("Padding::from([{t:.1}, {r:.1}, {b:.1}, {l:.1}])"))
 }
 
 fn iced_cross_align_row(a: AlignItems) -> &'static str {
@@ -218,13 +233,52 @@ fn emit_iced_node(
         write!(buf, "{pad}    }})")?;
 
         // Margin — no Iced equivalent
-        if !is_zero_px(&node.margin) && !matches!(node.margin, ValueConfig::Auto) {
+        if !node.margin.is_zero() {
+            writeln!(buf)?;
+            if node.margin.is_uniform() {
+                write!(
+                    buf,
+                    "{pad}    // NOTE: margin: {} — no Iced equivalent",
+                    node.margin.first().display_short()
+                )?;
+            } else {
+                write!(
+                    buf,
+                    "{pad}    // NOTE: margin: {}/{}/{}/{} — no Iced equivalent",
+                    node.margin.top.display_short(),
+                    node.margin.right.display_short(),
+                    node.margin.bottom.display_short(),
+                    node.margin.left.display_short()
+                )?;
+            }
+        }
+
+        // Border — via .style() closure
+        if !node.border_width.is_zero() || !node.border_radius.is_zero() {
             writeln!(buf)?;
             write!(
                 buf,
-                "{pad}    // NOTE: margin: {} — no Iced equivalent",
-                node.margin.display_short()
+                "{pad}    // NOTE: border — apply via .style(|_| container::Style {{ border: Border {{ "
             )?;
+            if !node.border_radius.is_zero() {
+                if node.border_radius.is_uniform() {
+                    write!(buf, "radius: {:.1}.into(), ", node.border_radius.top_left)?;
+                } else {
+                    write!(
+                        buf,
+                        "radius: [{:.1}, {:.1}, {:.1}, {:.1}].into(), ",
+                        node.border_radius.top_left,
+                        node.border_radius.top_right,
+                        node.border_radius.bottom_right,
+                        node.border_radius.bottom_left
+                    )?;
+                }
+            }
+            if !node.border_width.is_zero() {
+                let w = node.border_width.first().num().unwrap_or(0.0);
+                write!(buf, "width: {w:.1}, color: Color::WHITE, ")?;
+            }
+            write!(buf, "..Default::default() }}, ..Default::default() }})")?;
         }
 
         // Flex-shrink — no Iced equivalent
@@ -551,13 +605,52 @@ fn emit_iced_node(
         }
 
         // Margin — no Iced equivalent
-        if !is_zero_px(&node.margin) && !matches!(node.margin, ValueConfig::Auto) {
+        if !node.margin.is_zero() {
+            writeln!(buf)?;
+            if node.margin.is_uniform() {
+                write!(
+                    buf,
+                    "{pad}// NOTE: margin: {} — no Iced equivalent",
+                    node.margin.first().display_short()
+                )?;
+            } else {
+                write!(
+                    buf,
+                    "{pad}// NOTE: margin: {}/{}/{}/{} — no Iced equivalent",
+                    node.margin.top.display_short(),
+                    node.margin.right.display_short(),
+                    node.margin.bottom.display_short(),
+                    node.margin.left.display_short()
+                )?;
+            }
+        }
+
+        // Border — via .style() closure on container wrapper
+        if !node.border_width.is_zero() || !node.border_radius.is_zero() {
             writeln!(buf)?;
             write!(
                 buf,
-                "{pad}// NOTE: margin: {} — no Iced equivalent",
-                node.margin.display_short()
+                "{pad}// NOTE: border — wrap in container().style(|_| container::Style {{ border: Border {{ "
             )?;
+            if !node.border_radius.is_zero() {
+                if node.border_radius.is_uniform() {
+                    write!(buf, "radius: {:.1}.into(), ", node.border_radius.top_left)?;
+                } else {
+                    write!(
+                        buf,
+                        "radius: [{:.1}, {:.1}, {:.1}, {:.1}].into(), ",
+                        node.border_radius.top_left,
+                        node.border_radius.top_right,
+                        node.border_radius.bottom_right,
+                        node.border_radius.bottom_left
+                    )?;
+                }
+            }
+            if !node.border_width.is_zero() {
+                let w = node.border_width.first().num().unwrap_or(0.0);
+                write!(buf, "width: {w:.1}, color: Color::WHITE, ")?;
+            }
+            write!(buf, "..Default::default() }}, ..Default::default() }})")?;
         }
 
         // Flex-shrink — no Iced equivalent
@@ -729,7 +822,7 @@ mod tests {
     #[test]
     fn margin_emits_comment() {
         let mut leaf = NodeConfig::new_leaf("A", 80.0, 80.0);
-        leaf.margin = ValueConfig::Px(16.0);
+        leaf.margin = Sides::uniform(ValueConfig::Px(16.0));
         let mut root = NodeConfig::new_container("root");
         root.children = vec![leaf];
         let code = emit_iced(&root, ColorPalette::Pastel1).unwrap();

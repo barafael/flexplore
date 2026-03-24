@@ -28,13 +28,56 @@
   "max_width": "Auto",
   "max_height": "Auto",
   "padding": {
-    "Px": 12.0
+    "top": {
+      "Px": 12.0
+    },
+    "right": {
+      "Px": 12.0
+    },
+    "bottom": {
+      "Px": 12.0
+    },
+    "left": {
+      "Px": 12.0
+    }
   },
   "margin": {
-    "Px": 0.0
+    "top": {
+      "Px": 0.0
+    },
+    "right": {
+      "Px": 0.0
+    },
+    "bottom": {
+      "Px": 0.0
+    },
+    "left": {
+      "Px": 0.0
+    }
+  },
+  "border_width": {
+    "top": {
+      "Px": 0.0
+    },
+    "right": {
+      "Px": 0.0
+    },
+    "bottom": {
+      "Px": 0.0
+    },
+    "left": {
+      "Px": 0.0
+    }
+  },
+  "border_radius": {
+    "top_left": 0.0,
+    "top_right": 0.0,
+    "bottom_right": 0.0,
+    "bottom_left": 0.0
   },
   "order": 0,
   "visible": true,
+  "text_content": "",
   "children": [
     {
       "label": "top",
@@ -64,13 +107,56 @@
       "max_width": "Auto",
       "max_height": "Auto",
       "padding": {
-        "Px": 8.0
+        "top": {
+          "Px": 8.0
+        },
+        "right": {
+          "Px": 8.0
+        },
+        "bottom": {
+          "Px": 8.0
+        },
+        "left": {
+          "Px": 8.0
+        }
       },
       "margin": {
-        "Px": 0.0
+        "top": {
+          "Px": 0.0
+        },
+        "right": {
+          "Px": 0.0
+        },
+        "bottom": {
+          "Px": 0.0
+        },
+        "left": {
+          "Px": 0.0
+        }
+      },
+      "border_width": {
+        "top": {
+          "Px": 0.0
+        },
+        "right": {
+          "Px": 0.0
+        },
+        "bottom": {
+          "Px": 0.0
+        },
+        "left": {
+          "Px": 0.0
+        }
+      },
+      "border_radius": {
+        "top_left": 0.0,
+        "top_right": 0.0,
+        "bottom_right": 0.0,
+        "bottom_left": 0.0
       },
       "order": 0,
       "visible": true,
+      "text_content": "",
       "children": []
     },
     {
@@ -101,13 +187,56 @@
       "max_width": "Auto",
       "max_height": "Auto",
       "padding": {
-        "Px": 8.0
+        "top": {
+          "Px": 8.0
+        },
+        "right": {
+          "Px": 8.0
+        },
+        "bottom": {
+          "Px": 8.0
+        },
+        "left": {
+          "Px": 8.0
+        }
       },
       "margin": {
-        "Px": 0.0
+        "top": {
+          "Px": 0.0
+        },
+        "right": {
+          "Px": 0.0
+        },
+        "bottom": {
+          "Px": 0.0
+        },
+        "left": {
+          "Px": 0.0
+        }
+      },
+      "border_width": {
+        "top": {
+          "Px": 0.0
+        },
+        "right": {
+          "Px": 0.0
+        },
+        "bottom": {
+          "Px": 0.0
+        },
+        "left": {
+          "Px": 0.0
+        }
+      },
+      "border_radius": {
+        "top_left": 0.0,
+        "top_right": 0.0,
+        "bottom_right": 0.0,
+        "bottom_left": 0.0
       },
       "order": 0,
       "visible": true,
+      "text_content": "",
       "children": []
     },
     {
@@ -138,13 +267,56 @@
       "max_width": "Auto",
       "max_height": "Auto",
       "padding": {
-        "Px": 8.0
+        "top": {
+          "Px": 8.0
+        },
+        "right": {
+          "Px": 8.0
+        },
+        "bottom": {
+          "Px": 8.0
+        },
+        "left": {
+          "Px": 8.0
+        }
       },
       "margin": {
-        "Px": 0.0
+        "top": {
+          "Px": 0.0
+        },
+        "right": {
+          "Px": 0.0
+        },
+        "bottom": {
+          "Px": 0.0
+        },
+        "left": {
+          "Px": 0.0
+        }
+      },
+      "border_width": {
+        "top": {
+          "Px": 0.0
+        },
+        "right": {
+          "Px": 0.0
+        },
+        "bottom": {
+          "Px": 0.0
+        },
+        "left": {
+          "Px": 0.0
+        }
+      },
+      "border_radius": {
+        "top_left": 0.0,
+        "top_right": 0.0,
+        "bottom_right": 0.0,
+        "bottom_left": 0.0
       },
       "order": 0,
       "visible": true,
+      "text_content": "",
       "children": []
     }
   ],

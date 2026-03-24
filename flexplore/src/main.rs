@@ -28,6 +28,7 @@ fn main() {
         .init_resource::<FlexConfig>()
         .init_resource::<ArtState>()
         .init_resource::<viz::ArrowNav>()
+        .init_resource::<flexplore::config::RightPanelOpen>()
         .insert_resource(UndoHistory::new(FlexConfig::default()))
         .add_systems(Startup, (setup, load_autosave))
         .add_systems(EguiPrimaryContextPass, panel::panel_system)

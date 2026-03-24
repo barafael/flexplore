@@ -4,7 +4,7 @@ use crate::config::*;
 use anyhow::Result;
 
 use crate::art::palette_color;
-use crate::config::{ColorPalette, NodeConfig, ValueConfig};
+use crate::config::{ColorPalette, Corners, NodeConfig, Sides, ValueConfig};
 
 fn count_leaves(node: &NodeConfig) -> usize {
     if node.children.is_empty() {
@@ -58,6 +58,83 @@ fn swift_optional_value(v: &ValueConfig) -> Option<String> {
         ValueConfig::Auto => None,
         _ => Some(swift_value(v)),
     }
+}
+
+fn emit_swift_padding(
+    buf: &mut String,
+    prefix: &str,
+    sides: &Sides,
+    comment: &str,
+) -> Result<(), std::fmt::Error> {
+    if sides.is_zero() {
+        return Ok(());
+    }
+    if sides.is_uniform() {
+        if let Some(v) = swift_optional_value(&sides.first()) {
+            writeln!(buf, "{prefix}.padding({v}){comment}")?;
+        }
+    } else {
+        let edge_map: &[(&str, &ValueConfig)] = &[
+            (".top", &sides.top),
+            (".leading", &sides.left),
+            (".bottom", &sides.bottom),
+            (".trailing", &sides.right),
+        ];
+        for (edge, val) in edge_map {
+            if let Some(v) = swift_optional_value(val) {
+                writeln!(buf, "{prefix}.padding({edge}, {v}){comment}")?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn emit_swift_border(
+    buf: &mut String,
+    prefix: &str,
+    border_width: &Sides,
+    border_radius: &Corners,
+) -> Result<(), std::fmt::Error> {
+    if !border_radius.is_zero() {
+        if border_radius.is_uniform() {
+            writeln!(buf, "{prefix}.cornerRadius({:.1})", border_radius.top_left)?;
+        } else {
+            writeln!(
+                buf,
+                "{prefix}.clipShape(RoundedRectangle(cornerSize: CGSize(width: {:.1}, height: {:.1}))) /* per-corner: tl={:.1} tr={:.1} br={:.1} bl={:.1} */",
+                border_radius.top_left,
+                border_radius.top_left,
+                border_radius.top_left,
+                border_radius.top_right,
+                border_radius.bottom_right,
+                border_radius.bottom_left,
+            )?;
+        }
+    }
+    if !border_width.is_zero() {
+        if border_width.is_uniform() {
+            if let Some(w) = swift_optional_value(&border_width.first()) {
+                writeln!(buf, "{prefix}.border(Color.primary, width: {w})")?;
+            }
+        } else {
+            writeln!(buf, "{prefix}.overlay(")?;
+            writeln!(buf, "{prefix}    Rectangle().inset(by: 0)")?;
+            let edge_map: &[(&str, &ValueConfig)] = &[
+                ("top", &border_width.top),
+                ("leading", &border_width.left),
+                ("bottom", &border_width.bottom),
+                ("trailing", &border_width.right),
+            ];
+            for (edge, val) in edge_map {
+                if let Some(w) = swift_optional_value(val) {
+                    writeln!(buf, "{prefix}        /* {edge}: {w} */")?;
+                }
+            }
+            writeln!(buf, "{prefix}        .stroke(Color.primary)")?;
+            writeln!(buf, "{prefix})")?;
+        }
+    }
+    Ok(())
 }
 
 fn swift_flex_basis_value(v: &ValueConfig, is_width: bool) -> Option<String> {
@@ -219,20 +296,14 @@ fn emit_swiftui_node(
                 max_h.as_deref().unwrap_or("nil"),
             )?;
         }
-        if !is_zero_px(&node.padding)
-            && let Some(p) = swift_optional_value(&node.padding)
-        {
-            writeln!(buf, "{pad}    .padding({p})")?;
-        }
+        let leaf_prefix = format!("{pad}    ");
+        emit_swift_padding(buf, &leaf_prefix, &node.padding, "")?;
         writeln!(
             buf,
             "{pad}    .background(Color(red: {r:.2}, green: {g:.2}, blue: {b:.2}))"
         )?;
-        if !is_zero_px(&node.margin)
-            && let Some(m) = swift_optional_value(&node.margin)
-        {
-            writeln!(buf, "{pad}    .padding({m}) /* margin */",)?;
-        }
+        emit_swift_border(buf, &leaf_prefix, &node.border_width, &node.border_radius)?;
+        emit_swift_padding(buf, &leaf_prefix, &node.margin, " /* margin */")?;
         if let Some(alignment) = swift_align_self(node.align_self, parent_is_row) {
             if parent_is_row {
                 writeln!(buf, "{pad}    .frame(maxHeight: .infinity, alignment: {alignment})")?;
@@ -562,20 +633,13 @@ fn emit_swiftui_node(
             )?;
         }
 
-        if !is_zero_px(&node.padding)
-            && let Some(p) = swift_optional_value(&node.padding)
-        {
-            writeln!(buf, "{pad}.padding({p})")?;
-        }
+        emit_swift_padding(buf, &pad, &node.padding, "")?;
         writeln!(
             buf,
             "{pad}.background(Color(red: 0.11, green: 0.11, blue: 0.17))"
         )?;
-        if !is_zero_px(&node.margin)
-            && let Some(m) = swift_optional_value(&node.margin)
-        {
-            writeln!(buf, "{pad}.padding({m}) /* margin */")?;
-        }
+        emit_swift_border(buf, &pad, &node.border_width, &node.border_radius)?;
+        emit_swift_padding(buf, &pad, &node.margin, " /* margin */")?;
         if !node.visible {
             writeln!(buf, "{pad}.hidden()")?;
         }

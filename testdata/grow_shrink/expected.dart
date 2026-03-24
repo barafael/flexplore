@@ -3,7 +3,6 @@ Widget build(BuildContext context) {
     width: double.infinity,
     height: double.infinity,
     padding: EdgeInsets.all(12.0),
-    margin: EdgeInsets.all(0.0),
     child:     Row(
       mainAxisAlignment: MainAxisAlignment.start,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -13,7 +12,6 @@ Widget build(BuildContext context) {
           child:           Container(
             height: 80.0,
             padding: EdgeInsets.all(8.0),
-            margin: EdgeInsets.all(0.0),
             color: Color.fromRGBO(251, 180, 174, 1.0),
             alignment: Alignment.center,
             child: Text('grow-1',
@@ -26,7 +24,6 @@ Widget build(BuildContext context) {
           child:           Container(
             height: 80.0,
             padding: EdgeInsets.all(8.0),
-            margin: EdgeInsets.all(0.0),
             color: Color.fromRGBO(179, 205, 227, 1.0),
             alignment: Alignment.center,
             child: Text('grow-2',
@@ -38,7 +35,6 @@ Widget build(BuildContext context) {
           width: 100.0,
           height: 80.0,
           padding: EdgeInsets.all(8.0),
-          margin: EdgeInsets.all(0.0),
           color: Color.fromRGBO(204, 235, 197, 1.0),
           alignment: Alignment.center,
           child: Text('fixed',

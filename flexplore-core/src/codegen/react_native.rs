@@ -4,7 +4,7 @@ use crate::config::*;
 use anyhow::Result;
 
 use crate::art::palette_color;
-use crate::config::{ColorPalette, NodeConfig, ValueConfig};
+use crate::config::{ColorPalette, Corners, NodeConfig, Sides, ValueConfig};
 
 fn format_num(v: f32) -> String {
     if (v - v.round()).abs() < 0.005 {
@@ -98,6 +98,56 @@ fn rn_align_self(a: AlignSelf) -> &'static str {
     }
 }
 
+fn emit_rn_sides(buf: &mut String, pad: &str, prop: &str, sides: &Sides) -> std::fmt::Result {
+    if sides.is_zero() {
+        return Ok(());
+    }
+    if sides.is_uniform() {
+        writeln!(buf, "{pad}  {prop}: {},", rn_value(&sides.first()))
+    } else {
+        writeln!(buf, "{pad}  {prop}Top: {},", rn_value(&sides.top))?;
+        writeln!(buf, "{pad}  {prop}Right: {},", rn_value(&sides.right))?;
+        writeln!(buf, "{pad}  {prop}Bottom: {},", rn_value(&sides.bottom))?;
+        writeln!(buf, "{pad}  {prop}Left: {},", rn_value(&sides.left))
+    }
+}
+
+fn emit_rn_corners(buf: &mut String, pad: &str, corners: &Corners) -> std::fmt::Result {
+    if corners.is_zero() {
+        return Ok(());
+    }
+    if corners.is_uniform() {
+        writeln!(buf, "{pad}  borderRadius: {},", format_num(corners.top_left))
+    } else {
+        writeln!(
+            buf,
+            "{pad}  borderTopLeftRadius: {},",
+            format_num(corners.top_left)
+        )?;
+        writeln!(
+            buf,
+            "{pad}  borderTopRightRadius: {},",
+            format_num(corners.top_right)
+        )?;
+        writeln!(
+            buf,
+            "{pad}  borderBottomRightRadius: {},",
+            format_num(corners.bottom_right)
+        )?;
+        writeln!(
+            buf,
+            "{pad}  borderBottomLeftRadius: {},",
+            format_num(corners.bottom_left)
+        )
+    }
+}
+
+fn side_has_viewport_unit(sides: &Sides) -> bool {
+    [&sides.top, &sides.right, &sides.bottom, &sides.left]
+        .iter()
+        .any(|v| matches!(v, ValueConfig::Vw(_) | ValueConfig::Vh(_)))
+}
+
 fn needs_dimensions(node: &NodeConfig) -> bool {
     let vals = [
         &node.width,
@@ -106,14 +156,15 @@ fn needs_dimensions(node: &NodeConfig) -> bool {
         &node.min_height,
         &node.max_width,
         &node.max_height,
-        &node.padding,
-        &node.margin,
         &node.row_gap,
         &node.column_gap,
         &node.flex_basis,
     ];
     vals.iter()
         .any(|v| matches!(v, ValueConfig::Vw(_) | ValueConfig::Vh(_)))
+        || side_has_viewport_unit(&node.padding)
+        || side_has_viewport_unit(&node.margin)
+        || side_has_viewport_unit(&node.border_width)
         || node.children.iter().any(needs_dimensions)
 }
 
@@ -243,12 +294,10 @@ fn emit_rn_node(
     if !matches!(node.max_height, ValueConfig::Auto) {
         writeln!(buf, "{pad}  maxHeight: {},", rn_value(&node.max_height))?;
     }
-    if !matches!(node.padding, ValueConfig::Px(v) if v == 0.0) {
-        writeln!(buf, "{pad}  padding: {},", rn_value(&node.padding))?;
-    }
-    if !matches!(node.margin, ValueConfig::Px(v) if v == 0.0) {
-        writeln!(buf, "{pad}  margin: {},", rn_value(&node.margin))?;
-    }
+    emit_rn_sides(buf, &pad, "padding", &node.padding)?;
+    emit_rn_sides(buf, &pad, "margin", &node.margin)?;
+    emit_rn_sides(buf, &pad, "borderWidth", &node.border_width)?;
+    emit_rn_corners(buf, &pad, &node.border_radius)?;
     writeln!(buf, "{pad}  backgroundColor: {bg},")?;
 
     if is_leaf {

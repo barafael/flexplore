@@ -276,13 +276,13 @@ pub fn all_fixtures() -> Vec<Fixture> {
             "padding_margin",
             {
                 let mut r = NodeConfig::new_container("root");
-                r.padding = ValueConfig::Px(20.0);
+                r.padding = Sides::uniform(ValueConfig::Px(20.0));
                 r.flex_wrap = FlexWrap::NoWrap;
                 let items: Vec<_> = ["A", "B", "C"]
                     .iter()
                     .map(|label| {
                         let mut leaf = NodeConfig::new_leaf(*label, 100.0, 60.0);
-                        leaf.margin = ValueConfig::Px(16.0);
+                        leaf.margin = Sides::uniform(ValueConfig::Px(16.0));
                         leaf
                     })
                     .collect();

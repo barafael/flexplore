@@ -121,8 +121,8 @@ fn ordered_children() -> NodeConfig {
 
 fn with_padding_margin() -> NodeConfig {
     let mut leaf = NodeConfig::new_leaf("spaced", 80.0, 80.0);
-    leaf.padding = ValueConfig::Px(20.0);
-    leaf.margin = ValueConfig::Px(10.0);
+    leaf.padding = Sides::uniform(ValueConfig::Px(20.0));
+    leaf.margin = Sides::uniform(ValueConfig::Px(10.0));
     let mut root = NodeConfig::new_container("root");
     root.children = vec![leaf];
     root

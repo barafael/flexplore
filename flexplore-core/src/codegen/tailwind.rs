@@ -4,7 +4,7 @@ use crate::config::*;
 use anyhow::Result;
 
 use crate::art::palette_color;
-use crate::config::{ColorPalette, NodeConfig, ValueConfig};
+use crate::config::{ColorPalette, Corners, NodeConfig, Sides, ValueConfig};
 
 fn tailwind_flex_direction(d: FlexDirection) -> &'static str {
     match d {
@@ -91,6 +91,58 @@ fn tailwind_value(property: &str, v: &ValueConfig) -> String {
         ValueConfig::Percent(n) => format!("{property}-[{n:.1}%]"),
         ValueConfig::Vw(n) => format!("{property}-[{n:.1}vw]"),
         ValueConfig::Vh(n) => format!("{property}-[{n:.1}vh]"),
+    }
+}
+
+fn push_tailwind_sides(
+    classes: &mut Vec<String>,
+    uniform_prefix: &str,
+    top: &str,
+    right: &str,
+    bottom: &str,
+    left: &str,
+    sides: &Sides,
+) {
+    if sides.is_zero() {
+        return;
+    }
+    if sides.is_uniform() {
+        classes.push(tailwind_value(uniform_prefix, &sides.first()));
+    } else {
+        if !sides.top.is_zero_px() {
+            classes.push(tailwind_value(top, &sides.top));
+        }
+        if !sides.right.is_zero_px() {
+            classes.push(tailwind_value(right, &sides.right));
+        }
+        if !sides.bottom.is_zero_px() {
+            classes.push(tailwind_value(bottom, &sides.bottom));
+        }
+        if !sides.left.is_zero_px() {
+            classes.push(tailwind_value(left, &sides.left));
+        }
+    }
+}
+
+fn push_tailwind_corners(classes: &mut Vec<String>, corners: &Corners) {
+    if corners.is_zero() {
+        return;
+    }
+    if corners.is_uniform() {
+        classes.push(format!("rounded-[{:.1}px]", corners.top_left));
+    } else {
+        if corners.top_left != 0.0 {
+            classes.push(format!("rounded-tl-[{:.1}px]", corners.top_left));
+        }
+        if corners.top_right != 0.0 {
+            classes.push(format!("rounded-tr-[{:.1}px]", corners.top_right));
+        }
+        if corners.bottom_right != 0.0 {
+            classes.push(format!("rounded-br-[{:.1}px]", corners.bottom_right));
+        }
+        if corners.bottom_left != 0.0 {
+            classes.push(format!("rounded-bl-[{:.1}px]", corners.bottom_left));
+        }
     }
 }
 
@@ -188,11 +240,20 @@ fn emit_tailwind_node(
     if !matches!(node.max_height, ValueConfig::Auto) {
         classes.push(tailwind_value("max-h", &node.max_height));
     }
-    if !matches!(node.padding, ValueConfig::Px(v) if v == 0.0) {
-        classes.push(tailwind_value("p", &node.padding));
-    }
-    if !matches!(node.margin, ValueConfig::Px(v) if v == 0.0) {
-        classes.push(tailwind_value("m", &node.margin));
+    push_tailwind_sides(&mut classes, "p", "pt", "pr", "pb", "pl", &node.padding);
+    push_tailwind_sides(&mut classes, "m", "mt", "mr", "mb", "ml", &node.margin);
+    push_tailwind_sides(
+        &mut classes,
+        "border",
+        "border-t",
+        "border-r",
+        "border-b",
+        "border-l",
+        &node.border_width,
+    );
+    push_tailwind_corners(&mut classes, &node.border_radius);
+    if !node.border_width.is_zero() {
+        classes.push("border-solid".into());
     }
     classes.push(bg);
     classes.push("box-border".into());

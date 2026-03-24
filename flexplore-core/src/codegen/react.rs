@@ -4,7 +4,7 @@ use crate::config::*;
 use anyhow::Result;
 
 use crate::art::palette_color;
-use crate::config::{ColorPalette, NodeConfig, ValueConfig};
+use crate::config::{ColorPalette, Corners, NodeConfig, Sides, ValueConfig};
 
 fn format_num(v: f32) -> String {
     if (v - v.round()).abs() < 0.005 {
@@ -21,6 +21,50 @@ fn css_value(v: &ValueConfig) -> String {
         ValueConfig::Percent(n) => format!("'{n:.1}%'"),
         ValueConfig::Vw(n) => format!("'{n:.1}vw'"),
         ValueConfig::Vh(n) => format!("'{n:.1}vh'"),
+    }
+}
+
+fn emit_react_sides(buf: &mut String, pad: &str, prop: &str, sides: &Sides) -> std::fmt::Result {
+    if sides.is_zero() {
+        return Ok(());
+    }
+    if sides.is_uniform() {
+        writeln!(buf, "{pad}  {prop}: {},", css_value(&sides.first()))
+    } else {
+        writeln!(buf, "{pad}  {prop}Top: {},", css_value(&sides.top))?;
+        writeln!(buf, "{pad}  {prop}Right: {},", css_value(&sides.right))?;
+        writeln!(buf, "{pad}  {prop}Bottom: {},", css_value(&sides.bottom))?;
+        writeln!(buf, "{pad}  {prop}Left: {},", css_value(&sides.left))
+    }
+}
+
+fn emit_react_corners(buf: &mut String, pad: &str, corners: &Corners) -> std::fmt::Result {
+    if corners.is_zero() {
+        return Ok(());
+    }
+    if corners.is_uniform() {
+        writeln!(buf, "{pad}  borderRadius: '{:.1}px',", corners.top_left)
+    } else {
+        writeln!(
+            buf,
+            "{pad}  borderTopLeftRadius: '{:.1}px',",
+            corners.top_left
+        )?;
+        writeln!(
+            buf,
+            "{pad}  borderTopRightRadius: '{:.1}px',",
+            corners.top_right
+        )?;
+        writeln!(
+            buf,
+            "{pad}  borderBottomRightRadius: '{:.1}px',",
+            corners.bottom_right
+        )?;
+        writeln!(
+            buf,
+            "{pad}  borderBottomLeftRadius: '{:.1}px',",
+            corners.bottom_left
+        )
     }
 }
 
@@ -213,11 +257,12 @@ fn emit_react_node(
     if !matches!(node.max_height, ValueConfig::Auto) {
         writeln!(buf, "{pad}  maxHeight: {},", css_value(&node.max_height))?;
     }
-    if !matches!(node.padding, ValueConfig::Px(v) if v == 0.0) {
-        writeln!(buf, "{pad}  padding: {},", css_value(&node.padding))?;
-    }
-    if !matches!(node.margin, ValueConfig::Px(v) if v == 0.0) {
-        writeln!(buf, "{pad}  margin: {},", css_value(&node.margin))?;
+    emit_react_sides(buf, &pad, "padding", &node.padding)?;
+    emit_react_sides(buf, &pad, "margin", &node.margin)?;
+    emit_react_sides(buf, &pad, "borderWidth", &node.border_width)?;
+    emit_react_corners(buf, &pad, &node.border_radius)?;
+    if !node.border_width.is_zero() {
+        writeln!(buf, "{pad}  borderStyle: 'solid',")?;
     }
     if node.order != 0 {
         writeln!(buf, "{pad}  order: {},", node.order)?;

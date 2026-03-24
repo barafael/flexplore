@@ -3,7 +3,6 @@ Widget build(BuildContext context) {
     width: double.infinity,
     height: double.infinity,
     padding: EdgeInsets.all(12.0),
-    margin: EdgeInsets.all(0.0),
     child:     Wrap(
       direction: Axis.horizontal,
       spacing: 8.0,
@@ -12,7 +11,6 @@ Widget build(BuildContext context) {
         Container(
           width: double.infinity,
           padding: EdgeInsets.all(12.0),
-          margin: EdgeInsets.all(0.0),
           child:           Wrap(
             direction: Axis.horizontal,
             spacing: 8.0,
@@ -21,7 +19,6 @@ Widget build(BuildContext context) {
               Container(
                 width: double.infinity,
                 padding: EdgeInsets.all(12.0),
-                margin: EdgeInsets.all(0.0),
                 child:                 Wrap(
                   direction: Axis.horizontal,
                   spacing: 8.0,
@@ -31,7 +28,6 @@ Widget build(BuildContext context) {
                       width: 50.0,
                       height: 50.0,
                       padding: EdgeInsets.all(8.0),
-                      margin: EdgeInsets.all(0.0),
                       color: Color.fromRGBO(251, 180, 174, 1.0),
                       alignment: Alignment.center,
                       child: Text('leaf',
