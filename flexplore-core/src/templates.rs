@@ -162,3 +162,80 @@ pub fn nav_bar() -> NodeConfig {
     root.children = vec![logo, links, actions];
     root
 }
+
+/// A 3-column responsive-style grid dashboard.
+pub fn grid_dashboard() -> NodeConfig {
+    let mut root = NodeConfig::new_grid(
+        "dashboard",
+        vec![GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0)],
+    );
+    root.grid_template_rows = vec![GridTrackSize::Px(60.0), GridTrackSize::Fr(1.0), GridTrackSize::Px(40.0)];
+    root.width = ValueConfig::Percent(100.0);
+    root.height = ValueConfig::Percent(100.0);
+    root.padding = Sides::zero();
+    root.row_gap = ValueConfig::Px(0.0);
+    root.column_gap = ValueConfig::Px(0.0);
+
+    let mut header = NodeConfig::new_leaf("header", 100.0, 60.0);
+    header.grid_column = GridPlacement::StartSpan(1, 3);
+    header.width = ValueConfig::Auto;
+    header.height = ValueConfig::Auto;
+
+    let mut sidebar = NodeConfig::new_leaf("sidebar", 100.0, 100.0);
+    sidebar.width = ValueConfig::Auto;
+    sidebar.height = ValueConfig::Auto;
+
+    let mut main = NodeConfig::new_leaf("main", 100.0, 100.0);
+    main.grid_column = GridPlacement::Span(2);
+    main.width = ValueConfig::Auto;
+    main.height = ValueConfig::Auto;
+
+    let mut footer = NodeConfig::new_leaf("footer", 100.0, 40.0);
+    footer.grid_column = GridPlacement::StartSpan(1, 3);
+    footer.width = ValueConfig::Auto;
+    footer.height = ValueConfig::Auto;
+
+    root.children = vec![header, sidebar, main, footer];
+    root
+}
+
+/// A photo-gallery-style grid with items of varying spans.
+pub fn grid_gallery() -> NodeConfig {
+    let mut root = NodeConfig::new_grid(
+        "gallery",
+        vec![
+            GridTrackSize::Fr(1.0),
+            GridTrackSize::Fr(1.0),
+            GridTrackSize::Fr(1.0),
+            GridTrackSize::Fr(1.0),
+        ],
+    );
+    root.grid_auto_rows = vec![GridTrackSize::Px(120.0)];
+    root.width = ValueConfig::Percent(100.0);
+    root.height = ValueConfig::Auto;
+    root.padding = Sides::uniform(ValueConfig::Px(8.0));
+    root.row_gap = ValueConfig::Px(8.0);
+    root.column_gap = ValueConfig::Px(8.0);
+
+    let mut wide = NodeConfig::new_leaf("wide", 100.0, 120.0);
+    wide.grid_column = GridPlacement::Span(2);
+    wide.width = ValueConfig::Auto;
+    wide.height = ValueConfig::Auto;
+
+    let mut tall = NodeConfig::new_leaf("tall", 100.0, 120.0);
+    tall.grid_row = GridPlacement::Span(2);
+    tall.width = ValueConfig::Auto;
+    tall.height = ValueConfig::Auto;
+
+    let items: Vec<NodeConfig> = (1..=4)
+        .map(|i| {
+            let mut n = NodeConfig::new_leaf(format!("img-{i}"), 100.0, 120.0);
+            n.width = ValueConfig::Auto;
+            n.height = ValueConfig::Auto;
+            n
+        })
+        .collect();
+
+    root.children = vec![wide, items[0].clone(), items[1].clone(), tall, items[2].clone(), items[3].clone()];
+    root
+}

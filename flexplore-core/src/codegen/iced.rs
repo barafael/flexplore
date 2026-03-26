@@ -331,10 +331,23 @@ fn emit_iced_node(
         }
     } else {
         // ── Container node ──────────────────────────────────────────────
-        let is_row = matches!(
-            node.flex_direction,
-            FlexDirection::Row | FlexDirection::RowReverse
-        );
+        let is_grid = node.display_mode == DisplayMode::Grid;
+        let grid_col_count = if is_grid && !node.grid_template_columns.is_empty() {
+            node.grid_template_columns.len()
+        } else if is_grid {
+            1
+        } else {
+            0
+        };
+
+        let is_row = if is_grid {
+            true // Grid approximation uses row-based layout
+        } else {
+            matches!(
+                node.flex_direction,
+                FlexDirection::Row | FlexDirection::RowReverse
+            )
+        };
         let is_reversed = matches!(
             node.flex_direction,
             FlexDirection::RowReverse | FlexDirection::ColumnReverse
@@ -359,6 +372,43 @@ fn emit_iced_node(
         } else {
             &node.row_gap
         };
+
+        // CSS Grid comment
+        if is_grid {
+            writeln!(
+                buf,
+                "{pad}// CSS Grid: {grid_col_count} column{plural}",
+                plural = if grid_col_count == 1 { "" } else { "s" }
+            )?;
+            if !node.grid_template_columns.is_empty() {
+                let tracks: Vec<_> = node
+                    .grid_template_columns
+                    .iter()
+                    .map(|t| t.display_short())
+                    .collect();
+                writeln!(
+                    buf,
+                    "{pad}// grid-template-columns: {}",
+                    tracks.join(" ")
+                )?;
+            }
+            if !node.grid_template_rows.is_empty() {
+                let tracks: Vec<_> = node
+                    .grid_template_rows
+                    .iter()
+                    .map(|t| t.display_short())
+                    .collect();
+                writeln!(
+                    buf,
+                    "{pad}// grid-template-rows: {}",
+                    tracks.join(" ")
+                )?;
+            }
+            writeln!(
+                buf,
+                "{pad}// Approximated with Row/Column — Iced has no CSS Grid support"
+            )?;
+        }
 
         writeln!(buf, "{pad}{macro_name}[")?;
 
@@ -463,7 +513,7 @@ fn emit_iced_node(
         write!(buf, "{pad}]")?;
 
         // Wrapping — emit .wrap() on Row
-        if node.flex_wrap != FlexWrap::NoWrap && is_row {
+        if (is_grid || node.flex_wrap != FlexWrap::NoWrap) && is_row {
             writeln!(buf)?;
             write!(buf, "{pad}.wrap()")?;
         }

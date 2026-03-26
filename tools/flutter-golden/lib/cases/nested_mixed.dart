@@ -10,7 +10,6 @@ class NestedMixed extends StatelessWidget {
     width: double.infinity,
     height: double.infinity,
     padding: EdgeInsets.all(12.0),
-    margin: EdgeInsets.all(0.0),
     child:     Wrap(
       direction: Axis.horizontal,
       spacing: 8.0,
@@ -20,7 +19,6 @@ class NestedMixed extends StatelessWidget {
           width: 80.0,
           height: 80.0,
           padding: EdgeInsets.all(8.0),
-          margin: EdgeInsets.all(0.0),
           color: Color.fromRGBO(251, 180, 174, 1.0),
           alignment: Alignment.center,
           child: Text('A',
@@ -31,7 +29,6 @@ class NestedMixed extends StatelessWidget {
         Container(
           width: 200.0,
           padding: EdgeInsets.all(12.0),
-          margin: EdgeInsets.all(0.0),
           child:           Wrap(
             direction: Axis.vertical,
             spacing: 8.0,
@@ -41,7 +38,6 @@ class NestedMixed extends StatelessWidget {
                 width: 40.0,
                 height: 40.0,
                 padding: EdgeInsets.all(8.0),
-                margin: EdgeInsets.all(0.0),
                 color: Color.fromRGBO(179, 205, 227, 1.0),
                 alignment: Alignment.center,
                 child: Text('X',
@@ -53,7 +49,6 @@ class NestedMixed extends StatelessWidget {
                 width: 40.0,
                 height: 40.0,
                 padding: EdgeInsets.all(8.0),
-                margin: EdgeInsets.all(0.0),
                 color: Color.fromRGBO(204, 235, 197, 1.0),
                 alignment: Alignment.center,
                 child: Text('Y',
@@ -69,7 +64,6 @@ class NestedMixed extends StatelessWidget {
           width: 80.0,
           height: 80.0,
           padding: EdgeInsets.all(8.0),
-          margin: EdgeInsets.all(0.0),
           color: Color.fromRGBO(222, 203, 228, 1.0),
           alignment: Alignment.center,
           child: Text('B',

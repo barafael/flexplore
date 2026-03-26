@@ -290,7 +290,7 @@ fn child_fixed_main(child: &NodeConfig, is_row: bool) -> f32 {
     }
     let dim = if is_row { &child.width } else { &child.height };
     let size = resolve_to_px(dim, if is_row { VIEWPORT_W } else { VIEWPORT_H });
-    let margin = resolve_to_px(&child.margin, 0.0) * 2.0;
+    let margin = resolve_to_px(&child.margin.first(), 0.0) * 2.0;
     // If child has flex-grow and no explicit main-axis size, it's flexible
     if child.flex_grow > 0.0 && size == 0.0 {
         return 0.0;
@@ -380,8 +380,8 @@ fn build_leaf(
 
     let w = resolve_to_px(&node.width, VIEWPORT_W);
     let h = resolve_to_px(&node.height, VIEWPORT_H);
-    let padding = resolve_to_px(&node.padding, 0.0);
-    let margin = resolve_to_px(&node.margin, 0.0);
+    let padding = resolve_to_px(&node.padding.first(), 0.0);
+    let margin = resolve_to_px(&node.margin.first(), 0.0);
 
     // Apply max constraints
     let max_w = if let ValueConfig::Px(n) = node.max_width {
@@ -527,8 +527,8 @@ fn build_container(
         resolve_to_px(&node.row_gap, 0.0)
     };
 
-    let padding = resolve_to_px(&node.padding, 0.0);
-    let margin = resolve_to_px(&node.margin, 0.0);
+    let padding = resolve_to_px(&node.padding.first(), 0.0);
+    let margin = resolve_to_px(&node.margin.first(), 0.0);
     let w = resolve_to_px(&node.width, VIEWPORT_W);
     let h = resolve_to_px(&node.height, VIEWPORT_H);
     let bg = Color32::from_rgb(28, 28, 43);
@@ -639,7 +639,7 @@ fn build_container(
             let main_override = if child.visible && child.flex_grow > 0.0 && total_grow > 0.0 {
                 let dim = if is_row { &child.width } else { &child.height };
                 if resolve_to_px(dim, if is_row { VIEWPORT_W } else { VIEWPORT_H }) == 0.0 {
-                    let margin = resolve_to_px(&child.margin, 0.0) * 2.0;
+                    let margin = resolve_to_px(&child.margin.first(), 0.0) * 2.0;
                     Some((remaining_for_grow * child.flex_grow / total_grow - margin).max(0.0))
                 } else {
                     None

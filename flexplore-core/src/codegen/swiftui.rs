@@ -163,6 +163,23 @@ fn swift_spacing_value(v: &ValueConfig) -> Option<String> {
     }
 }
 
+fn swift_grid_item(track: &GridTrackSize) -> String {
+    match track {
+        GridTrackSize::Px(n) => format!("GridItem(.fixed({n:.1}))"),
+        GridTrackSize::Fr(_) => "GridItem(.flexible())".into(),
+        GridTrackSize::Auto => "GridItem(.flexible())".into(),
+        GridTrackSize::Percent(_) => {
+            "GridItem(.flexible()) /* percentage track — use .flexible() as approximation */".into()
+        }
+        GridTrackSize::MinContent => {
+            "GridItem(.flexible(minimum: 0)) /* min-content */".into()
+        }
+        GridTrackSize::MaxContent => {
+            "GridItem(.flexible()) /* max-content */".into()
+        }
+    }
+}
+
 fn swift_alignment(a: AlignItems) -> &'static str {
     match a {
         AlignItems::FlexStart | AlignItems::Start => ".top",
@@ -328,6 +345,7 @@ fn emit_swiftui_node(
             )?;
         }
     } else {
+        let is_grid = node.display_mode == DisplayMode::Grid;
         let is_row = matches!(
             node.flex_direction,
             FlexDirection::Row | FlexDirection::RowReverse
@@ -351,12 +369,65 @@ fn emit_swiftui_node(
 
         // Only reverse children for HStack/VStack (non-wrapping).
         // FlowLayout handles reversal natively via mainReversed.
-        if is_reversed && !is_wrapping {
+        if is_reversed && !is_wrapping && !is_grid {
             children.reverse();
             starts.reverse();
         }
 
-        if is_wrapping {
+        if is_grid {
+            // --- LazyVGrid / LazyHGrid (CSS Grid) ---
+            let is_column_flow = matches!(
+                node.grid_auto_flow,
+                GridAutoFlow::Column | GridAutoFlow::ColumnDense
+            );
+            let tracks = if is_column_flow {
+                &node.grid_template_rows
+            } else {
+                &node.grid_template_columns
+            };
+            let items: Vec<String> = if tracks.is_empty() {
+                vec!["GridItem(.flexible())".into()]
+            } else {
+                tracks.iter().map(swift_grid_item).collect()
+            };
+            writeln!(
+                buf,
+                "{pad}let columns = [{}]",
+                items.join(", ")
+            )?;
+            let spacing_arg = swift_spacing_value(if is_column_flow {
+                &node.column_gap
+            } else {
+                &node.row_gap
+            })
+            .map(|s| format!(", spacing: {s}"))
+            .unwrap_or_default();
+            let grid_type = if is_column_flow {
+                "LazyHGrid"
+            } else {
+                "LazyVGrid"
+            };
+            // LazyHGrid uses `rows:`, LazyVGrid uses `columns:`
+            let param_name = if is_column_flow { "rows" } else { "columns" };
+            writeln!(
+                buf,
+                "{pad}{grid_type}({param_name}: columns{spacing_arg}) {{"
+            )?;
+
+            for (child, start) in children.iter().zip(starts.iter()) {
+                let mut idx = *start;
+                emit_swiftui_node(
+                    buf,
+                    child,
+                    depth + 1,
+                    &mut idx,
+                    palette,
+                    true, // grid children flow like rows
+                    node.align_items == AlignItems::Stretch,
+                    false,
+                )?;
+            }
+        } else if is_wrapping {
             // --- FlowLayout (custom wrapping layout) ---
             let axis = if is_row { ".horizontal" } else { ".vertical" };
             let item_gap = if is_row {

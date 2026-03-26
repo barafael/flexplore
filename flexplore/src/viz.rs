@@ -7,8 +7,8 @@ use bevy_egui::EguiContexts;
 
 use flexplore::art::{ArtExpressions, ArtState, palette_bevy_color, render_art};
 use flexplore::config::{
-    ART_TEXTURE_SIZE, BackgroundMode, FlexConfig, NodeConfig, PANEL_WIDTH, RIGHT_PANEL_WIDTH,
-    RightPanelOpen,
+    ART_TEXTURE_SIZE, BackgroundMode, DisplayMode, FlexConfig, NodeConfig, PANEL_WIDTH,
+    RIGHT_PANEL_WIDTH, RightPanelOpen,
 };
 
 // ─── Components ───────────────────────────────────────────────────────────────
@@ -156,51 +156,76 @@ fn spawn_node(
     let user_border = node.border_width.to_bevy_ui_rect();
     let user_border_color = Color::srgba(0.4, 0.4, 0.5, 0.8);
 
-    let node_bevy = Node {
-        display: if node.visible {
-            Display::Flex
-        } else {
-            Display::None
-        },
-        flex_direction: node.flex_direction.into(),
-        flex_wrap: node.flex_wrap.into(),
-        justify_content: node.justify_content.into(),
-        align_items: node.align_items.into(),
-        align_content: node.align_content.into(),
-        row_gap: node.row_gap.to_bevy_val(),
-        column_gap: node.column_gap.to_bevy_val(),
-        flex_grow: node.flex_grow,
-        flex_shrink: node.flex_shrink,
-        flex_basis: node.flex_basis.to_bevy_val(),
-        align_self: node.align_self.into(),
-        width: node.width.to_bevy_val(),
-        height: node.height.to_bevy_val(),
-        min_width: node.min_width.to_bevy_val(),
-        min_height: node.min_height.to_bevy_val(),
-        max_width: node.max_width.to_bevy_val(),
-        max_height: node.max_height.to_bevy_val(),
-        padding: node.padding.to_bevy_ui_rect(),
-        margin: node.margin.to_bevy_ui_rect(),
-        border: user_border,
-        border_radius: node.border_radius.to_bevy_border_radius(),
-        overflow: Overflow::clip(),
-        ..default()
+    let node_bevy = {
+        let mut n = Node {
+            display: if !node.visible {
+                Display::None
+            } else {
+                match node.display_mode {
+                    DisplayMode::Grid => Display::Grid,
+                    DisplayMode::Flex => Display::Flex,
+                }
+            },
+            // Flex container
+            flex_direction: node.flex_direction.into(),
+            flex_wrap: node.flex_wrap.into(),
+            justify_content: node.justify_content.into(),
+            align_items: node.align_items.into(),
+            align_content: node.align_content.into(),
+            row_gap: node.row_gap.to_bevy_val(),
+            column_gap: node.column_gap.to_bevy_val(),
+            // Flex item
+            flex_grow: node.flex_grow,
+            flex_shrink: node.flex_shrink,
+            flex_basis: node.flex_basis.to_bevy_val(),
+            align_self: node.align_self.into(),
+            // Grid
+            grid_auto_flow: node.grid_auto_flow.to_bevy(),
+            grid_column: node.grid_column.to_bevy(),
+            grid_row: node.grid_row.to_bevy(),
+            // Sizing
+            width: node.width.to_bevy_val(),
+            height: node.height.to_bevy_val(),
+            min_width: node.min_width.to_bevy_val(),
+            min_height: node.min_height.to_bevy_val(),
+            max_width: node.max_width.to_bevy_val(),
+            max_height: node.max_height.to_bevy_val(),
+            // Spacing
+            padding: node.padding.to_bevy_ui_rect(),
+            margin: node.margin.to_bevy_ui_rect(),
+            border: user_border,
+            border_radius: node.border_radius.to_bevy_border_radius(),
+            overflow: Overflow::clip(),
+            ..default()
+        };
+        // Grid template tracks
+        n.grid_template_columns = node
+            .grid_template_columns
+            .iter()
+            .map(|t| t.to_bevy_repeated_grid_track())
+            .collect();
+        n.grid_template_rows = node
+            .grid_template_rows
+            .iter()
+            .map(|t| t.to_bevy_repeated_grid_track())
+            .collect();
+        n.grid_auto_columns = node
+            .grid_auto_columns
+            .iter()
+            .map(|t| t.to_bevy_grid_track())
+            .collect();
+        n.grid_auto_rows = node
+            .grid_auto_rows
+            .iter()
+            .map(|t| t.to_bevy_grid_track())
+            .collect();
+        n
     };
 
-    // Selection uses Outline so it doesn't compete with user-defined border
-    let outline = if is_selected {
-        Outline {
-            width: Val::Px(3.0),
-            color: Color::srgba(1.0, 0.85, 0.1, 1.0),
-            offset: Val::Px(0.0),
-        }
-    } else {
-        Outline {
-            width: Val::Px(0.0),
-            color: Color::NONE,
-            offset: Val::Px(0.0),
-        }
-    };
+    // Selection highlight: an absolutely-positioned child with a colored border
+    // and GlobalZIndex so it always renders on top. We use this instead of
+    // Outline because Outline extends outward and gets clipped by the parent's
+    // `overflow: clip()`.
 
     let display_text = node.display_text().to_owned();
 
@@ -216,7 +241,6 @@ fn spawn_node(
                 VizNodePath(current_path.to_vec()),
                 VizNodeInfo(node.info()),
             ))
-            .insert(outline)
             .id();
         if ctx.cfg.bg_mode == BackgroundMode::RandomArt
             && let Some(h) = ctx.art.handles.get(my_idx)
@@ -249,6 +273,25 @@ fn spawn_node(
             ))
             .id();
         commands.entity(entity).add_child(overlay);
+        if is_selected {
+            let sel = commands
+                .spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        top: Val::Px(0.0),
+                        left: Val::Px(0.0),
+                        right: Val::Px(0.0),
+                        bottom: Val::Px(0.0),
+                        border: UiRect::all(Val::Px(3.0)),
+                        ..default()
+                    },
+                    GlobalZIndex(99),
+                    BorderColor::all(Color::srgba(1.0, 0.85, 0.1, 1.0)),
+                    Pickable::IGNORE,
+                ))
+                .id();
+            commands.entity(entity).add_child(sel);
+        }
         commands.entity(parent_entity).add_child(entity);
     } else {
         let entity = commands
@@ -260,7 +303,6 @@ fn spawn_node(
                 VizNodePath(current_path.to_vec()),
                 VizNodeInfo(node.info()),
             ))
-            .insert(outline)
             .id();
         let cscale = node.text_scale();
         let lbl = commands
@@ -281,6 +323,25 @@ fn spawn_node(
             ))
             .id();
         commands.entity(entity).add_child(lbl);
+        if is_selected {
+            let sel = commands
+                .spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        top: Val::Px(0.0),
+                        left: Val::Px(0.0),
+                        right: Val::Px(0.0),
+                        bottom: Val::Px(0.0),
+                        border: UiRect::all(Val::Px(3.0)),
+                        ..default()
+                    },
+                    GlobalZIndex(99),
+                    BorderColor::all(Color::srgba(1.0, 0.85, 0.1, 1.0)),
+                    Pickable::IGNORE,
+                ))
+                .id();
+            commands.entity(entity).add_child(sel);
+        }
         commands.entity(parent_entity).add_child(entity);
         // Sort children by order for visual display, preserving original indices for paths.
         let mut sorted_indices: Vec<usize> = (0..node.children.len()).collect();

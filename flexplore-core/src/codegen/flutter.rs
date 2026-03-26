@@ -358,8 +358,45 @@ fn emit_flutter_inner(
 
         let inner_depth = if has_container { depth + 1 } else { depth };
         let ipad = "  ".repeat(inner_depth);
+        let is_grid = node.display_mode == DisplayMode::Grid;
 
-        if node.flex_wrap != FlexWrap::NoWrap {
+        if is_grid {
+            // CSS Grid layout — use GridView.count or a custom grid widget
+            writeln!(buf, "{ipad}// CSS Grid layout — use GridView.count or a custom grid widget")?;
+            writeln!(buf, "{ipad}Wrap(")?;
+            writeln!(buf, "{ipad}  // grid-template-columns / rows not directly supported in Flutter")?;
+            if !node.grid_template_columns.is_empty() {
+                let val: Vec<_> = node.grid_template_columns.iter().map(|t| t.display_short()).collect();
+                writeln!(buf, "{ipad}  // grid-template-columns: {}", val.join(" "))?;
+            }
+            if !node.grid_template_rows.is_empty() {
+                let val: Vec<_> = node.grid_template_rows.iter().map(|t| t.display_short()).collect();
+                writeln!(buf, "{ipad}  // grid-template-rows: {}", val.join(" "))?;
+            }
+            if !node.grid_auto_columns.is_empty() {
+                let val: Vec<_> = node.grid_auto_columns.iter().map(|t| t.display_short()).collect();
+                writeln!(buf, "{ipad}  // grid-auto-columns: {}", val.join(" "))?;
+            }
+            if !node.grid_auto_rows.is_empty() {
+                let val: Vec<_> = node.grid_auto_rows.iter().map(|t| t.display_short()).collect();
+                writeln!(buf, "{ipad}  // grid-auto-rows: {}", val.join(" "))?;
+            }
+            if node.grid_auto_flow != GridAutoFlow::Row {
+                let flow = match node.grid_auto_flow {
+                    GridAutoFlow::Column => "column",
+                    GridAutoFlow::RowDense => "row dense",
+                    GridAutoFlow::ColumnDense => "column dense",
+                    _ => "row",
+                };
+                writeln!(buf, "{ipad}  // grid-auto-flow: {flow}")?;
+            }
+            if let Some(s) = dart_value(&node.column_gap) {
+                writeln!(buf, "{ipad}  spacing: {s},")?;
+            }
+            if let Some(s) = dart_value(&node.row_gap) {
+                writeln!(buf, "{ipad}  runSpacing: {s},")?;
+            }
+        } else if node.flex_wrap != FlexWrap::NoWrap {
             // For Wrap, textDirection/verticalDirection handles axis reversal
             // natively, so no effective_justify swap or child reversal needed.
             writeln!(buf, "{ipad}Wrap(")?;

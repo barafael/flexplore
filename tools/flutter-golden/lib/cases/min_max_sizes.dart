@@ -10,7 +10,6 @@ class MinMaxSizes extends StatelessWidget {
     width: double.infinity,
     height: double.infinity,
     padding: EdgeInsets.all(12.0),
-    margin: EdgeInsets.all(0.0),
     child:     Row(
       mainAxisAlignment: MainAxisAlignment.start,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -20,7 +19,6 @@ class MinMaxSizes extends StatelessWidget {
           child:           Container(
             height: 80.0,
             padding: EdgeInsets.all(8.0),
-            margin: EdgeInsets.all(0.0),
             constraints: BoxConstraints(
               maxWidth: 100.0,
             ),
@@ -36,7 +34,6 @@ class MinMaxSizes extends StatelessWidget {
           child:           Container(
             height: 80.0,
             padding: EdgeInsets.all(8.0),
-            margin: EdgeInsets.all(0.0),
             color: Color.fromRGBO(179, 205, 227, 1.0),
             alignment: Alignment.center,
             child: Text('free',
@@ -49,7 +46,6 @@ class MinMaxSizes extends StatelessWidget {
           child:           Container(
             height: 80.0,
             padding: EdgeInsets.all(8.0),
-            margin: EdgeInsets.all(0.0),
             constraints: BoxConstraints(
               minWidth: 200.0,
             ),

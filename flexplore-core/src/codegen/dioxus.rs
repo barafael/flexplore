@@ -167,19 +167,52 @@ fn emit_dioxus_node(
     };
 
     writeln!(buf, "{pad}div {{")?;
-    writeln!(buf, "{pad}    display: \"flex\",")?;
+    let is_grid = node.display_mode == DisplayMode::Grid;
+    if is_grid {
+        writeln!(buf, "{pad}    display: \"grid\",")?;
+    } else {
+        writeln!(buf, "{pad}    display: \"flex\",")?;
+    }
     if !node.visible {
         writeln!(buf, "{pad}    visibility: \"hidden\",")?;
     }
-    if node.flex_direction != FlexDirection::Row {
-        writeln!(
-            buf,
-            "{pad}    flex_direction: \"{}\",",
-            css_direction(node.flex_direction)
-        )?;
-    }
-    if node.flex_wrap != FlexWrap::NoWrap {
-        writeln!(buf, "{pad}    flex_wrap: \"{}\",", css_wrap(node.flex_wrap))?;
+    if is_grid {
+        if !node.grid_template_columns.is_empty() {
+            let val: Vec<_> = node.grid_template_columns.iter().map(|t| t.display_short()).collect();
+            writeln!(buf, "{pad}    grid_template_columns: \"{}\",", val.join(" "))?;
+        }
+        if !node.grid_template_rows.is_empty() {
+            let val: Vec<_> = node.grid_template_rows.iter().map(|t| t.display_short()).collect();
+            writeln!(buf, "{pad}    grid_template_rows: \"{}\",", val.join(" "))?;
+        }
+        if !node.grid_auto_columns.is_empty() {
+            let val: Vec<_> = node.grid_auto_columns.iter().map(|t| t.display_short()).collect();
+            writeln!(buf, "{pad}    grid_auto_columns: \"{}\",", val.join(" "))?;
+        }
+        if !node.grid_auto_rows.is_empty() {
+            let val: Vec<_> = node.grid_auto_rows.iter().map(|t| t.display_short()).collect();
+            writeln!(buf, "{pad}    grid_auto_rows: \"{}\",", val.join(" "))?;
+        }
+        if node.grid_auto_flow != GridAutoFlow::Row {
+            let flow = match node.grid_auto_flow {
+                GridAutoFlow::Column => "column",
+                GridAutoFlow::RowDense => "row dense",
+                GridAutoFlow::ColumnDense => "column dense",
+                _ => "row",
+            };
+            writeln!(buf, "{pad}    grid_auto_flow: \"{flow}\",")?;
+        }
+    } else {
+        if node.flex_direction != FlexDirection::Row {
+            writeln!(
+                buf,
+                "{pad}    flex_direction: \"{}\",",
+                css_direction(node.flex_direction)
+            )?;
+        }
+        if node.flex_wrap != FlexWrap::NoWrap {
+            writeln!(buf, "{pad}    flex_wrap: \"{}\",", css_wrap(node.flex_wrap))?;
+        }
     }
     if !matches!(
         node.justify_content,
@@ -249,6 +282,12 @@ fn emit_dioxus_node(
             "{pad}    align_self: \"{}\",",
             css_align_self(node.align_self)
         )?;
+    }
+    if node.grid_column != GridPlacement::Auto {
+        writeln!(buf, "{pad}    grid_column: \"{}\",", node.grid_column.display_short())?;
+    }
+    if node.grid_row != GridPlacement::Auto {
+        writeln!(buf, "{pad}    grid_row: \"{}\",", node.grid_row.display_short())?;
     }
     if !matches!(node.width, ValueConfig::Auto) {
         writeln!(buf, "{pad}    width: \"{}\",", css_value(&node.width))?;

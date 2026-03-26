@@ -300,6 +300,7 @@ fn emit_egui_node(
         }
     } else {
         // ── Container node ──────────────────────────────────────────────
+        let is_grid = node.display_mode == DisplayMode::Grid;
         let is_row = matches!(
             node.flex_direction,
             FlexDirection::Row | FlexDirection::RowReverse
@@ -366,100 +367,6 @@ fn emit_egui_node(
             }
         }
 
-        // Set gap via item_spacing
-        if let Some(g) = egui_gap(gap) {
-            if is_row {
-                writeln!(
-                    buf,
-                    "{pad}        ui.spacing_mut().item_spacing = egui::vec2({g}, 0.0);"
-                )?;
-            } else {
-                writeln!(
-                    buf,
-                    "{pad}        ui.spacing_mut().item_spacing = egui::vec2(0.0, {g});"
-                )?;
-            }
-        } else {
-            writeln!(
-                buf,
-                "{pad}        ui.spacing_mut().item_spacing = egui::Vec2::ZERO;"
-            )?;
-        }
-
-        // Build layout
-        let jc = node.justify_content;
-        let needs_justify = matches!(
-            jc,
-            JustifyContent::SpaceBetween
-                | JustifyContent::SpaceEvenly
-                | JustifyContent::SpaceAround
-        );
-        let needs_center = matches!(jc, JustifyContent::Center);
-        let needs_end = matches!(jc, JustifyContent::FlexEnd | JustifyContent::End);
-
-        write!(buf, "{pad}        let layout = {dir_fn}({cross})")?;
-        if stretch {
-            writeln!(buf)?;
-            write!(buf, "{pad}            .with_cross_justify(true)")?;
-        }
-        if wraps {
-            writeln!(buf)?;
-            write!(buf, "{pad}            .with_main_wrap(true)")?;
-        }
-        if needs_justify {
-            writeln!(buf)?;
-            writeln!(
-                buf,
-                "{pad}            .with_main_justify(true); // approximate {:?}",
-                jc
-            )?;
-        } else {
-            writeln!(buf, ";")?;
-        }
-
-        if needs_center {
-            writeln!(
-                buf,
-                "{pad}        // NOTE: justify-content: Center — egui Layout lacks main_align; center manually or use custom layout"
-            )?;
-        }
-        if needs_end {
-            writeln!(
-                buf,
-                "{pad}        // NOTE: justify-content: {:?} — egui Layout lacks main_align; reverse child order or use custom layout",
-                jc
-            )?;
-        }
-
-        // Wrap note
-        if node.flex_wrap == FlexWrap::WrapReverse {
-            writeln!(
-                buf,
-                "{pad}        // NOTE: flex-wrap: WrapReverse — egui has main_wrap but no reverse wrap"
-            )?;
-        }
-
-        // Align-content note
-        if !matches!(
-            node.align_content,
-            AlignContent::Default | AlignContent::FlexStart | AlignContent::Start
-        ) {
-            writeln!(
-                buf,
-                "{pad}        // NOTE: align-content: {:?} — no egui equivalent",
-                node.align_content
-            )?;
-        }
-
-        if node.align_items == AlignItems::Baseline {
-            writeln!(
-                buf,
-                "{pad}        // NOTE: align-items: Baseline — approximated as Min; egui has no baseline alignment"
-            )?;
-        }
-
-        writeln!(buf, "{pad}        ui.with_layout(layout, |ui| {{")?;
-
         // Sort children by order
         let mut children: Vec<&NodeConfig> = node.children.iter().collect();
         children.sort_by_key(|c| c.order);
@@ -473,62 +380,235 @@ fn emit_egui_node(
         }
         *leaf_idx = acc;
 
-        if is_reversed {
-            let dir_label = match node.flex_direction {
-                FlexDirection::RowReverse => "RowReverse",
-                FlexDirection::ColumnReverse => "ColumnReverse",
-                _ => unreachable!(),
+        if is_grid {
+            // ── CSS Grid → egui::Grid ────────────────────────────────────
+            let num_cols = if node.grid_template_columns.is_empty() {
+                1
+            } else {
+                node.grid_template_columns.len()
             };
+
+            // Set gap via item_spacing (row_gap, column_gap)
+            let col_gap = egui_gap(&node.column_gap);
+            let row_gap = egui_gap(&node.row_gap);
+            match (&col_gap, &row_gap) {
+                (Some(cg), Some(rg)) => {
+                    writeln!(
+                        buf,
+                        "{pad}        ui.spacing_mut().item_spacing = egui::vec2({cg}, {rg});"
+                    )?;
+                }
+                (Some(cg), None) => {
+                    writeln!(
+                        buf,
+                        "{pad}        ui.spacing_mut().item_spacing = egui::vec2({cg}, 0.0);"
+                    )?;
+                }
+                (None, Some(rg)) => {
+                    writeln!(
+                        buf,
+                        "{pad}        ui.spacing_mut().item_spacing = egui::vec2(0.0, {rg});"
+                    )?;
+                }
+                (None, None) => {
+                    writeln!(
+                        buf,
+                        "{pad}        ui.spacing_mut().item_spacing = egui::Vec2::ZERO;"
+                    )?;
+                }
+            }
+
             writeln!(
                 buf,
-                "{pad}            // flex-direction: {dir_label} — handled by Layout direction"
+                "{pad}        egui::Grid::new({:?})",
+                node.label
             )?;
-        }
+            writeln!(
+                buf,
+                "{pad}            .num_columns({num_cols})"
+            )?;
+            if stretch {
+                writeln!(
+                    buf,
+                    "{pad}            .striped(false)"
+                )?;
+            }
+            writeln!(buf, "{pad}            .show(ui, |ui| {{")?;
 
-        for (child, start) in children.iter().zip(starts.iter()) {
-            let mut idx = *start;
-            if let Some(main_align) = egui_align_self_main(child.align_self) {
-                let child_pad = "    ".repeat(depth + 3);
-                let wrapper_dir = if is_row {
-                    "egui::Layout::top_down(egui::Align::Min)"
-                } else {
-                    "egui::Layout::left_to_right(egui::Align::Min)"
-                };
-                let fill_axis = if is_row {
-                    "ui.set_min_height(ui.available_height());"
-                } else {
-                    "ui.set_min_width(ui.available_width());"
-                };
-                writeln!(buf, "{child_pad}ui.with_layout({wrapper_dir}.with_main_align({main_align}), |ui| {{")?;
-                writeln!(buf, "{child_pad}    {fill_axis}")?;
+            // Emit children, inserting ui.end_row() after every `num_cols` items
+            for (i, (child, start)) in children.iter().zip(starts.iter()).enumerate() {
+                let mut idx = *start;
                 emit_egui_node(
                     buf,
                     child,
                     depth + 4,
                     &mut idx,
                     palette,
-                    is_row,
+                    true, // grid children laid out in rows
                     stretch,
                     false,
                 )?;
                 writeln!(buf, ";")?;
-                write!(buf, "{child_pad}}})")?;
+                if (i + 1) % num_cols == 0 {
+                    writeln!(buf, "{pad}                ui.end_row();")?;
+                }
+            }
+
+            writeln!(buf, "{pad}            }});")?;
+        } else {
+            // ── Flex layout (original path) ──────────────────────────────
+
+            // Set gap via item_spacing
+            if let Some(g) = egui_gap(gap) {
+                if is_row {
+                    writeln!(
+                        buf,
+                        "{pad}        ui.spacing_mut().item_spacing = egui::vec2({g}, 0.0);"
+                    )?;
+                } else {
+                    writeln!(
+                        buf,
+                        "{pad}        ui.spacing_mut().item_spacing = egui::vec2(0.0, {g});"
+                    )?;
+                }
             } else {
-                emit_egui_node(
+                writeln!(
                     buf,
-                    child,
-                    depth + 3,
-                    &mut idx,
-                    palette,
-                    is_row,
-                    stretch,
-                    false,
+                    "{pad}        ui.spacing_mut().item_spacing = egui::Vec2::ZERO;"
                 )?;
             }
-            writeln!(buf, ";")?;
-        }
 
-        writeln!(buf, "{pad}        }});")?;
+            // Build layout
+            let jc = node.justify_content;
+            let needs_justify = matches!(
+                jc,
+                JustifyContent::SpaceBetween
+                    | JustifyContent::SpaceEvenly
+                    | JustifyContent::SpaceAround
+            );
+            let needs_center = matches!(jc, JustifyContent::Center);
+            let needs_end = matches!(jc, JustifyContent::FlexEnd | JustifyContent::End);
+
+            write!(buf, "{pad}        let layout = {dir_fn}({cross})")?;
+            if stretch {
+                writeln!(buf)?;
+                write!(buf, "{pad}            .with_cross_justify(true)")?;
+            }
+            if wraps {
+                writeln!(buf)?;
+                write!(buf, "{pad}            .with_main_wrap(true)")?;
+            }
+            if needs_justify {
+                writeln!(buf)?;
+                writeln!(
+                    buf,
+                    "{pad}            .with_main_justify(true); // approximate {:?}",
+                    jc
+                )?;
+            } else {
+                writeln!(buf, ";")?;
+            }
+
+            if needs_center {
+                writeln!(
+                    buf,
+                    "{pad}        // NOTE: justify-content: Center — egui Layout lacks main_align; center manually or use custom layout"
+                )?;
+            }
+            if needs_end {
+                writeln!(
+                    buf,
+                    "{pad}        // NOTE: justify-content: {:?} — egui Layout lacks main_align; reverse child order or use custom layout",
+                    jc
+                )?;
+            }
+
+            // Wrap note
+            if node.flex_wrap == FlexWrap::WrapReverse {
+                writeln!(
+                    buf,
+                    "{pad}        // NOTE: flex-wrap: WrapReverse — egui has main_wrap but no reverse wrap"
+                )?;
+            }
+
+            // Align-content note
+            if !matches!(
+                node.align_content,
+                AlignContent::Default | AlignContent::FlexStart | AlignContent::Start
+            ) {
+                writeln!(
+                    buf,
+                    "{pad}        // NOTE: align-content: {:?} — no egui equivalent",
+                    node.align_content
+                )?;
+            }
+
+            if node.align_items == AlignItems::Baseline {
+                writeln!(
+                    buf,
+                    "{pad}        // NOTE: align-items: Baseline — approximated as Min; egui has no baseline alignment"
+                )?;
+            }
+
+            writeln!(buf, "{pad}        ui.with_layout(layout, |ui| {{")?;
+
+            if is_reversed {
+                let dir_label = match node.flex_direction {
+                    FlexDirection::RowReverse => "RowReverse",
+                    FlexDirection::ColumnReverse => "ColumnReverse",
+                    _ => unreachable!(),
+                };
+                writeln!(
+                    buf,
+                    "{pad}            // flex-direction: {dir_label} — handled by Layout direction"
+                )?;
+            }
+
+            for (child, start) in children.iter().zip(starts.iter()) {
+                let mut idx = *start;
+                if let Some(main_align) = egui_align_self_main(child.align_self) {
+                    let child_pad = "    ".repeat(depth + 3);
+                    let wrapper_dir = if is_row {
+                        "egui::Layout::top_down(egui::Align::Min)"
+                    } else {
+                        "egui::Layout::left_to_right(egui::Align::Min)"
+                    };
+                    let fill_axis = if is_row {
+                        "ui.set_min_height(ui.available_height());"
+                    } else {
+                        "ui.set_min_width(ui.available_width());"
+                    };
+                    writeln!(buf, "{child_pad}ui.with_layout({wrapper_dir}.with_main_align({main_align}), |ui| {{")?;
+                    writeln!(buf, "{child_pad}    {fill_axis}")?;
+                    emit_egui_node(
+                        buf,
+                        child,
+                        depth + 4,
+                        &mut idx,
+                        palette,
+                        is_row,
+                        stretch,
+                        false,
+                    )?;
+                    writeln!(buf, ";")?;
+                    write!(buf, "{child_pad}}})")?;
+                } else {
+                    emit_egui_node(
+                        buf,
+                        child,
+                        depth + 3,
+                        &mut idx,
+                        palette,
+                        is_row,
+                        stretch,
+                        false,
+                    )?;
+                }
+                writeln!(buf, ";")?;
+            }
+
+            writeln!(buf, "{pad}        }});")?;
+        }
 
         // Container-level notes
         if node.flex_grow > 0.0 {

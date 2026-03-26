@@ -82,9 +82,83 @@ pub enum AlignSelf {
     End,
 }
 
+#[derive(Clone, Copy, PartialEq, Debug, Default, Deserialize)]
+pub enum DisplayMode {
+    #[default]
+    Flex,
+    Grid,
+}
+
+#[derive(Clone, Copy, PartialEq, Debug, Default, Deserialize)]
+pub enum GridAutoFlow {
+    #[default]
+    Row,
+    Column,
+    RowDense,
+    ColumnDense,
+}
+
+#[derive(Clone, Copy, PartialEq, Debug, Deserialize)]
+pub enum GridTrackSize {
+    Auto,
+    Px(f32),
+    Percent(f32),
+    Fr(f32),
+    MinContent,
+    MaxContent,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+pub enum GridPlacement {
+    #[default]
+    Auto,
+    Start(i16),
+    Span(u16),
+    StartSpan(i16, u16),
+}
+
+#[derive(Clone, Copy, PartialEq, Debug, Deserialize)]
+pub struct Sides {
+    pub top: ValueConfig,
+    pub right: ValueConfig,
+    pub bottom: ValueConfig,
+    pub left: ValueConfig,
+}
+
+impl Default for Sides {
+    fn default() -> Self {
+        Self {
+            top: ValueConfig::Px(0.0),
+            right: ValueConfig::Px(0.0),
+            bottom: ValueConfig::Px(0.0),
+            left: ValueConfig::Px(0.0),
+        }
+    }
+}
+
+impl Sides {
+    pub fn first(&self) -> ValueConfig {
+        self.top
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Debug, Default, Deserialize)]
+pub struct Corners {
+    #[serde(default)]
+    pub top_left: f32,
+    #[serde(default)]
+    pub top_right: f32,
+    #[serde(default)]
+    pub bottom_right: f32,
+    #[serde(default)]
+    pub bottom_left: f32,
+}
+
 #[derive(Clone, Deserialize)]
 pub struct NodeConfig {
     pub label: String,
+    #[serde(default)]
+    pub display_mode: DisplayMode,
     pub flex_direction: FlexDirection,
     pub flex_wrap: FlexWrap,
     pub justify_content: JustifyContent,
@@ -96,17 +170,37 @@ pub struct NodeConfig {
     pub flex_shrink: f32,
     pub flex_basis: ValueConfig,
     pub align_self: AlignSelf,
+    #[serde(default)]
+    pub grid_template_columns: Vec<GridTrackSize>,
+    #[serde(default)]
+    pub grid_template_rows: Vec<GridTrackSize>,
+    #[serde(default)]
+    pub grid_auto_columns: Vec<GridTrackSize>,
+    #[serde(default)]
+    pub grid_auto_rows: Vec<GridTrackSize>,
+    #[serde(default)]
+    pub grid_auto_flow: GridAutoFlow,
+    #[serde(default)]
+    pub grid_column: GridPlacement,
+    #[serde(default)]
+    pub grid_row: GridPlacement,
     pub width: ValueConfig,
     pub height: ValueConfig,
     pub min_width: ValueConfig,
     pub min_height: ValueConfig,
     pub max_width: ValueConfig,
     pub max_height: ValueConfig,
-    pub padding: ValueConfig,
-    pub margin: ValueConfig,
+    pub padding: Sides,
+    pub margin: Sides,
+    #[serde(default)]
+    pub border_width: Sides,
+    #[serde(default)]
+    pub border_radius: Corners,
     pub order: i32,
     #[serde(default = "default_true")]
     pub visible: bool,
+    #[serde(default)]
+    pub text_content: String,
     pub children: Vec<NodeConfig>,
 }
 

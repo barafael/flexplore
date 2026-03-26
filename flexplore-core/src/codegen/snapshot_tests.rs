@@ -153,6 +153,11 @@ fn run_snapshot(name: &str) -> Result<()> {
 #[test_case("tpl_sidebar_content" ; "tpl_sidebar_content")]
 #[test_case("tpl_card_grid" ; "tpl_card_grid")]
 #[test_case("tpl_nav_bar" ; "tpl_nav_bar")]
+#[test_case("tpl_grid_dashboard" ; "tpl_grid_dashboard")]
+#[test_case("tpl_grid_gallery" ; "tpl_grid_gallery")]
+#[test_case("grid_3col" ; "grid_3col")]
+#[test_case("grid_span" ; "grid_span")]
+#[test_case("grid_auto_flow_column" ; "grid_auto_flow_column")]
 fn snapshot(name: &str) -> Result<()> {
     run_snapshot(name)
 }

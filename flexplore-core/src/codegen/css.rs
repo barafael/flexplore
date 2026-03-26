@@ -134,6 +134,39 @@ fn css_align_self(a: AlignSelf) -> &'static str {
     }
 }
 
+fn css_grid_track(t: &GridTrackSize) -> String {
+    match t {
+        GridTrackSize::Auto => "auto".into(),
+        GridTrackSize::Px(n) => format!("{n:.1}px"),
+        GridTrackSize::Percent(n) => format!("{n:.1}%"),
+        GridTrackSize::Fr(n) => format!("{n:.1}fr"),
+        GridTrackSize::MinContent => "min-content".into(),
+        GridTrackSize::MaxContent => "max-content".into(),
+    }
+}
+
+fn css_grid_template(tracks: &[GridTrackSize]) -> String {
+    tracks.iter().map(css_grid_track).collect::<Vec<_>>().join(" ")
+}
+
+fn css_grid_auto_flow(flow: GridAutoFlow) -> &'static str {
+    match flow {
+        GridAutoFlow::Row => "row",
+        GridAutoFlow::Column => "column",
+        GridAutoFlow::RowDense => "row dense",
+        GridAutoFlow::ColumnDense => "column dense",
+    }
+}
+
+fn css_grid_placement(p: &GridPlacement) -> String {
+    match p {
+        GridPlacement::Auto => "auto".into(),
+        GridPlacement::Start(s) => format!("{s}"),
+        GridPlacement::Span(n) => format!("span {n}"),
+        GridPlacement::StartSpan(s, n) => format!("{s} / span {n}"),
+    }
+}
+
 pub fn emit_html_css(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
     let mut css = String::new();
     let mut html = String::new();
@@ -181,19 +214,65 @@ fn emit_html_node(
     writeln!(css, ".{class} {{")?;
 
     // Only emit properties that differ from CSS defaults.
-    css.push_str("  display: flex;\n");
+    let is_grid = node.display_mode == DisplayMode::Grid;
+    if is_grid {
+        css.push_str("  display: grid;\n");
+    } else {
+        css.push_str("  display: flex;\n");
+    }
     if !node.visible {
         css.push_str("  visibility: hidden;\n");
     }
-    if node.flex_direction != FlexDirection::Row {
-        writeln!(
-            css,
-            "  flex-direction: {};",
-            css_flex_direction(node.flex_direction)
-        )?;
-    }
-    if node.flex_wrap != FlexWrap::NoWrap {
-        writeln!(css, "  flex-wrap: {};", css_flex_wrap(node.flex_wrap))?;
+
+    if is_grid {
+        // Grid container properties
+        if !node.grid_template_columns.is_empty() {
+            writeln!(
+                css,
+                "  grid-template-columns: {};",
+                css_grid_template(&node.grid_template_columns)
+            )?;
+        }
+        if !node.grid_template_rows.is_empty() {
+            writeln!(
+                css,
+                "  grid-template-rows: {};",
+                css_grid_template(&node.grid_template_rows)
+            )?;
+        }
+        if !node.grid_auto_columns.is_empty() {
+            writeln!(
+                css,
+                "  grid-auto-columns: {};",
+                css_grid_template(&node.grid_auto_columns)
+            )?;
+        }
+        if !node.grid_auto_rows.is_empty() {
+            writeln!(
+                css,
+                "  grid-auto-rows: {};",
+                css_grid_template(&node.grid_auto_rows)
+            )?;
+        }
+        if node.grid_auto_flow != GridAutoFlow::Row {
+            writeln!(
+                css,
+                "  grid-auto-flow: {};",
+                css_grid_auto_flow(node.grid_auto_flow)
+            )?;
+        }
+    } else {
+        // Flex container properties
+        if node.flex_direction != FlexDirection::Row {
+            writeln!(
+                css,
+                "  flex-direction: {};",
+                css_flex_direction(node.flex_direction)
+            )?;
+        }
+        if node.flex_wrap != FlexWrap::NoWrap {
+            writeln!(css, "  flex-wrap: {};", css_flex_wrap(node.flex_wrap))?;
+        }
     }
     if !matches!(
         node.justify_content,
@@ -224,6 +303,7 @@ fn emit_html_node(
     if !is_zero_or_auto(&node.column_gap) {
         writeln!(css, "  column-gap: {};", emit_css_value(&node.column_gap))?;
     }
+    // Flex item properties
     if node.flex_grow != 0.0 {
         writeln!(css, "  flex-grow: {};", format_num(node.flex_grow))?;
     }
@@ -235,6 +315,13 @@ fn emit_html_node(
     }
     if node.align_self != AlignSelf::Auto {
         writeln!(css, "  align-self: {};", css_align_self(node.align_self))?;
+    }
+    // Grid item placement
+    if node.grid_column != GridPlacement::Auto {
+        writeln!(css, "  grid-column: {};", css_grid_placement(&node.grid_column))?;
+    }
+    if node.grid_row != GridPlacement::Auto {
+        writeln!(css, "  grid-row: {};", css_grid_placement(&node.grid_row))?;
     }
     if !matches!(node.width, ValueConfig::Auto) {
         writeln!(css, "  width: {};", emit_css_value(&node.width))?;
@@ -356,5 +443,66 @@ mod tests {
         root.children = vec![leaf];
         let code = emit_html_css(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("50.0vw"));
+    }
+
+    #[test]
+    fn grid_emits_display_grid() {
+        let mut root = NodeConfig::new_grid(
+            "grid",
+            vec![GridTrackSize::Fr(1.0), GridTrackSize::Fr(2.0)],
+        );
+        root.children = vec![
+            NodeConfig::new_leaf("A", 80.0, 80.0),
+            NodeConfig::new_leaf("B", 80.0, 80.0),
+        ];
+        let code = emit_html_css(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains("display: grid;"), "should emit display:grid");
+        assert!(
+            code.contains("grid-template-columns: 1.0fr 2.0fr;"),
+            "should emit grid-template-columns, got:\n{code}"
+        );
+    }
+
+    #[test]
+    fn grid_emits_auto_flow() {
+        let mut root = NodeConfig::new_grid("grid", vec![GridTrackSize::Fr(1.0)]);
+        root.grid_auto_flow = GridAutoFlow::ColumnDense;
+        root.children = vec![NodeConfig::new_leaf("A", 80.0, 80.0)];
+        let code = emit_html_css(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains("grid-auto-flow: column dense;"));
+    }
+
+    #[test]
+    fn grid_emits_item_placement() {
+        let mut root = NodeConfig::new_grid(
+            "grid",
+            vec![GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0)],
+        );
+        let mut item = NodeConfig::new_leaf("wide", 80.0, 80.0);
+        item.grid_column = GridPlacement::StartSpan(1, 3);
+        root.children = vec![item];
+        let code = emit_html_css(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains("grid-column: 1 / span 3;"));
+    }
+
+    #[test]
+    fn grid_container_does_not_emit_flex_direction() {
+        let mut root = NodeConfig::new_grid("grid", vec![GridTrackSize::Fr(1.0)]);
+        root.children = vec![NodeConfig::new_leaf("A", 80.0, 80.0)];
+        let code = emit_html_css(&root, ColorPalette::Pastel1).unwrap();
+        // Extract the root node's CSS block (node-0)
+        let root_css = code
+            .split(".node-0 {")
+            .nth(1)
+            .and_then(|s| s.split('}').next())
+            .unwrap_or("");
+        assert!(
+            !root_css.contains("flex-direction"),
+            "grid container should not emit flex-direction in its CSS block"
+        );
+        assert!(
+            !root_css.contains("flex-wrap"),
+            "grid container should not emit flex-wrap in its CSS block"
+        );
     }
 }

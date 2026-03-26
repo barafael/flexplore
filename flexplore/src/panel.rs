@@ -441,6 +441,15 @@ pub fn panel_system(
                 });
                 ui.add_space(4.0);
 
+                // Auto-sync tab to selected node's display mode (before
+                // drawing widgets so the user's click can still override).
+                if let Some(node) = cfg.root.get(&sel_path) {
+                    *tab = match node.display_mode {
+                        DisplayMode::Flex => LeftTab::Flexbox,
+                        DisplayMode::Grid => LeftTab::CssGrid,
+                    };
+                }
+
                 // ── Tabs: Flexbox / CSS Grid ──────────────────────────────
                 ui.horizontal(|ui| {
                     ui.selectable_value(tab, LeftTab::Flexbox, "Flexbox");
@@ -449,14 +458,19 @@ pub fn panel_system(
                 ui.separator();
 
                 match *tab {
-                    LeftTab::CssGrid => {
-                        ui.add_space(20.0);
-                        ui.label("CSS Grid support is coming soon.");
-                        ui.add_space(4.0);
-                        ui.weak("Taffy already supports Grid — the UI and codegen for it are next.");
-                    }
-                    LeftTab::Flexbox => {
-                        draw_flexbox_panel(
+                    LeftTab::CssGrid | LeftTab::Flexbox => {
+                        // When user clicks a tab, switch the selected node's display mode
+                        let target_mode = match *tab {
+                            LeftTab::CssGrid => DisplayMode::Grid,
+                            LeftTab::Flexbox => DisplayMode::Flex,
+                        };
+                        if let Some(node) = cfg.root.get_mut(&sel_path) {
+                            if node.display_mode != target_mode {
+                                node.display_mode = target_mode;
+                                changed = true;
+                            }
+                        }
+                        draw_layout_panel(
                             ui,
                             &mut cfg,
                             &mut history,
@@ -658,10 +672,10 @@ pub fn panel_system(
     Ok(())
 }
 
-// ─── Flexbox panel contents ──────────────────────────────────────────────────
+// ─── Layout panel contents (shared by Flexbox and CSS Grid tabs) ─────────────
 
 #[allow(clippy::too_many_arguments)]
-fn draw_flexbox_panel(
+fn draw_layout_panel(
     ui: &mut egui::Ui,
     cfg: &mut ResMut<FlexConfig>,
     history: &mut ResMut<UndoHistory>,
@@ -808,6 +822,13 @@ fn draw_flexbox_panel(
             });
         }
         ui.add_space(4.0);
+
+        let sel_display_mode = cfg.root.get(sel_path).map(|n| n.display_mode).unwrap_or(DisplayMode::Flex);
+
+        if sel_display_mode == DisplayMode::Grid {
+            // ── Grid Container ───────────────────────────────────────
+            draw_grid_container_section(ui, cfg, sel_path, changed, any_hovered, hover_row_gap, hover_column_gap, hover_justify, hover_align_items, hover_align_content, preview);
+        } else {
 
         // ── Flex Container ────────────────────────────────────────────
         egui::CollapsingHeader::new("Flex Container")
@@ -985,6 +1006,8 @@ fn draw_flexbox_panel(
                 }
             });
 
+        } // end else (Flex Container)
+
         ui.add_space(6.0);
 
         // ── Sizing ────────────────────────────────────────────────────
@@ -1080,8 +1103,14 @@ fn draw_flexbox_panel(
 
         ui.add_space(6.0);
 
-        // ── Flex Item (non-root) ──────────────────────────────────────
-        if !*is_root {
+        // ── Item properties (non-root) ──────────────────────────────
+        if !*is_root && sel_display_mode == DisplayMode::Grid {
+            // ── Grid Item ────────────────────────────────────────────
+            draw_grid_item_section(ui, cfg, sel_path, changed, hover_align_self, any_hovered, preview);
+
+            ui.add_space(6.0);
+        }
+        if !*is_root && sel_display_mode == DisplayMode::Flex {
             egui::CollapsingHeader::new("Flex Item")
                 .default_open(true)
                 .show(ui, |ui| {
@@ -1192,6 +1221,8 @@ fn draw_flexbox_panel(
                 ("Sidebar + Content", flexplore::templates::sidebar_content),
                 ("Card Grid", flexplore::templates::card_grid),
                 ("Nav Bar", flexplore::templates::nav_bar),
+                ("Grid Dashboard", flexplore::templates::grid_dashboard),
+                ("Grid Gallery", flexplore::templates::grid_gallery),
             ];
             ui.horizontal_wrapped(|ui| {
                 for (name, builder) in templates {
@@ -1489,6 +1520,368 @@ fn apply_theme(ctx: &egui::Context, theme: Theme) {
     style.spacing.button_padding = egui::vec2(6.0, 2.0);
     style.spacing.slider_width = 110.0;
     ctx.set_style(style);
+}
+
+// ─── Grid UI sections ────────────────────────────────────────────────────────
+
+#[allow(clippy::too_many_arguments)]
+fn draw_grid_container_section(
+    ui: &mut egui::Ui,
+    cfg: &mut bevy::prelude::ResMut<FlexConfig>,
+    sel_path: &mut Vec<usize>,
+    changed: &mut bool,
+    any_hovered: &mut bool,
+    hover_row_gap: &mut Option<ValueConfig>,
+    hover_column_gap: &mut Option<ValueConfig>,
+    hover_justify: &mut Option<JustifyContent>,
+    hover_align_items: &mut Option<AlignItems>,
+    hover_align_content: &mut Option<AlignContent>,
+    preview: &mut bevy::prelude::Local<Option<FlexConfig>>,
+) {
+    egui::CollapsingHeader::new("Grid Container")
+        .default_open(true)
+        .show(ui, |ui| {
+            ui.add_space(4.0);
+
+            // ── Template Columns ─────────────────────────────────────
+            {
+                let Some(n) = cfg.root.get_mut(sel_path) else { return };
+                track_list_editor(ui, "columns", "gtc", &mut n.grid_template_columns, changed);
+            }
+            ui.add_space(4.0);
+
+            // ── Template Rows ────────────────────────────────────────
+            {
+                let Some(n) = cfg.root.get_mut(sel_path) else { return };
+                track_list_editor(ui, "rows", "gtr", &mut n.grid_template_rows, changed);
+            }
+            ui.add_space(4.0);
+            ui.separator();
+            ui.add_space(4.0);
+
+            // ── Auto Flow ────────────────────────────────────────────
+            egui::Grid::new("gc_flow")
+                .num_columns(2)
+                .spacing([10.0, 6.0])
+                .show(ui, |ui| {
+                    let Some(n) = cfg.root.get_mut(sel_path) else { return };
+                    label_with_help(ui, "auto-flow", "Direction that auto-placed items flow");
+                    combo(
+                        ui,
+                        "gaf",
+                        &mut n.grid_auto_flow,
+                        &[
+                            ("Row", GridAutoFlow::Row),
+                            ("Column", GridAutoFlow::Column),
+                            ("RowDense", GridAutoFlow::RowDense),
+                            ("ColumnDense", GridAutoFlow::ColumnDense),
+                        ],
+                        changed,
+                        any_hovered,
+                    );
+                    ui.end_row();
+                });
+
+            ui.add_space(4.0);
+
+            // ── Auto Rows / Auto Columns ─────────────────────────────
+            {
+                let Some(n) = cfg.root.get_mut(sel_path) else { return };
+                track_list_editor(ui, "auto-cols", "gac", &mut n.grid_auto_columns, changed);
+            }
+            ui.add_space(2.0);
+            {
+                let Some(n) = cfg.root.get_mut(sel_path) else { return };
+                track_list_editor(ui, "auto-rows", "gar", &mut n.grid_auto_rows, changed);
+            }
+
+            ui.add_space(4.0);
+            ui.separator();
+            ui.add_space(4.0);
+
+            // ── Gaps (shared with flex) ──────────────────────────────
+            egui::Grid::new("gc_gaps")
+                .num_columns(2)
+                .spacing([10.0, 6.0])
+                .show(ui, |ui| {
+                    let Some(n) = cfg.root.get_mut(sel_path) else { return };
+                    label_with_help(ui, "row-gap", "Spacing between rows");
+                    *hover_row_gap = val_row(ui, "grg", &mut n.row_gap, changed, any_hovered);
+                    ui.end_row();
+                    label_with_help(ui, "column-gap", "Spacing between columns");
+                    *hover_column_gap = val_row(ui, "gcg", &mut n.column_gap, changed, any_hovered);
+                    ui.end_row();
+                });
+
+            ui.add_space(4.0);
+            ui.separator();
+            ui.add_space(4.0);
+
+            // ── Alignment (shared with flex) ─────────────────────────
+            egui::Grid::new("gc_align")
+                .num_columns(2)
+                .spacing([10.0, 6.0])
+                .show(ui, |ui| {
+                    let Some(n) = cfg.root.get_mut(sel_path) else { return };
+                    label_with_help(ui, "justify", "How items are distributed along the row axis");
+                    *hover_justify = combo(
+                        ui, "gjc", &mut n.justify_content,
+                        &[
+                            ("Default", JustifyContent::Default),
+                            ("Start", JustifyContent::Start),
+                            ("End", JustifyContent::End),
+                            ("Center", JustifyContent::Center),
+                            ("Stretch", JustifyContent::Stretch),
+                            ("SpaceBetween", JustifyContent::SpaceBetween),
+                            ("SpaceAround", JustifyContent::SpaceAround),
+                            ("SpaceEvenly", JustifyContent::SpaceEvenly),
+                        ],
+                        changed, any_hovered,
+                    );
+                    ui.end_row();
+                    label_with_help(ui, "align-items", "How items are aligned along the column axis");
+                    *hover_align_items = combo(
+                        ui, "gai", &mut n.align_items,
+                        &[
+                            ("Default", AlignItems::Default),
+                            ("Start", AlignItems::Start),
+                            ("End", AlignItems::End),
+                            ("Center", AlignItems::Center),
+                            ("Baseline", AlignItems::Baseline),
+                            ("Stretch", AlignItems::Stretch),
+                        ],
+                        changed, any_hovered,
+                    );
+                    ui.end_row();
+                    label_with_help(ui, "align-content", "How grid tracks are distributed along the column axis");
+                    *hover_align_content = combo(
+                        ui, "gac2", &mut n.align_content,
+                        &[
+                            ("Default", AlignContent::Default),
+                            ("Start", AlignContent::Start),
+                            ("End", AlignContent::End),
+                            ("Center", AlignContent::Center),
+                            ("Stretch", AlignContent::Stretch),
+                            ("SpaceBetween", AlignContent::SpaceBetween),
+                            ("SpaceAround", AlignContent::SpaceAround),
+                            ("SpaceEvenly", AlignContent::SpaceEvenly),
+                        ],
+                        changed, any_hovered,
+                    );
+                    ui.end_row();
+                });
+
+            let has_hover = hover_row_gap.is_some()
+                || hover_column_gap.is_some()
+                || hover_justify.is_some()
+                || hover_align_items.is_some()
+                || hover_align_content.is_some();
+            if has_hover {
+                *any_hovered = true;
+                let p = &mut **preview;
+                let sp = sel_path.as_slice();
+                let needs_rebuild =
+                    apply_hover(*hover_row_gap, cfg, p, sp, |n| n.row_gap, |n, v| n.row_gap = v)
+                    | apply_hover(*hover_column_gap, cfg, p, sp, |n| n.column_gap, |n, v| n.column_gap = v)
+                    | apply_hover(*hover_justify, cfg, p, sp, |n| n.justify_content, |n, v| n.justify_content = v)
+                    | apply_hover(*hover_align_items, cfg, p, sp, |n| n.align_items, |n, v| n.align_items = v)
+                    | apply_hover(*hover_align_content, cfg, p, sp, |n| n.align_content, |n, v| n.align_content = v);
+                if needs_rebuild {
+                    cfg.request_rebuild();
+                }
+            }
+        });
+}
+
+fn draw_grid_item_section(
+    ui: &mut egui::Ui,
+    cfg: &mut bevy::prelude::ResMut<FlexConfig>,
+    sel_path: &mut Vec<usize>,
+    changed: &mut bool,
+    hover_align_self: &mut Option<AlignSelf>,
+    any_hovered: &mut bool,
+    preview: &mut bevy::prelude::Local<Option<FlexConfig>>,
+) {
+    egui::CollapsingHeader::new("Grid Item")
+        .default_open(true)
+        .show(ui, |ui| {
+            ui.add_space(4.0);
+            egui::Grid::new("gi")
+                .num_columns(2)
+                .spacing([10.0, 6.0])
+                .show(ui, |ui| {
+                    let Some(n) = cfg.root.get_mut(sel_path) else { return };
+
+                    // ── grid-column ──
+                    label_with_help(ui, "grid-column", "Column placement (start line / span)");
+                    grid_placement_editor(ui, "gic", &mut n.grid_column, changed);
+                    ui.end_row();
+
+                    // ── grid-row ──
+                    label_with_help(ui, "grid-row", "Row placement (start line / span)");
+                    grid_placement_editor(ui, "gir", &mut n.grid_row, changed);
+                    ui.end_row();
+
+                    // ── align-self ──
+                    label_with_help(ui, "align-self", "Override parent's align-items for this child");
+                    *hover_align_self = combo(
+                        ui, "gias", &mut n.align_self,
+                        &[
+                            ("Auto", AlignSelf::Auto),
+                            ("Start", AlignSelf::Start),
+                            ("End", AlignSelf::End),
+                            ("Center", AlignSelf::Center),
+                            ("Baseline", AlignSelf::Baseline),
+                            ("Stretch", AlignSelf::Stretch),
+                        ],
+                        changed, any_hovered,
+                    );
+                    ui.end_row();
+
+                    // ── order ──
+                    label_with_help(ui, "order", "Controls visual ordering (lower first)");
+                    *changed |= ui.add(egui::Slider::new(&mut n.order, -10..=10)).changed();
+                    ui.end_row();
+                });
+
+            if hover_align_self.is_some() {
+                *any_hovered = true;
+                let p = &mut **preview;
+                let sp = sel_path.as_slice();
+                let needs_rebuild = apply_hover(
+                    *hover_align_self, cfg, p, sp,
+                    |n| n.align_self, |n, v| n.align_self = v,
+                );
+                if needs_rebuild {
+                    cfg.request_rebuild();
+                }
+            }
+        });
+}
+
+/// Editor for a list of grid track sizes (e.g. grid-template-columns).
+fn track_list_editor(
+    ui: &mut egui::Ui,
+    label: &str,
+    id_prefix: &str,
+    tracks: &mut Vec<GridTrackSize>,
+    changed: &mut bool,
+) {
+    ui.horizontal(|ui| {
+        label_with_help(
+            ui,
+            label,
+            &format!("Grid track definitions for {label}"),
+        );
+        if ui.small_button("+").on_hover_text("Add track").clicked() {
+            tracks.push(GridTrackSize::Fr(1.0));
+            *changed = true;
+        }
+    });
+    let mut remove_idx = None;
+    for (i, track) in tracks.iter_mut().enumerate() {
+        ui.horizontal(|ui| {
+            ui.add_space(14.0);
+            let tid = format!("{id_prefix}_{i}");
+            let cur_kind = track.kind();
+            egui::ComboBox::from_id_salt(&tid)
+                .width(72.0)
+                .selected_text(cur_kind.to_string())
+                .show_ui(ui, |ui| {
+                    for kind in GridTrackKind::iter() {
+                        if ui.selectable_label(cur_kind == kind, kind.to_string()).clicked() {
+                            let n = track.num().unwrap_or(1.0);
+                            *track = GridTrackSize::cast(kind, n);
+                            *changed = true;
+                        }
+                    }
+                });
+            if let Some(n) = track.num() {
+                let mut n = n;
+                let (lo, hi) = match track.kind() {
+                    GridTrackKind::Px => (0.0_f32, 800.0_f32),
+                    GridTrackKind::Fr => (0.1_f32, 10.0_f32),
+                    _ => (0.0_f32, 100.0_f32),
+                };
+                let decimals = if matches!(track.kind(), GridTrackKind::Fr) { 1 } else { 0 };
+                if ui.add(egui::Slider::new(&mut n, lo..=hi).max_decimals(decimals)).changed() {
+                    track.set_num(n);
+                    *changed = true;
+                }
+            }
+            if ui.small_button("x").on_hover_text("Remove track").clicked() {
+                remove_idx = Some(i);
+            }
+        });
+    }
+    if let Some(i) = remove_idx {
+        tracks.remove(i);
+        *changed = true;
+    }
+}
+
+/// Editor for a GridPlacement value.
+fn grid_placement_editor(
+    ui: &mut egui::Ui,
+    id: &str,
+    placement: &mut GridPlacement,
+    changed: &mut bool,
+) {
+    ui.horizontal(|ui| {
+        let modes = ["Auto", "Start", "Span", "Start+Span"];
+        let cur_idx = match placement {
+            GridPlacement::Auto => 0,
+            GridPlacement::Start(_) => 1,
+            GridPlacement::Span(_) => 2,
+            GridPlacement::StartSpan(_, _) => 3,
+        };
+        egui::ComboBox::from_id_salt(id)
+            .width(90.0)
+            .selected_text(modes[cur_idx])
+            .show_ui(ui, |ui| {
+                for (i, mode) in modes.iter().enumerate() {
+                    if ui.selectable_label(cur_idx == i, *mode).clicked() && cur_idx != i {
+                        *placement = match i {
+                            0 => GridPlacement::Auto,
+                            1 => GridPlacement::Start(1),
+                            2 => GridPlacement::Span(1),
+                            3 => GridPlacement::StartSpan(1, 1),
+                            _ => GridPlacement::Auto,
+                        };
+                        *changed = true;
+                    }
+                }
+            });
+        match placement {
+            GridPlacement::Start(s) => {
+                let mut v = *s as i32;
+                if ui.add(egui::Slider::new(&mut v, -10..=20).prefix("line ")).changed() {
+                    *s = v as i16;
+                    *changed = true;
+                }
+            }
+            GridPlacement::Span(n) => {
+                let mut v = *n as i32;
+                if ui.add(egui::Slider::new(&mut v, 1..=12).prefix("span ")).changed() {
+                    *n = v as u16;
+                    *changed = true;
+                }
+            }
+            GridPlacement::StartSpan(s, n) => {
+                let mut vs = *s as i32;
+                let mut vn = *n as i32;
+                if ui.add(egui::Slider::new(&mut vs, -10..=20).prefix("line ")).changed() {
+                    *s = vs as i16;
+                    *changed = true;
+                }
+                if ui.add(egui::Slider::new(&mut vn, 1..=12).prefix("span ")).changed() {
+                    *n = vn as u16;
+                    *changed = true;
+                }
+            }
+            GridPlacement::Auto => {}
+        }
+    });
 }
 
 // ─── egui helpers ─────────────────────────────────────────────────────────────

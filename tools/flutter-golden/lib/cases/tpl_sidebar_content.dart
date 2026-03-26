@@ -9,8 +9,6 @@ class TplSidebarContent extends StatelessWidget {
   return   Container(
     width: double.infinity,
     height: double.infinity,
-    padding: EdgeInsets.all(0.0),
-    margin: EdgeInsets.all(0.0),
     child:     Row(
       mainAxisAlignment: MainAxisAlignment.start,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -18,7 +16,6 @@ class TplSidebarContent extends StatelessWidget {
         Container(
           width: 120.0,
           padding: EdgeInsets.all(8.0),
-          margin: EdgeInsets.all(0.0),
           child:           Column(
             mainAxisAlignment: MainAxisAlignment.start,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -28,7 +25,6 @@ class TplSidebarContent extends StatelessWidget {
                 child:                 Container(
                   height: 44.0,
                   padding: EdgeInsets.all(8.0),
-                  margin: EdgeInsets.all(0.0),
                   color: Color.fromRGBO(251, 180, 174, 1.0),
                   alignment: Alignment.center,
                   child: Text('nav-1',
@@ -41,7 +37,6 @@ class TplSidebarContent extends StatelessWidget {
                 child:                 Container(
                   height: 44.0,
                   padding: EdgeInsets.all(8.0),
-                  margin: EdgeInsets.all(0.0),
                   color: Color.fromRGBO(179, 205, 227, 1.0),
                   alignment: Alignment.center,
                   child: Text('nav-2',
@@ -54,7 +49,6 @@ class TplSidebarContent extends StatelessWidget {
                 child:                 Container(
                   height: 44.0,
                   padding: EdgeInsets.all(8.0),
-                  margin: EdgeInsets.all(0.0),
                   color: Color.fromRGBO(204, 235, 197, 1.0),
                   alignment: Alignment.center,
                   child: Text('nav-3',
@@ -70,7 +64,6 @@ class TplSidebarContent extends StatelessWidget {
           flex: 1,
           child:           Container(
             padding: EdgeInsets.all(8.0),
-            margin: EdgeInsets.all(0.0),
             color: Color.fromRGBO(222, 203, 228, 1.0),
             alignment: Alignment.center,
             child: Text('content',

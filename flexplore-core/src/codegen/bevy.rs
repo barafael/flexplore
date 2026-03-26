@@ -44,6 +44,37 @@ fn emit_bevy_corners(corners: &Corners) -> String {
     }
 }
 
+fn emit_bevy_grid_track(t: &GridTrackSize) -> String {
+    match t {
+        GridTrackSize::Auto => "GridTrack::auto()".into(),
+        GridTrackSize::Px(n) => format!("GridTrack::px({n:.1})"),
+        GridTrackSize::Percent(n) => format!("GridTrack::percent({n:.1})"),
+        GridTrackSize::Fr(n) => format!("GridTrack::fr({n:.1})"),
+        GridTrackSize::MinContent => "GridTrack::min_content()".into(),
+        GridTrackSize::MaxContent => "GridTrack::max_content()".into(),
+    }
+}
+
+fn emit_bevy_repeated_grid_track(t: &GridTrackSize) -> String {
+    match t {
+        GridTrackSize::Auto => "RepeatedGridTrack::auto(1)".into(),
+        GridTrackSize::Px(n) => format!("RepeatedGridTrack::px(1, {n:.1})"),
+        GridTrackSize::Percent(n) => format!("RepeatedGridTrack::percent(1, {n:.1})"),
+        GridTrackSize::Fr(n) => format!("RepeatedGridTrack::fr(1, {n:.1})"),
+        GridTrackSize::MinContent => "RepeatedGridTrack::min_content(1)".into(),
+        GridTrackSize::MaxContent => "RepeatedGridTrack::max_content(1)".into(),
+    }
+}
+
+fn emit_bevy_grid_placement(p: &GridPlacement) -> String {
+    match p {
+        GridPlacement::Auto => "GridPlacement::default()".into(),
+        GridPlacement::Start(s) => format!("GridPlacement::start({s})"),
+        GridPlacement::Span(n) => format!("GridPlacement::span({n})"),
+        GridPlacement::StartSpan(s, n) => format!("GridPlacement::start_span({s}, {n})"),
+    }
+}
+
 pub fn emit_bevy_code(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
     let mut buf = String::from("fn spawn_ui(commands: &mut Commands) {\n");
     emit_node(&mut buf, root, 1, &mut 0, true, palette)?;
@@ -75,24 +106,47 @@ fn emit_node(
     writeln!(buf, "{pad}{spawner}.spawn((")?;
 
     writeln!(buf, "{pad}    Node {{")?;
-    // Only emit non-default fields. Bevy defaults: Display::Flex, Row, NoWrap,
-    // JustifyContent/AlignItems/AlignContent::Default, gaps Px(0), grow 0, shrink 1,
-    // basis/sizes Auto, padding/margin zero.
-    if node.flex_direction != FlexDirection::Row {
-        emit_field(
-            buf,
-            &pad,
-            "flex_direction",
-            &format!("FlexDirection::{:?}", node.flex_direction),
-        )?;
-    }
-    if node.flex_wrap != FlexWrap::NoWrap {
-        emit_field(
-            buf,
-            &pad,
-            "flex_wrap",
-            &format!("FlexWrap::{:?}", node.flex_wrap),
-        )?;
+    let is_grid = node.display_mode == DisplayMode::Grid;
+    if is_grid {
+        emit_field(buf, &pad, "display", "Display::Grid")?;
+        // Grid template tracks
+        if !node.grid_template_columns.is_empty() {
+            let tracks: Vec<_> = node.grid_template_columns.iter().map(emit_bevy_repeated_grid_track).collect();
+            emit_field(buf, &pad, "grid_template_columns", &format!("vec![{}]", tracks.join(", ")))?;
+        }
+        if !node.grid_template_rows.is_empty() {
+            let tracks: Vec<_> = node.grid_template_rows.iter().map(emit_bevy_repeated_grid_track).collect();
+            emit_field(buf, &pad, "grid_template_rows", &format!("vec![{}]", tracks.join(", ")))?;
+        }
+        if !node.grid_auto_columns.is_empty() {
+            let tracks: Vec<_> = node.grid_auto_columns.iter().map(emit_bevy_grid_track).collect();
+            emit_field(buf, &pad, "grid_auto_columns", &format!("vec![{}]", tracks.join(", ")))?;
+        }
+        if !node.grid_auto_rows.is_empty() {
+            let tracks: Vec<_> = node.grid_auto_rows.iter().map(emit_bevy_grid_track).collect();
+            emit_field(buf, &pad, "grid_auto_rows", &format!("vec![{}]", tracks.join(", ")))?;
+        }
+        if node.grid_auto_flow != GridAutoFlow::Row {
+            emit_field(buf, &pad, "grid_auto_flow", &format!("GridAutoFlow::{:?}", node.grid_auto_flow))?;
+        }
+    } else {
+        // Flex container — only emit non-default fields.
+        if node.flex_direction != FlexDirection::Row {
+            emit_field(
+                buf,
+                &pad,
+                "flex_direction",
+                &format!("FlexDirection::{:?}", node.flex_direction),
+            )?;
+        }
+        if node.flex_wrap != FlexWrap::NoWrap {
+            emit_field(
+                buf,
+                &pad,
+                "flex_wrap",
+                &format!("FlexWrap::{:?}", node.flex_wrap),
+            )?;
+        }
     }
     if !matches!(node.justify_content, JustifyContent::Default) {
         emit_field(
@@ -149,6 +203,13 @@ fn emit_node(
             "align_self",
             &format!("AlignSelf::{:?}", node.align_self),
         )?;
+    }
+    // Grid item placement
+    if node.grid_column != GridPlacement::Auto {
+        emit_field(buf, &pad, "grid_column", &emit_bevy_grid_placement(&node.grid_column))?;
+    }
+    if node.grid_row != GridPlacement::Auto {
+        emit_field(buf, &pad, "grid_row", &emit_bevy_grid_placement(&node.grid_row))?;
     }
     if !matches!(node.width, ValueConfig::Auto) {
         emit_field(buf, &pad, "width", &emit_bevy_value(&node.width))?;
@@ -316,5 +377,29 @@ mod tests {
         root.children = vec![leaf];
         let code = emit_bevy_code(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("Val::Percent(50.0)"));
+    }
+
+    #[test]
+    fn grid_emits_display_grid() {
+        let mut root = NodeConfig::new_grid(
+            "grid",
+            vec![GridTrackSize::Fr(1.0), GridTrackSize::Fr(2.0)],
+        );
+        root.children = vec![NodeConfig::new_leaf("A", 80.0, 80.0)];
+        let code = emit_bevy_code(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains("Display::Grid"), "should emit Display::Grid");
+        assert!(code.contains("grid_template_columns"), "should emit grid_template_columns");
+        assert!(code.contains("RepeatedGridTrack::fr(1, 1.0)"));
+        assert!(code.contains("RepeatedGridTrack::fr(1, 2.0)"));
+    }
+
+    #[test]
+    fn grid_emits_item_placement() {
+        let mut root = NodeConfig::new_grid("grid", vec![GridTrackSize::Fr(1.0)]);
+        let mut item = NodeConfig::new_leaf("A", 80.0, 80.0);
+        item.grid_column = GridPlacement::Span(2);
+        root.children = vec![item];
+        let code = emit_bevy_code(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains("GridPlacement::span(2)"));
     }
 }

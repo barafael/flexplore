@@ -494,5 +494,80 @@ pub fn all_fixtures() -> Vec<Fixture> {
             ColorPalette::Pastel1,
         ),
         fixture("tpl_nav_bar", templates::nav_bar(), ColorPalette::Pastel1),
+        // ── Grid templates ─────────────────────────────────────────────
+        fixture(
+            "tpl_grid_dashboard",
+            templates::grid_dashboard(),
+            ColorPalette::Pastel1,
+        ),
+        fixture(
+            "tpl_grid_gallery",
+            templates::grid_gallery(),
+            ColorPalette::Pastel1,
+        ),
+        // ── Grid fundamentals ──────────────────────────────────────────
+        fixture(
+            "grid_3col",
+            {
+                let mut r = NodeConfig::new_grid(
+                    "grid",
+                    vec![GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0)],
+                );
+                r.children = (1..=6)
+                    .map(|i| {
+                        let mut n = NodeConfig::new_leaf(format!("cell-{i}"), 80.0, 60.0);
+                        n.width = ValueConfig::Auto;
+                        n.height = ValueConfig::Auto;
+                        n
+                    })
+                    .collect();
+                r
+            },
+            ColorPalette::Pastel1,
+        ),
+        fixture(
+            "grid_span",
+            {
+                let mut r = NodeConfig::new_grid(
+                    "grid",
+                    vec![GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0)],
+                );
+                let mut wide = NodeConfig::new_leaf("wide", 80.0, 60.0);
+                wide.grid_column = GridPlacement::Span(2);
+                wide.width = ValueConfig::Auto;
+                wide.height = ValueConfig::Auto;
+                let mut tall = NodeConfig::new_leaf("tall", 80.0, 60.0);
+                tall.grid_row = GridPlacement::Span(2);
+                tall.width = ValueConfig::Auto;
+                tall.height = ValueConfig::Auto;
+                let mut cell = NodeConfig::new_leaf("cell", 80.0, 60.0);
+                cell.width = ValueConfig::Auto;
+                cell.height = ValueConfig::Auto;
+                r.children = vec![wide, tall, cell.clone(), cell];
+                r
+            },
+            ColorPalette::Pastel1,
+        ),
+        fixture(
+            "grid_auto_flow_column",
+            {
+                let mut r = NodeConfig::new_grid(
+                    "grid",
+                    vec![GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0)],
+                );
+                r.grid_auto_flow = GridAutoFlow::Column;
+                r.grid_template_rows = vec![GridTrackSize::Px(80.0), GridTrackSize::Px(80.0)];
+                r.children = (1..=4)
+                    .map(|i| {
+                        let mut n = NodeConfig::new_leaf(format!("cell-{i}"), 80.0, 80.0);
+                        n.width = ValueConfig::Auto;
+                        n.height = ValueConfig::Auto;
+                        n
+                    })
+                    .collect();
+                r
+            },
+            ColorPalette::Pastel1,
+        ),
     ]
 }

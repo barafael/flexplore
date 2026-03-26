@@ -17,6 +17,9 @@ import 'package:flutter_golden/cases/direction_column_reverse.dart';
 import 'package:flutter_golden/cases/direction_row_reverse.dart';
 import 'package:flutter_golden/cases/flex_basis_percent.dart';
 import 'package:flutter_golden/cases/gaps_mixed.dart';
+import 'package:flutter_golden/cases/grid_3col.dart';
+import 'package:flutter_golden/cases/grid_auto_flow_column.dart';
+import 'package:flutter_golden/cases/grid_span.dart';
 import 'package:flutter_golden/cases/grow_shrink.dart';
 import 'package:flutter_golden/cases/hidden_child.dart';
 import 'package:flutter_golden/cases/justify_center.dart';
@@ -28,6 +31,8 @@ import 'package:flutter_golden/cases/ordered_children.dart';
 import 'package:flutter_golden/cases/padding_margin.dart';
 import 'package:flutter_golden/cases/single_leaf.dart';
 import 'package:flutter_golden/cases/tpl_card_grid.dart';
+import 'package:flutter_golden/cases/tpl_grid_dashboard.dart';
+import 'package:flutter_golden/cases/tpl_grid_gallery.dart';
 import 'package:flutter_golden/cases/tpl_holy_grail.dart';
 import 'package:flutter_golden/cases/tpl_nav_bar.dart';
 import 'package:flutter_golden/cases/tpl_sidebar_content.dart';
@@ -334,6 +339,78 @@ void main() {
     );
   });
 
+  testWidgets('grid_3col', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
+    await tester.binding.setSurfaceSize(const Size(400, 300));
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: Grid3col(),
+          ),
+        ),
+      ),
+    );
+    // Consume any overflow errors so the golden is still captured.
+    tester.takeException();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/grid_3col.png'),
+    );
+  });
+
+  testWidgets('grid_auto_flow_column', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
+    await tester.binding.setSurfaceSize(const Size(400, 300));
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: GridAutoFlowColumn(),
+          ),
+        ),
+      ),
+    );
+    // Consume any overflow errors so the golden is still captured.
+    tester.takeException();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/grid_auto_flow_column.png'),
+    );
+  });
+
+  testWidgets('grid_span', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
+    await tester.binding.setSurfaceSize(const Size(400, 300));
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: GridSpan(),
+          ),
+        ),
+      ),
+    );
+    // Consume any overflow errors so the golden is still captured.
+    tester.takeException();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/grid_span.png'),
+    );
+  });
+
   testWidgets('grow_shrink', (tester) async {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() => tester.view.resetDevicePixelRatio());
@@ -595,6 +672,54 @@ void main() {
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/tpl_card_grid.png'),
+    );
+  });
+
+  testWidgets('tpl_grid_dashboard', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
+    await tester.binding.setSurfaceSize(const Size(400, 300));
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: TplGridDashboard(),
+          ),
+        ),
+      ),
+    );
+    // Consume any overflow errors so the golden is still captured.
+    tester.takeException();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/tpl_grid_dashboard.png'),
+    );
+  });
+
+  testWidgets('tpl_grid_gallery', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetDevicePixelRatio());
+    await tester.binding.setSurfaceSize(const Size(400, 300));
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(size: Size(400, 300)),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            backgroundColor: const Color(0xFF1C1C2E),
+            body: TplGridGallery(),
+          ),
+        ),
+      ),
+    );
+    // Consume any overflow errors so the golden is still captured.
+    tester.takeException();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/tpl_grid_gallery.png'),
     );
   });
 

@@ -226,7 +226,7 @@ fn build_widget<'a>(
     };
 
     // Apply margin as an outer container with padding
-    apply_margin(inner, &node.margin)
+    apply_margin(inner, &node.margin.first())
 }
 
 fn build_leaf<'a>(
@@ -290,7 +290,7 @@ fn build_leaf<'a>(
             ..Default::default()
         });
 
-    if let Some(p) = to_padding(&node.padding) {
+    if let Some(p) = to_padding(&node.padding.first()) {
         c = c.padding(p);
     }
     c = apply_min_max(c, node);
@@ -405,7 +405,7 @@ fn build_container<'a>(
         } else {
             parent_main
         };
-        let padding_px = resolve_to_px(&node.padding, 0.0);
+        let padding_px = resolve_to_px(&node.padding.first(), 0.0);
         let inner_main = (container_main - padding_px * 2.0).max(0.0);
 
         // First pass: compute line assignments for visible children
@@ -419,7 +419,7 @@ fn build_container<'a>(
                 continue;
             }
             let size = child_main_axis_px(child, is_row, inner_main);
-            let margin_extra = resolve_to_px(&child.margin, 0.0) * 2.0;
+            let margin_extra = resolve_to_px(&child.margin.first(), 0.0) * 2.0;
             let total = size + margin_extra;
 
             if visible_count_on_line > 0 && line_used + main_gap_px + total > inner_main {
@@ -506,7 +506,7 @@ fn build_container<'a>(
 
         // Pre-compute flex-shrink: if children overflow, shrink them proportionally.
         let parent_main = if is_row { VIEWPORT_W } else { VIEWPORT_H };
-        let padding_px = resolve_to_px(&node.padding, 0.0);
+        let padding_px = resolve_to_px(&node.padding.first(), 0.0);
         let available = (parent_main - padding_px * 2.0).max(0.0);
         let visible: Vec<&&NodeConfig> = children.iter().filter(|c| c.visible).collect();
         let num_gaps = if visible.len() > 1 && !uses_space_justification {
@@ -518,7 +518,7 @@ fn build_container<'a>(
             .iter()
             .map(|c| {
                 let dim = if is_row { &c.width } else { &c.height };
-                resolve_to_px(dim, parent_main) + resolve_to_px(&c.margin, 0.0) * 2.0
+                resolve_to_px(dim, parent_main) + resolve_to_px(&c.margin.first(), 0.0) * 2.0
             })
             .sum::<f32>()
             + num_gaps * main_gap_px;
@@ -670,7 +670,7 @@ fn build_container<'a>(
             ..Default::default()
         });
 
-    if let Some(p) = to_padding(&node.padding) {
+    if let Some(p) = to_padding(&node.padding.first()) {
         c = c.padding(p);
     }
 

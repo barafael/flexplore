@@ -208,11 +208,25 @@ fn emit_rn_node(
         "'rgba(28, 28, 43, 1)'".into()
     };
 
+    let is_grid = node.display_mode == DisplayMode::Grid;
+    let grid_col_count = if is_grid && !node.grid_template_columns.is_empty() {
+        node.grid_template_columns.len()
+    } else {
+        0
+    };
+
+    if is_grid {
+        writeln!(buf, "{pad}{{/* CSS Grid — approximated with flexWrap */}}")?;
+    }
     writeln!(buf, "{pad}<View style={{{{")?;
 
     // React Native defaults: flexDirection 'column', unlike CSS 'row'.
     // Always emit flexDirection so the layout intent is explicit.
-    if node.flex_direction != FlexDirection::Column {
+    if is_grid {
+        // Grid approximation: use row direction with wrapping
+        writeln!(buf, "{pad}  flexDirection: 'row',")?;
+        writeln!(buf, "{pad}  flexWrap: 'wrap',")?;
+    } else if node.flex_direction != FlexDirection::Column {
         writeln!(
             buf,
             "{pad}  flexDirection: {},",
@@ -222,7 +236,7 @@ fn emit_rn_node(
     if !node.visible {
         writeln!(buf, "{pad}  opacity: 0,")?;
     }
-    if node.flex_wrap != FlexWrap::NoWrap {
+    if !is_grid && node.flex_wrap != FlexWrap::NoWrap {
         writeln!(buf, "{pad}  flexWrap: {},", rn_wrap(node.flex_wrap))?;
     }
     if !matches!(
@@ -312,7 +326,33 @@ fn emit_rn_node(
         writeln!(buf, "{pad}}}}}>")?;
         let mut sorted: Vec<&NodeConfig> = node.children.iter().collect();
         sorted.sort_by_key(|c| c.order);
+        if is_grid && grid_col_count > 0 {
+            // Approximate child widths from grid-template-columns
+            let child_pad = "  ".repeat(depth + 1);
+            writeln!(
+                buf,
+                "{child_pad}{{/* Grid children — each sized to ~1/{grid_col_count} of container width */}}"
+            )?;
+        }
         for child in sorted {
+            // Emit grid-item placement comments for non-auto placements
+            if is_grid {
+                let child_pad = "  ".repeat(depth + 1);
+                if child.grid_column != GridPlacement::Auto {
+                    writeln!(
+                        buf,
+                        "{child_pad}{{/* grid-column: {} — not supported in RN */}}",
+                        child.grid_column.display_short()
+                    )?;
+                }
+                if child.grid_row != GridPlacement::Auto {
+                    writeln!(
+                        buf,
+                        "{child_pad}{{/* grid-row: {} — not supported in RN */}}",
+                        child.grid_row.display_short()
+                    )?;
+                }
+            }
             emit_rn_node(buf, child, depth + 1, leaf_idx, palette)?;
         }
         writeln!(buf, "{pad}</View>")?;

@@ -1,5 +1,6 @@
 {
   "label": "root",
+  "display_mode": "Flex",
   "flex_direction": "Row",
   "flex_wrap": "NoWrap",
   "justify_content": "FlexStart",
@@ -15,6 +16,13 @@
   "flex_shrink": 1.0,
   "flex_basis": "Auto",
   "align_self": "Auto",
+  "grid_template_columns": [],
+  "grid_template_rows": [],
+  "grid_auto_columns": [],
+  "grid_auto_rows": [],
+  "grid_auto_flow": "Row",
+  "grid_column": "Auto",
+  "grid_row": "Auto",
   "width": {
     "Percent": 100.0
   },
@@ -81,6 +89,7 @@
   "children": [
     {
       "label": "A",
+      "display_mode": "Flex",
       "flex_direction": "Row",
       "flex_wrap": "Wrap",
       "justify_content": "Center",
@@ -96,6 +105,13 @@
       "flex_shrink": 1.0,
       "flex_basis": "Auto",
       "align_self": "Auto",
+      "grid_template_columns": [],
+      "grid_template_rows": [],
+      "grid_auto_columns": [],
+      "grid_auto_rows": [],
+      "grid_auto_flow": "Row",
+      "grid_column": "Auto",
+      "grid_row": "Auto",
       "width": {
         "Px": 100.0
       },
@@ -159,6 +175,7 @@
     },
     {
       "label": "B",
+      "display_mode": "Flex",
       "flex_direction": "Row",
       "flex_wrap": "Wrap",
       "justify_content": "Center",
@@ -174,6 +191,13 @@
       "flex_shrink": 1.0,
       "flex_basis": "Auto",
       "align_self": "Auto",
+      "grid_template_columns": [],
+      "grid_template_rows": [],
+      "grid_auto_columns": [],
+      "grid_auto_rows": [],
+      "grid_auto_flow": "Row",
+      "grid_column": "Auto",
+      "grid_row": "Auto",
       "width": {
         "Px": 80.0
       },
@@ -237,6 +261,7 @@
     },
     {
       "label": "C",
+      "display_mode": "Flex",
       "flex_direction": "Row",
       "flex_wrap": "Wrap",
       "justify_content": "Center",
@@ -252,6 +277,13 @@
       "flex_shrink": 1.0,
       "flex_basis": "Auto",
       "align_self": "Auto",
+      "grid_template_columns": [],
+      "grid_template_rows": [],
+      "grid_auto_columns": [],
+      "grid_auto_rows": [],
+      "grid_auto_flow": "Row",
+      "grid_column": "Auto",
+      "grid_row": "Auto",
       "width": {
         "Px": 60.0
       },

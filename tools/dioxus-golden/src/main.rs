@@ -298,11 +298,11 @@ fn emit_node(
     if !matches!(node.max_height, ValueConfig::Auto) {
         styles.push(format!("max-height: {}", css_value(&node.max_height)));
     }
-    if !matches!(node.padding, ValueConfig::Px(v) if v == 0.0) {
-        styles.push(format!("padding: {}", css_value(&node.padding)));
+    if !matches!(node.padding.first(), ValueConfig::Px(v) if v == 0.0) {
+        styles.push(format!("padding: {}", css_value(&node.padding.first())));
     }
-    if !matches!(node.margin, ValueConfig::Px(v) if v == 0.0) {
-        styles.push(format!("margin: {}", css_value(&node.margin)));
+    if !matches!(node.margin.first(), ValueConfig::Px(v) if v == 0.0) {
+        styles.push(format!("margin: {}", css_value(&node.margin.first())));
     }
     if node.order != 0 {
         styles.push(format!("order: {}", node.order));

@@ -175,15 +175,36 @@ fn emit_tailwind_node(
         "bg-[rgba(28,28,43,1)]".into()
     };
 
-    let mut classes: Vec<String> = vec!["flex".into()];
+    let is_grid = node.display_mode == DisplayMode::Grid;
+    let mut classes: Vec<String> = vec![if is_grid { "grid" } else { "flex" }.into()];
     if !node.visible {
         classes.push("invisible".into());
     }
-    if node.flex_direction != FlexDirection::Row {
-        classes.push(tailwind_flex_direction(node.flex_direction).into());
-    }
-    if node.flex_wrap != FlexWrap::NoWrap {
-        classes.push(tailwind_flex_wrap(node.flex_wrap).into());
+    if is_grid {
+        // Grid template — use arbitrary Tailwind values
+        if !node.grid_template_columns.is_empty() {
+            let val: Vec<_> = node.grid_template_columns.iter().map(|t| t.display_short()).collect();
+            classes.push(format!("grid-cols-[{}]", val.join("_")));
+        }
+        if !node.grid_template_rows.is_empty() {
+            let val: Vec<_> = node.grid_template_rows.iter().map(|t| t.display_short()).collect();
+            classes.push(format!("grid-rows-[{}]", val.join("_")));
+        }
+        if node.grid_auto_flow != GridAutoFlow::Row {
+            classes.push(match node.grid_auto_flow {
+                GridAutoFlow::Column => "grid-flow-col",
+                GridAutoFlow::RowDense => "grid-flow-row-dense",
+                GridAutoFlow::ColumnDense => "grid-flow-col-dense",
+                _ => "grid-flow-row",
+            }.into());
+        }
+    } else {
+        if node.flex_direction != FlexDirection::Row {
+            classes.push(tailwind_flex_direction(node.flex_direction).into());
+        }
+        if node.flex_wrap != FlexWrap::NoWrap {
+            classes.push(tailwind_flex_wrap(node.flex_wrap).into());
+        }
     }
     if !matches!(
         node.justify_content,
@@ -221,6 +242,13 @@ fn emit_tailwind_node(
     }
     if node.align_self != AlignSelf::Auto {
         classes.push(tailwind_align_self(node.align_self).into());
+    }
+    // Grid item placement
+    if node.grid_column != GridPlacement::Auto {
+        classes.push(format!("col-[{}]", node.grid_column.display_short()));
+    }
+    if node.grid_row != GridPlacement::Auto {
+        classes.push(format!("row-[{}]", node.grid_row.display_short()));
     }
     if !matches!(node.width, ValueConfig::Auto) {
         classes.push(tailwind_value("w", &node.width));
@@ -262,7 +290,9 @@ fn emit_tailwind_node(
     }
 
     if is_leaf {
-        classes.push("flex".into());
+        if !is_grid {
+            classes.push("flex".into());
+        }
         classes.push("items-center".into());
         classes.push("justify-center".into());
         classes.push("text-[26px]".into());
