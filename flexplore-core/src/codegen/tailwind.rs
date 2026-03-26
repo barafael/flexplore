@@ -190,6 +190,14 @@ fn emit_tailwind_node(
             let val: Vec<_> = node.grid_template_rows.iter().map(|t| t.display_short()).collect();
             classes.push(format!("grid-rows-[{}]", val.join("_")));
         }
+        if !node.grid_auto_columns.is_empty() {
+            let val: Vec<_> = node.grid_auto_columns.iter().map(|t| t.display_short()).collect();
+            classes.push(format!("auto-cols-[{}]", val.join("_")));
+        }
+        if !node.grid_auto_rows.is_empty() {
+            let val: Vec<_> = node.grid_auto_rows.iter().map(|t| t.display_short()).collect();
+            classes.push(format!("auto-rows-[{}]", val.join("_")));
+        }
         if node.grid_auto_flow != GridAutoFlow::Row {
             classes.push(match node.grid_auto_flow {
                 GridAutoFlow::Column => "grid-flow-col",

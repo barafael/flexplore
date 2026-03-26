@@ -194,13 +194,7 @@ fn emit_dioxus_node(
             writeln!(buf, "{pad}    grid_auto_rows: \"{}\",", val.join(" "))?;
         }
         if node.grid_auto_flow != GridAutoFlow::Row {
-            let flow = match node.grid_auto_flow {
-                GridAutoFlow::Column => "column",
-                GridAutoFlow::RowDense => "row dense",
-                GridAutoFlow::ColumnDense => "column dense",
-                _ => "row",
-            };
-            writeln!(buf, "{pad}    grid_auto_flow: \"{flow}\",")?;
+            writeln!(buf, "{pad}    grid_auto_flow: \"{}\",", node.grid_auto_flow.to_css_str())?;
         }
     } else {
         if node.flex_direction != FlexDirection::Row {

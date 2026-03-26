@@ -96,6 +96,17 @@ pub enum GridAutoFlow {
     ColumnDense,
 }
 
+impl GridAutoFlow {
+    pub fn to_css_str(self) -> &'static str {
+        match self {
+            GridAutoFlow::Row => "row",
+            GridAutoFlow::Column => "column",
+            GridAutoFlow::RowDense => "row dense",
+            GridAutoFlow::ColumnDense => "column dense",
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Debug, Display, EnumIter, Serialize, Deserialize)]
 pub enum GridTrackSize {
     Auto,
@@ -535,8 +546,6 @@ impl NodeConfig {
         let mut node = Self::new_container(label);
         node.display_mode = DisplayMode::Grid;
         node.grid_template_columns = cols;
-        node.row_gap = ValueConfig::Px(8.0);
-        node.column_gap = ValueConfig::Px(8.0);
         node
     }
 }

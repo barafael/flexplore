@@ -1104,13 +1104,22 @@ fn draw_layout_panel(
         ui.add_space(6.0);
 
         // ── Item properties (non-root) ──────────────────────────────
-        if !*is_root && sel_display_mode == DisplayMode::Grid {
-            // ── Grid Item ────────────────────────────────────────────
+        // Whether to show grid-item or flex-item controls depends on the
+        // *parent's* display mode, not the node's own.
+        let parent_display_mode = if sel_path.is_empty() {
+            DisplayMode::Flex
+        } else {
+            cfg.root
+                .get(&sel_path[..sel_path.len() - 1])
+                .map(|p| p.display_mode)
+                .unwrap_or(DisplayMode::Flex)
+        };
+        if !*is_root && parent_display_mode == DisplayMode::Grid {
             draw_grid_item_section(ui, cfg, sel_path, changed, hover_align_self, any_hovered, preview);
 
             ui.add_space(6.0);
         }
-        if !*is_root && sel_display_mode == DisplayMode::Flex {
+        if !*is_root && parent_display_mode == DisplayMode::Flex {
             egui::CollapsingHeader::new("Flex Item")
                 .default_open(true)
                 .show(ui, |ui| {

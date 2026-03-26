@@ -950,10 +950,10 @@ fn grid_mixed_tracks_codegen() {
     let html = emit_html_css(&node, ColorPalette::Pastel1).unwrap();
     let bevy = emit_bevy_code(&node, ColorPalette::Pastel1).unwrap();
 
-    // HTML: template has px, fr, and %
-    assert!(html.contains("100.0px"), "HTML missing px track");
+    // HTML: template has px, fr, and % (display_short uses .0 for px/%)
+    assert!(html.contains("100px"), "HTML missing px track");
     assert!(html.contains("1.0fr"), "HTML missing fr track");
-    assert!(html.contains("30.0%"), "HTML missing percent track");
+    assert!(html.contains("30%"), "HTML missing percent track");
     assert!(html.contains("grid-auto-rows:"), "HTML missing grid-auto-rows");
 
     // Bevy: all three track types present

@@ -134,37 +134,12 @@ fn css_align_self(a: AlignSelf) -> &'static str {
     }
 }
 
-fn css_grid_track(t: &GridTrackSize) -> String {
-    match t {
-        GridTrackSize::Auto => "auto".into(),
-        GridTrackSize::Px(n) => format!("{n:.1}px"),
-        GridTrackSize::Percent(n) => format!("{n:.1}%"),
-        GridTrackSize::Fr(n) => format!("{n:.1}fr"),
-        GridTrackSize::MinContent => "min-content".into(),
-        GridTrackSize::MaxContent => "max-content".into(),
-    }
-}
-
 fn css_grid_template(tracks: &[GridTrackSize]) -> String {
-    tracks.iter().map(css_grid_track).collect::<Vec<_>>().join(" ")
-}
-
-fn css_grid_auto_flow(flow: GridAutoFlow) -> &'static str {
-    match flow {
-        GridAutoFlow::Row => "row",
-        GridAutoFlow::Column => "column",
-        GridAutoFlow::RowDense => "row dense",
-        GridAutoFlow::ColumnDense => "column dense",
-    }
-}
-
-fn css_grid_placement(p: &GridPlacement) -> String {
-    match p {
-        GridPlacement::Auto => "auto".into(),
-        GridPlacement::Start(s) => format!("{s}"),
-        GridPlacement::Span(n) => format!("span {n}"),
-        GridPlacement::StartSpan(s, n) => format!("{s} / span {n}"),
-    }
+    tracks
+        .iter()
+        .map(|t| t.display_short())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 pub fn emit_html_css(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
@@ -214,11 +189,15 @@ fn emit_html_node(
     writeln!(css, ".{class} {{")?;
 
     // Only emit properties that differ from CSS defaults.
-    let is_grid = node.display_mode == DisplayMode::Grid;
-    if is_grid {
-        css.push_str("  display: grid;\n");
-    } else {
-        css.push_str("  display: flex;\n");
+    // Leaves always get `display: flex` at the end for text centering,
+    // so skip the container-level display for them to avoid duplication.
+    let is_grid = !is_leaf && node.display_mode == DisplayMode::Grid;
+    if !is_leaf {
+        if is_grid {
+            css.push_str("  display: grid;\n");
+        } else {
+            css.push_str("  display: flex;\n");
+        }
     }
     if !node.visible {
         css.push_str("  visibility: hidden;\n");
@@ -258,7 +237,7 @@ fn emit_html_node(
             writeln!(
                 css,
                 "  grid-auto-flow: {};",
-                css_grid_auto_flow(node.grid_auto_flow)
+                node.grid_auto_flow.to_css_str()
             )?;
         }
     } else {
@@ -318,10 +297,10 @@ fn emit_html_node(
     }
     // Grid item placement
     if node.grid_column != GridPlacement::Auto {
-        writeln!(css, "  grid-column: {};", css_grid_placement(&node.grid_column))?;
+        writeln!(css, "  grid-column: {};", node.grid_column.display_short())?;
     }
     if node.grid_row != GridPlacement::Auto {
-        writeln!(css, "  grid-row: {};", css_grid_placement(&node.grid_row))?;
+        writeln!(css, "  grid-row: {};", node.grid_row.display_short())?;
     }
     if !matches!(node.width, ValueConfig::Auto) {
         writeln!(css, "  width: {};", emit_css_value(&node.width))?;

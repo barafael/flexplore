@@ -382,13 +382,7 @@ fn emit_flutter_inner(
                 writeln!(buf, "{ipad}  // grid-auto-rows: {}", val.join(" "))?;
             }
             if node.grid_auto_flow != GridAutoFlow::Row {
-                let flow = match node.grid_auto_flow {
-                    GridAutoFlow::Column => "column",
-                    GridAutoFlow::RowDense => "row dense",
-                    GridAutoFlow::ColumnDense => "column dense",
-                    _ => "row",
-                };
-                writeln!(buf, "{ipad}  // grid-auto-flow: {flow}")?;
+                writeln!(buf, "{ipad}  // grid-auto-flow: {}", node.grid_auto_flow.to_css_str())?;
             }
             if let Some(s) = dart_value(&node.column_gap) {
                 writeln!(buf, "{ipad}  spacing: {s},")?;
