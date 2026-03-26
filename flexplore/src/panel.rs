@@ -2147,6 +2147,7 @@ fn single_val_editor(
 
 // ─── File picker helpers ─────────────────────────────────────────────────────
 
+#[allow(unused_variables)]
 fn save_file(
     cfg: &FlexConfig,
     toast: &mut Local<Option<(String, f64)>>,
