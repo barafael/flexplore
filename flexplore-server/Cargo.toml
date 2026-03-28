@@ -1,0 +1,24 @@
+[package]
+name = "flexplore-server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+flexplore-protocol = { path = "../flexplore-protocol" }
+flexplore-core = { path = "../flexplore-core" }
+bevy = { version = "0.18", default-features = false, features = [
+    "bevy_state",
+    "bevy_log",
+    "multi_threaded",
+] }
+lightyear = { version = "0.26.4", features = [
+    "server",
+    "webtransport",
+    "webtransport_self_signed",
+    "netcode",
+    "input_native",
+    "replication",
+] }
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

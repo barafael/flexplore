@@ -402,7 +402,7 @@ impl<'de> Deserialize<'de> for Corners {
 
 // ─── Node config (recursive tree) ────────────────────────────────────────────
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct NodeConfig {
     pub label: String,
     #[serde(default)]

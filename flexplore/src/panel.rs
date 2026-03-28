@@ -230,10 +230,12 @@ pub fn panel_system(
     mut codegen: Local<Option<CodegenState>>,
     mut drag: Local<DragState>,
     mut show_help: Local<bool>,
+    #[cfg(feature = "multiplayer")] mut pending_edits: Option<ResMut<crate::net::PendingEdits>>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
     let tab = left_tab.get_or_insert(LeftTab::Flexbox);
     let cg = codegen.get_or_insert_with(CodegenState::default);
+    let mut net_dirty = false;
 
     // ── Global shortcuts ──────────────────────────────────────────────────────
     let undo_pressed = ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Z));
@@ -305,6 +307,7 @@ pub fn panel_system(
             *preview = None;
             history.push(cfg.clone());
             cg.dirty = true;
+            net_dirty = true;
         }
     }
 
@@ -498,6 +501,7 @@ pub fn panel_system(
                             &mut hover_align_self,
                             cg,
                             &mut drag,
+                            &mut net_dirty,
                         );
                     }
                 }
@@ -554,11 +558,17 @@ pub fn panel_system(
                 egui::ScrollArea::both()
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        ui.add(
-                            egui::TextEdit::multiline(&mut cg.cached_code.as_str())
-                                .code_editor()
-                                .desired_width(f32::INFINITY),
-                        );
+                        let lang = crate::highlight::lang_for_framework(cg.framework_idx);
+                        let font = egui::FontId::monospace(12.0);
+                        let job = crate::highlight::highlight(&cg.cached_code, lang, font);
+                        let response = ui.label(job);
+                        // Allow text selection via right-click context menu
+                        response.context_menu(|ui| {
+                            if ui.button("Copy all").clicked() {
+                                ui.ctx().copy_text(cg.cached_code.clone());
+                                ui.close();
+                            }
+                        });
                     });
             });
     }
@@ -569,6 +579,7 @@ pub fn panel_system(
         cfg.request_rebuild();
         history.push(cfg.clone());
         cg.dirty = true;
+        net_dirty = true;
     } else if !any_hovered && let Some(saved) = preview.take() {
         *cfg = saved;
         cfg.sanitize_selection();
@@ -599,6 +610,7 @@ pub fn panel_system(
                         cfg.request_rebuild();
                         history.push(cfg.clone());
                         cg.dirty = true;
+                        net_dirty = true;
                     }
                 }
             }
@@ -669,6 +681,27 @@ pub fn panel_system(
             });
     }
 
+    // ── Send accumulated edits to the network ─────────────────────────────────
+    #[cfg(feature = "multiplayer")]
+    if net_dirty {
+        if let Some(ref mut edits) = pending_edits {
+            edits.0.push(flexplore_protocol::LayoutEdit::ReplaceRoot(
+                cfg.root.clone(),
+            ));
+            edits.0.push(flexplore_protocol::LayoutEdit::UpdateSettings {
+                bg_mode: cfg.bg_mode,
+                art_style: cfg.art_style,
+                art_seed: cfg.art_seed,
+                art_depth: cfg.art_depth,
+                theme: cfg.theme,
+                palette: cfg.palette,
+            });
+        }
+    }
+
+    #[cfg(not(feature = "multiplayer"))]
+    let _ = net_dirty;
+
     Ok(())
 }
 
@@ -703,6 +736,7 @@ fn draw_layout_panel(
     hover_align_self: &mut Option<AlignSelf>,
     cg: &mut CodegenState,
     drag: &mut DragState,
+    net_dirty: &mut bool,
 ) {
     // ── Tree ──────────────────────────────────────────────────────────────
     egui::CollapsingHeader::new("Tree")
@@ -1397,6 +1431,7 @@ fn draw_layout_panel(
                         **preview = None;
                         history.push((**cfg).clone());
                         cg.dirty = true;
+                        *net_dirty = true;
                     }
                 }
             });
@@ -1417,6 +1452,7 @@ fn draw_layout_panel(
                 history.push((**cfg).clone());
                 import_buf.clear();
                 cg.dirty = true;
+                *net_dirty = true;
             }
 
             #[cfg(target_arch = "wasm32")]

@@ -3,10 +3,25 @@ name = "flexplore"
 version = "1.0.0"
 edition = "2024"
 
+[features]
+default = ["multiplayer"]
+multiplayer = [
+    "dep:flexplore-protocol",
+    "dep:lightyear",
+]
+
 [dependencies]
 flexplore-core = { path = "../flexplore-core", features = ["bevy"] }
+flexplore-protocol = { path = "../flexplore-protocol", optional = true }
 bevy = { version = "0.18", features = ["serialize"] }
 bevy_egui = "0.39"
+lightyear = { version = "0.26.4", optional = true, features = [
+    "client",
+    "webtransport",
+    "netcode",
+    "input_native",
+    "replication",
+] }
 rand = "0.8"
 getrandom = { version = "0.2", features = ["js"] }
 getrandom_0_3 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }

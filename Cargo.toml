@@ -2,9 +2,15 @@
 
 resolver = "3"
 
-members = ["flexplore", "flexplore-core", "tools/update-snapshots", "tools/bevy-golden", "tools/iced-golden", "tools/egui-golden", "tools/dioxus-golden", "tools/react-native-golden", "tools/build-overview"]
+members = ["flexplore", "flexplore-core", "flexplore-protocol", "flexplore-server", "tools/update-snapshots", "tools/bevy-golden", "tools/iced-golden", "tools/egui-golden", "tools/dioxus-golden", "tools/react-native-golden", "tools/build-overview"]
 
 default-members = ["flexplore"]
+
+[workspace.dependencies]
+# Force bevy_ecs `std` feature on — lightyear_messages 0.26.4 uses
+# `ParallelCommands` which is behind `#[cfg(feature = "std")]` in bevy 0.18.1,
+# but lightyear_messages declares `default-features = false` without `std`.
+bevy_ecs = { version = "0.18", features = ["std"] }
 
 [profile.dev]
 opt-level = 1
