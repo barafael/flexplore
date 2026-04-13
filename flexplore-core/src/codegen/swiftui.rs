@@ -171,12 +171,8 @@ fn swift_grid_item(track: &GridTrackSize) -> String {
         GridTrackSize::Percent(_) => {
             "GridItem(.flexible()) /* percentage track — use .flexible() as approximation */".into()
         }
-        GridTrackSize::MinContent => {
-            "GridItem(.flexible(minimum: 0)) /* min-content */".into()
-        }
-        GridTrackSize::MaxContent => {
-            "GridItem(.flexible()) /* max-content */".into()
-        }
+        GridTrackSize::MinContent => "GridItem(.flexible(minimum: 0)) /* min-content */".into(),
+        GridTrackSize::MaxContent => "GridItem(.flexible()) /* max-content */".into(),
     }
 }
 
@@ -323,9 +319,15 @@ fn emit_swiftui_node(
         emit_swift_padding(buf, &leaf_prefix, &node.margin, " /* margin */")?;
         if let Some(alignment) = swift_align_self(node.align_self, parent_is_row) {
             if parent_is_row {
-                writeln!(buf, "{pad}    .frame(maxHeight: .infinity, alignment: {alignment})")?;
+                writeln!(
+                    buf,
+                    "{pad}    .frame(maxHeight: .infinity, alignment: {alignment})"
+                )?;
             } else {
-                writeln!(buf, "{pad}    .frame(maxWidth: .infinity, alignment: {alignment})")?;
+                writeln!(
+                    buf,
+                    "{pad}    .frame(maxWidth: .infinity, alignment: {alignment})"
+                )?;
             }
         } else if node.align_self != AlignSelf::Auto {
             writeln!(
@@ -390,11 +392,7 @@ fn emit_swiftui_node(
             } else {
                 tracks.iter().map(swift_grid_item).collect()
             };
-            writeln!(
-                buf,
-                "{pad}let columns = [{}]",
-                items.join(", ")
-            )?;
+            writeln!(buf, "{pad}let columns = [{}]", items.join(", "))?;
             let spacing_arg = swift_spacing_value(if is_column_flow {
                 &node.column_gap
             } else {

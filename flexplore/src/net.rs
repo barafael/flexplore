@@ -14,8 +14,8 @@ use lightyear::webtransport::prelude::client::WebTransportClientIo;
 
 use flexplore_protocol::*;
 
-use flexplore::config::FlexConfig;
 use crate::history::UndoHistory;
+use flexplore::config::FlexConfig;
 
 // --- Resources ---
 
@@ -152,10 +152,7 @@ fn apply_server_state(
 }
 
 /// Collect all remote peer cursors into a resource for the UI to render.
-fn collect_remote_cursors(
-    cursors: Query<&PeerCursor>,
-    mut remote: ResMut<RemoteCursors>,
-) {
+fn collect_remote_cursors(cursors: Query<&PeerCursor>, mut remote: ResMut<RemoteCursors>) {
     remote.0.clear();
     for cursor in cursors.iter() {
         remote.0.push(RemoteCursorInfo {

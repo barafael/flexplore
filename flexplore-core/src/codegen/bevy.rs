@@ -36,10 +36,7 @@ fn emit_bevy_corners(corners: &Corners) -> String {
     } else {
         format!(
             "BorderRadius {{ top_left: Val::Px({:.1}), top_right: Val::Px({:.1}), bottom_right: Val::Px({:.1}), bottom_left: Val::Px({:.1}) }}",
-            corners.top_left,
-            corners.top_right,
-            corners.bottom_right,
-            corners.bottom_left,
+            corners.top_left, corners.top_right, corners.bottom_right, corners.bottom_left,
         )
     }
 }
@@ -111,23 +108,64 @@ fn emit_node(
         emit_field(buf, &pad, "display", "Display::Grid")?;
         // Grid template tracks
         if !node.grid_template_columns.is_empty() {
-            let tracks: Vec<_> = node.grid_template_columns.iter().map(emit_bevy_repeated_grid_track).collect();
-            emit_field(buf, &pad, "grid_template_columns", &format!("vec![{}]", tracks.join(", ")))?;
+            let tracks: Vec<_> = node
+                .grid_template_columns
+                .iter()
+                .map(emit_bevy_repeated_grid_track)
+                .collect();
+            emit_field(
+                buf,
+                &pad,
+                "grid_template_columns",
+                &format!("vec![{}]", tracks.join(", ")),
+            )?;
         }
         if !node.grid_template_rows.is_empty() {
-            let tracks: Vec<_> = node.grid_template_rows.iter().map(emit_bevy_repeated_grid_track).collect();
-            emit_field(buf, &pad, "grid_template_rows", &format!("vec![{}]", tracks.join(", ")))?;
+            let tracks: Vec<_> = node
+                .grid_template_rows
+                .iter()
+                .map(emit_bevy_repeated_grid_track)
+                .collect();
+            emit_field(
+                buf,
+                &pad,
+                "grid_template_rows",
+                &format!("vec![{}]", tracks.join(", ")),
+            )?;
         }
         if !node.grid_auto_columns.is_empty() {
-            let tracks: Vec<_> = node.grid_auto_columns.iter().map(emit_bevy_grid_track).collect();
-            emit_field(buf, &pad, "grid_auto_columns", &format!("vec![{}]", tracks.join(", ")))?;
+            let tracks: Vec<_> = node
+                .grid_auto_columns
+                .iter()
+                .map(emit_bevy_grid_track)
+                .collect();
+            emit_field(
+                buf,
+                &pad,
+                "grid_auto_columns",
+                &format!("vec![{}]", tracks.join(", ")),
+            )?;
         }
         if !node.grid_auto_rows.is_empty() {
-            let tracks: Vec<_> = node.grid_auto_rows.iter().map(emit_bevy_grid_track).collect();
-            emit_field(buf, &pad, "grid_auto_rows", &format!("vec![{}]", tracks.join(", ")))?;
+            let tracks: Vec<_> = node
+                .grid_auto_rows
+                .iter()
+                .map(emit_bevy_grid_track)
+                .collect();
+            emit_field(
+                buf,
+                &pad,
+                "grid_auto_rows",
+                &format!("vec![{}]", tracks.join(", ")),
+            )?;
         }
         if node.grid_auto_flow != GridAutoFlow::Row {
-            emit_field(buf, &pad, "grid_auto_flow", &format!("GridAutoFlow::{:?}", node.grid_auto_flow))?;
+            emit_field(
+                buf,
+                &pad,
+                "grid_auto_flow",
+                &format!("GridAutoFlow::{:?}", node.grid_auto_flow),
+            )?;
         }
     } else {
         // Flex container — only emit non-default fields.
@@ -206,10 +244,20 @@ fn emit_node(
     }
     // Grid item placement
     if node.grid_column != GridPlacement::Auto {
-        emit_field(buf, &pad, "grid_column", &emit_bevy_grid_placement(&node.grid_column))?;
+        emit_field(
+            buf,
+            &pad,
+            "grid_column",
+            &emit_bevy_grid_placement(&node.grid_column),
+        )?;
     }
     if node.grid_row != GridPlacement::Auto {
-        emit_field(buf, &pad, "grid_row", &emit_bevy_grid_placement(&node.grid_row))?;
+        emit_field(
+            buf,
+            &pad,
+            "grid_row",
+            &emit_bevy_grid_placement(&node.grid_row),
+        )?;
     }
     if !matches!(node.width, ValueConfig::Auto) {
         emit_field(buf, &pad, "width", &emit_bevy_value(&node.width))?;
@@ -230,28 +278,13 @@ fn emit_node(
         emit_field(buf, &pad, "max_height", &emit_bevy_value(&node.max_height))?;
     }
     if !node.padding.is_zero() {
-        emit_field(
-            buf,
-            &pad,
-            "padding",
-            &emit_bevy_sides(&node.padding),
-        )?;
+        emit_field(buf, &pad, "padding", &emit_bevy_sides(&node.padding))?;
     }
     if !node.margin.is_zero() {
-        emit_field(
-            buf,
-            &pad,
-            "margin",
-            &emit_bevy_sides(&node.margin),
-        )?;
+        emit_field(buf, &pad, "margin", &emit_bevy_sides(&node.margin))?;
     }
     if !node.border_width.is_zero() {
-        emit_field(
-            buf,
-            &pad,
-            "border",
-            &emit_bevy_sides(&node.border_width),
-        )?;
+        emit_field(buf, &pad, "border", &emit_bevy_sides(&node.border_width))?;
     }
     if !node.border_radius.is_zero() {
         emit_field(
@@ -381,14 +414,15 @@ mod tests {
 
     #[test]
     fn grid_emits_display_grid() {
-        let mut root = NodeConfig::new_grid(
-            "grid",
-            vec![GridTrackSize::Fr(1.0), GridTrackSize::Fr(2.0)],
-        );
+        let mut root =
+            NodeConfig::new_grid("grid", vec![GridTrackSize::Fr(1.0), GridTrackSize::Fr(2.0)]);
         root.children = vec![NodeConfig::new_leaf("A", 80.0, 80.0)];
         let code = emit_bevy_code(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("Display::Grid"), "should emit Display::Grid");
-        assert!(code.contains("grid_template_columns"), "should emit grid_template_columns");
+        assert!(
+            code.contains("grid_template_columns"),
+            "should emit grid_template_columns"
+        );
         assert!(code.contains("RepeatedGridTrack::fr(1, 1.0)"));
         assert!(code.contains("RepeatedGridTrack::fr(1, 2.0)"));
     }

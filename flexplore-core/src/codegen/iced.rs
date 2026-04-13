@@ -386,11 +386,7 @@ fn emit_iced_node(
                     .iter()
                     .map(|t| t.display_short())
                     .collect();
-                writeln!(
-                    buf,
-                    "{pad}// grid-template-columns: {}",
-                    tracks.join(" ")
-                )?;
+                writeln!(buf, "{pad}// grid-template-columns: {}", tracks.join(" "))?;
             }
             if !node.grid_template_rows.is_empty() {
                 let tracks: Vec<_> = node
@@ -398,11 +394,7 @@ fn emit_iced_node(
                     .iter()
                     .map(|t| t.display_short())
                     .collect();
-                writeln!(
-                    buf,
-                    "{pad}// grid-template-rows: {}",
-                    tracks.join(" ")
-                )?;
+                writeln!(buf, "{pad}// grid-template-rows: {}", tracks.join(" "))?;
             }
             writeln!(
                 buf,

@@ -183,23 +183,43 @@ fn emit_react_node(
     }
     if is_grid {
         if !node.grid_template_columns.is_empty() {
-            let val: Vec<_> = node.grid_template_columns.iter().map(|t| t.display_short()).collect();
+            let val: Vec<_> = node
+                .grid_template_columns
+                .iter()
+                .map(|t| t.display_short())
+                .collect();
             writeln!(buf, "{pad}  gridTemplateColumns: '{}',", val.join(" "))?;
         }
         if !node.grid_template_rows.is_empty() {
-            let val: Vec<_> = node.grid_template_rows.iter().map(|t| t.display_short()).collect();
+            let val: Vec<_> = node
+                .grid_template_rows
+                .iter()
+                .map(|t| t.display_short())
+                .collect();
             writeln!(buf, "{pad}  gridTemplateRows: '{}',", val.join(" "))?;
         }
         if !node.grid_auto_columns.is_empty() {
-            let val: Vec<_> = node.grid_auto_columns.iter().map(|t| t.display_short()).collect();
+            let val: Vec<_> = node
+                .grid_auto_columns
+                .iter()
+                .map(|t| t.display_short())
+                .collect();
             writeln!(buf, "{pad}  gridAutoColumns: '{}',", val.join(" "))?;
         }
         if !node.grid_auto_rows.is_empty() {
-            let val: Vec<_> = node.grid_auto_rows.iter().map(|t| t.display_short()).collect();
+            let val: Vec<_> = node
+                .grid_auto_rows
+                .iter()
+                .map(|t| t.display_short())
+                .collect();
             writeln!(buf, "{pad}  gridAutoRows: '{}',", val.join(" "))?;
         }
         if node.grid_auto_flow != GridAutoFlow::Row {
-            writeln!(buf, "{pad}  gridAutoFlow: '{}',", node.grid_auto_flow.to_css_str())?;
+            writeln!(
+                buf,
+                "{pad}  gridAutoFlow: '{}',",
+                node.grid_auto_flow.to_css_str()
+            )?;
         }
     } else {
         if node.flex_direction != FlexDirection::Row {
@@ -267,7 +287,11 @@ fn emit_react_node(
         )?;
     }
     if node.grid_column != GridPlacement::Auto {
-        writeln!(buf, "{pad}  gridColumn: '{}',", node.grid_column.display_short())?;
+        writeln!(
+            buf,
+            "{pad}  gridColumn: '{}',",
+            node.grid_column.display_short()
+        )?;
     }
     if node.grid_row != GridPlacement::Auto {
         writeln!(buf, "{pad}  gridRow: '{}',", node.grid_row.display_short())?;

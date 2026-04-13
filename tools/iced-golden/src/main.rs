@@ -486,9 +486,7 @@ fn build_container<'a>(
                         elements.push(Space::new(Length::Shrink, Length::Fill).into());
                     }
                     elements.extend(line_elements);
-                    let mut c = column(elements)
-                        .spacing(main_gap_px)
-                        .width(Length::Fill);
+                    let mut c = column(elements).spacing(main_gap_px).width(Length::Fill);
                     c = apply_column_align(&node.align_items, c);
                     c.into()
                 }

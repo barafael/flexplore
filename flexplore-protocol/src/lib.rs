@@ -8,9 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 // Re-export core config types used by both sides.
-pub use flexplore_core::config::{
-    ArtStyle, BackgroundMode, ColorPalette, NodeConfig, Theme,
-};
+pub use flexplore_core::config::{ArtStyle, BackgroundMode, ColorPalette, NodeConfig, Theme};
 
 // --- Constants ---
 
@@ -59,19 +57,14 @@ pub enum LayoutEdit {
     /// Replace the entire layout tree (e.g. loading a template or import).
     ReplaceRoot(NodeConfig),
     /// Replace a single node at the given path.
-    UpdateNode {
-        path: Vec<usize>,
-        node: NodeConfig,
-    },
+    UpdateNode { path: Vec<usize>, node: NodeConfig },
     /// Add a child node at the given parent path.
     AddChild {
         parent_path: Vec<usize>,
         child: NodeConfig,
     },
     /// Remove the node at the given path.
-    RemoveNode {
-        path: Vec<usize>,
-    },
+    RemoveNode { path: Vec<usize> },
     /// Move a node from `src` to `dst_parent` at `dst_index`.
     MoveNode {
         src_path: Vec<usize>,
@@ -88,9 +81,7 @@ pub enum LayoutEdit {
         palette: ColorPalette,
     },
     /// Update this client's selection path (cursor broadcast).
-    UpdateSelection {
-        selected: Vec<usize>,
-    },
+    UpdateSelection { selected: Vec<usize> },
 }
 
 /// Wrapper input type for Lightyear's input system.

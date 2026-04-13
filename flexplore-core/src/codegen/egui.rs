@@ -418,20 +418,10 @@ fn emit_egui_node(
                 }
             }
 
-            writeln!(
-                buf,
-                "{pad}        egui::Grid::new({:?})",
-                node.label
-            )?;
-            writeln!(
-                buf,
-                "{pad}            .num_columns({num_cols})"
-            )?;
+            writeln!(buf, "{pad}        egui::Grid::new({:?})", node.label)?;
+            writeln!(buf, "{pad}            .num_columns({num_cols})")?;
             if stretch {
-                writeln!(
-                    buf,
-                    "{pad}            .striped(false)"
-                )?;
+                writeln!(buf, "{pad}            .striped(false)")?;
             }
             writeln!(buf, "{pad}            .show(ui, |ui| {{")?;
 
@@ -578,7 +568,10 @@ fn emit_egui_node(
                     } else {
                         "ui.set_min_width(ui.available_width());"
                     };
-                    writeln!(buf, "{child_pad}ui.with_layout({wrapper_dir}.with_main_align({main_align}), |ui| {{")?;
+                    writeln!(
+                        buf,
+                        "{child_pad}ui.with_layout({wrapper_dir}.with_main_align({main_align}), |ui| {{"
+                    )?;
                     writeln!(buf, "{child_pad}    {fill_axis}")?;
                     emit_egui_node(
                         buf,

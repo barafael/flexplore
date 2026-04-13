@@ -167,9 +167,17 @@ pub fn nav_bar() -> NodeConfig {
 pub fn grid_dashboard() -> NodeConfig {
     let mut root = NodeConfig::new_grid(
         "dashboard",
-        vec![GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0)],
+        vec![
+            GridTrackSize::Fr(1.0),
+            GridTrackSize::Fr(1.0),
+            GridTrackSize::Fr(1.0),
+        ],
     );
-    root.grid_template_rows = vec![GridTrackSize::Px(60.0), GridTrackSize::Fr(1.0), GridTrackSize::Px(40.0)];
+    root.grid_template_rows = vec![
+        GridTrackSize::Px(60.0),
+        GridTrackSize::Fr(1.0),
+        GridTrackSize::Px(40.0),
+    ];
     root.width = ValueConfig::Percent(100.0);
     root.height = ValueConfig::Percent(100.0);
     root.padding = Sides::zero();
@@ -236,6 +244,13 @@ pub fn grid_gallery() -> NodeConfig {
         })
         .collect();
 
-    root.children = vec![wide, items[0].clone(), items[1].clone(), tall, items[2].clone(), items[3].clone()];
+    root.children = vec![
+        wide,
+        items[0].clone(),
+        items[1].clone(),
+        tall,
+        items[2].clone(),
+        items[3].clone(),
+    ];
     root
 }

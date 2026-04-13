@@ -210,7 +210,11 @@ fn grid_basic(cols: usize) -> NodeConfig {
 fn grid_with_span() -> NodeConfig {
     let mut root = NodeConfig::new_grid(
         "grid",
-        vec![GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0)],
+        vec![
+            GridTrackSize::Fr(1.0),
+            GridTrackSize::Fr(1.0),
+            GridTrackSize::Fr(1.0),
+        ],
     );
     let mut wide = NodeConfig::new_leaf("wide", 80.0, 60.0);
     wide.grid_column = GridPlacement::Span(2);
@@ -229,7 +233,8 @@ fn grid_with_span() -> NodeConfig {
 }
 
 fn grid_auto_flow_test(flow: GridAutoFlow) -> NodeConfig {
-    let mut root = NodeConfig::new_grid("grid", vec![GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0)]);
+    let mut root =
+        NodeConfig::new_grid("grid", vec![GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0)]);
     root.grid_auto_flow = flow;
     root.children = (1..=4)
         .map(|i| {
@@ -245,7 +250,11 @@ fn grid_auto_flow_test(flow: GridAutoFlow) -> NodeConfig {
 fn grid_mixed_tracks() -> NodeConfig {
     let mut root = NodeConfig::new_grid(
         "grid",
-        vec![GridTrackSize::Px(100.0), GridTrackSize::Fr(1.0), GridTrackSize::Percent(30.0)],
+        vec![
+            GridTrackSize::Px(100.0),
+            GridTrackSize::Fr(1.0),
+            GridTrackSize::Percent(30.0),
+        ],
     );
     root.grid_auto_rows = vec![GridTrackSize::Px(80.0)];
     root.children = (1..=6)
@@ -897,9 +906,18 @@ fn assert_grid_emit(node: &NodeConfig, palette: ColorPalette) {
         .nth(1)
         .and_then(|s| s.split('}').next())
         .expect("missing node-0 CSS block");
-    assert!(root_css.contains("display: grid;"), "HTML root missing display:grid");
-    assert!(!root_css.contains("flex-direction"), "HTML root should not have flex-direction");
-    assert!(!root_css.contains("flex-wrap"), "HTML root should not have flex-wrap");
+    assert!(
+        root_css.contains("display: grid;"),
+        "HTML root missing display:grid"
+    );
+    assert!(
+        !root_css.contains("flex-direction"),
+        "HTML root should not have flex-direction"
+    );
+    assert!(
+        !root_css.contains("flex-wrap"),
+        "HTML root should not have flex-wrap"
+    );
 
     // Bevy: root must have Display::Grid
     assert!(bevy.contains("Display::Grid"), "Bevy missing Display::Grid");
@@ -921,12 +939,24 @@ fn grid_span_codegen() {
     let bevy = emit_bevy_code(&node, ColorPalette::Pastel1).unwrap();
 
     // HTML grid-column span
-    assert!(html.contains("grid-column: span 2;"), "HTML missing grid-column span");
-    assert!(html.contains("grid-row: 1 / span 2;"), "HTML missing grid-row start+span");
+    assert!(
+        html.contains("grid-column: span 2;"),
+        "HTML missing grid-column span"
+    );
+    assert!(
+        html.contains("grid-row: 1 / span 2;"),
+        "HTML missing grid-row start+span"
+    );
 
     // Bevy grid placement
-    assert!(bevy.contains("GridPlacement::span(2)"), "Bevy missing GridPlacement::span");
-    assert!(bevy.contains("GridPlacement::start_span(1, 2)"), "Bevy missing GridPlacement::start_span");
+    assert!(
+        bevy.contains("GridPlacement::span(2)"),
+        "Bevy missing GridPlacement::span"
+    );
+    assert!(
+        bevy.contains("GridPlacement::start_span(1, 2)"),
+        "Bevy missing GridPlacement::start_span"
+    );
 }
 
 #[test_case(GridAutoFlow::Row ; "row")]
@@ -939,8 +969,14 @@ fn grid_auto_flow_codegen(flow: GridAutoFlow) {
     let bevy = emit_bevy_code(&node, ColorPalette::Pastel1).unwrap();
 
     if flow != GridAutoFlow::Row {
-        assert!(html.contains("grid-auto-flow:"), "HTML missing grid-auto-flow for {flow:?}");
-        assert!(bevy.contains("grid_auto_flow:"), "Bevy missing grid_auto_flow for {flow:?}");
+        assert!(
+            html.contains("grid-auto-flow:"),
+            "HTML missing grid-auto-flow for {flow:?}"
+        );
+        assert!(
+            bevy.contains("grid_auto_flow:"),
+            "Bevy missing grid_auto_flow for {flow:?}"
+        );
     }
 }
 
@@ -954,13 +990,28 @@ fn grid_mixed_tracks_codegen() {
     assert!(html.contains("100px"), "HTML missing px track");
     assert!(html.contains("1.0fr"), "HTML missing fr track");
     assert!(html.contains("30%"), "HTML missing percent track");
-    assert!(html.contains("grid-auto-rows:"), "HTML missing grid-auto-rows");
+    assert!(
+        html.contains("grid-auto-rows:"),
+        "HTML missing grid-auto-rows"
+    );
 
     // Bevy: all three track types present
-    assert!(bevy.contains("RepeatedGridTrack::px(1, 100.0)"), "Bevy missing px track");
-    assert!(bevy.contains("RepeatedGridTrack::fr(1, 1.0)"), "Bevy missing fr track");
-    assert!(bevy.contains("RepeatedGridTrack::percent(1, 30.0)"), "Bevy missing percent track");
-    assert!(bevy.contains("grid_auto_rows"), "Bevy missing grid_auto_rows");
+    assert!(
+        bevy.contains("RepeatedGridTrack::px(1, 100.0)"),
+        "Bevy missing px track"
+    );
+    assert!(
+        bevy.contains("RepeatedGridTrack::fr(1, 1.0)"),
+        "Bevy missing fr track"
+    );
+    assert!(
+        bevy.contains("RepeatedGridTrack::percent(1, 30.0)"),
+        "Bevy missing percent track"
+    );
+    assert!(
+        bevy.contains("grid_auto_rows"),
+        "Bevy missing grid_auto_rows"
+    );
 }
 
 #[test]

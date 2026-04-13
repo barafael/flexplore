@@ -511,7 +511,11 @@ pub fn all_fixtures() -> Vec<Fixture> {
             {
                 let mut r = NodeConfig::new_grid(
                     "grid",
-                    vec![GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0)],
+                    vec![
+                        GridTrackSize::Fr(1.0),
+                        GridTrackSize::Fr(1.0),
+                        GridTrackSize::Fr(1.0),
+                    ],
                 );
                 r.children = (1..=6)
                     .map(|i| {
@@ -530,7 +534,11 @@ pub fn all_fixtures() -> Vec<Fixture> {
             {
                 let mut r = NodeConfig::new_grid(
                     "grid",
-                    vec![GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0)],
+                    vec![
+                        GridTrackSize::Fr(1.0),
+                        GridTrackSize::Fr(1.0),
+                        GridTrackSize::Fr(1.0),
+                    ],
                 );
                 let mut wide = NodeConfig::new_leaf("wide", 80.0, 60.0);
                 wide.grid_column = GridPlacement::Span(2);

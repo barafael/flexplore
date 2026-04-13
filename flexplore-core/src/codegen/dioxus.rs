@@ -24,12 +24,7 @@ fn css_value(v: &ValueConfig) -> String {
     }
 }
 
-fn emit_dioxus_sides(
-    buf: &mut String,
-    pad: &str,
-    prop: &str,
-    sides: &Sides,
-) -> std::fmt::Result {
+fn emit_dioxus_sides(buf: &mut String, pad: &str, prop: &str, sides: &Sides) -> std::fmt::Result {
     if sides.is_zero() {
         return Ok(());
     }
@@ -52,7 +47,11 @@ fn emit_dioxus_corners(buf: &mut String, pad: &str, corners: &Corners) -> std::f
         return Ok(());
     }
     if corners.is_uniform() {
-        writeln!(buf, "{pad}    border_radius: \"{:.1}px\",", corners.top_left)
+        writeln!(
+            buf,
+            "{pad}    border_radius: \"{:.1}px\",",
+            corners.top_left
+        )
     } else {
         writeln!(
             buf,
@@ -178,23 +177,47 @@ fn emit_dioxus_node(
     }
     if is_grid {
         if !node.grid_template_columns.is_empty() {
-            let val: Vec<_> = node.grid_template_columns.iter().map(|t| t.display_short()).collect();
-            writeln!(buf, "{pad}    grid_template_columns: \"{}\",", val.join(" "))?;
+            let val: Vec<_> = node
+                .grid_template_columns
+                .iter()
+                .map(|t| t.display_short())
+                .collect();
+            writeln!(
+                buf,
+                "{pad}    grid_template_columns: \"{}\",",
+                val.join(" ")
+            )?;
         }
         if !node.grid_template_rows.is_empty() {
-            let val: Vec<_> = node.grid_template_rows.iter().map(|t| t.display_short()).collect();
+            let val: Vec<_> = node
+                .grid_template_rows
+                .iter()
+                .map(|t| t.display_short())
+                .collect();
             writeln!(buf, "{pad}    grid_template_rows: \"{}\",", val.join(" "))?;
         }
         if !node.grid_auto_columns.is_empty() {
-            let val: Vec<_> = node.grid_auto_columns.iter().map(|t| t.display_short()).collect();
+            let val: Vec<_> = node
+                .grid_auto_columns
+                .iter()
+                .map(|t| t.display_short())
+                .collect();
             writeln!(buf, "{pad}    grid_auto_columns: \"{}\",", val.join(" "))?;
         }
         if !node.grid_auto_rows.is_empty() {
-            let val: Vec<_> = node.grid_auto_rows.iter().map(|t| t.display_short()).collect();
+            let val: Vec<_> = node
+                .grid_auto_rows
+                .iter()
+                .map(|t| t.display_short())
+                .collect();
             writeln!(buf, "{pad}    grid_auto_rows: \"{}\",", val.join(" "))?;
         }
         if node.grid_auto_flow != GridAutoFlow::Row {
-            writeln!(buf, "{pad}    grid_auto_flow: \"{}\",", node.grid_auto_flow.to_css_str())?;
+            writeln!(
+                buf,
+                "{pad}    grid_auto_flow: \"{}\",",
+                node.grid_auto_flow.to_css_str()
+            )?;
         }
     } else {
         if node.flex_direction != FlexDirection::Row {
@@ -278,10 +301,18 @@ fn emit_dioxus_node(
         )?;
     }
     if node.grid_column != GridPlacement::Auto {
-        writeln!(buf, "{pad}    grid_column: \"{}\",", node.grid_column.display_short())?;
+        writeln!(
+            buf,
+            "{pad}    grid_column: \"{}\",",
+            node.grid_column.display_short()
+        )?;
     }
     if node.grid_row != GridPlacement::Auto {
-        writeln!(buf, "{pad}    grid_row: \"{}\",", node.grid_row.display_short())?;
+        writeln!(
+            buf,
+            "{pad}    grid_row: \"{}\",",
+            node.grid_row.display_short()
+        )?;
     }
     if !matches!(node.width, ValueConfig::Auto) {
         writeln!(buf, "{pad}    width: \"{}\",", css_value(&node.width))?;

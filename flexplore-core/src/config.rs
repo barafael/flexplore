@@ -290,7 +290,12 @@ pub struct Sides {
 
 impl Sides {
     pub fn uniform(v: ValueConfig) -> Self {
-        Self { top: v, right: v, bottom: v, left: v }
+        Self {
+            top: v,
+            right: v,
+            bottom: v,
+            left: v,
+        }
     }
 
     pub fn zero() -> Self {
@@ -302,7 +307,10 @@ impl Sides {
     }
 
     pub fn is_zero(&self) -> bool {
-        self.top.is_zero_px() && self.right.is_zero_px() && self.bottom.is_zero_px() && self.left.is_zero_px()
+        self.top.is_zero_px()
+            && self.right.is_zero_px()
+            && self.bottom.is_zero_px()
+            && self.left.is_zero_px()
     }
 
     /// First side value — use when only uniform values are supported.
@@ -334,7 +342,17 @@ impl<'de> Deserialize<'de> for Sides {
             Uniform(ValueConfig),
         }
         match Helper::deserialize(deserializer)? {
-            Helper::PerSide { top, right, bottom, left } => Ok(Sides { top, right, bottom, left }),
+            Helper::PerSide {
+                top,
+                right,
+                bottom,
+                left,
+            } => Ok(Sides {
+                top,
+                right,
+                bottom,
+                left,
+            }),
             Helper::Uniform(v) => Ok(Sides::uniform(v)),
         }
     }
@@ -352,7 +370,12 @@ pub struct Corners {
 
 impl Corners {
     pub fn uniform(v: f32) -> Self {
-        Self { top_left: v, top_right: v, bottom_right: v, bottom_left: v }
+        Self {
+            top_left: v,
+            top_right: v,
+            bottom_right: v,
+            bottom_left: v,
+        }
     }
 
     pub fn is_uniform(&self) -> bool {
@@ -392,9 +415,17 @@ impl<'de> Deserialize<'de> for Corners {
             Uniform(f32),
         }
         match Helper::deserialize(deserializer)? {
-            Helper::PerCorner { top_left, top_right, bottom_right, bottom_left } => {
-                Ok(Corners { top_left, top_right, bottom_right, bottom_left })
-            }
+            Helper::PerCorner {
+                top_left,
+                top_right,
+                bottom_right,
+                bottom_left,
+            } => Ok(Corners {
+                top_left,
+                top_right,
+                bottom_right,
+                bottom_left,
+            }),
             Helper::Uniform(v) => Ok(Corners::uniform(v)),
         }
     }
@@ -818,9 +849,7 @@ mod bevy_bridge {
                 GridPlacement::Auto => bevy::prelude::GridPlacement::default(),
                 GridPlacement::Start(s) => bevy::prelude::GridPlacement::start(s),
                 GridPlacement::Span(n) => bevy::prelude::GridPlacement::span(n),
-                GridPlacement::StartSpan(s, n) => {
-                    bevy::prelude::GridPlacement::start_span(s, n)
-                }
+                GridPlacement::StartSpan(s, n) => bevy::prelude::GridPlacement::start_span(s, n),
             }
         }
     }
@@ -950,7 +979,10 @@ mod tests {
         assert_eq!(deser.grid_template_columns.len(), 2);
         assert_eq!(deser.grid_auto_flow, GridAutoFlow::ColumnDense);
         assert_eq!(deser.grid_auto_rows.len(), 1);
-        assert_eq!(deser.children[0].grid_column, GridPlacement::StartSpan(1, 2));
+        assert_eq!(
+            deser.children[0].grid_column,
+            GridPlacement::StartSpan(1, 2)
+        );
         assert_eq!(deser.children[0].grid_row, GridPlacement::Span(3));
     }
 

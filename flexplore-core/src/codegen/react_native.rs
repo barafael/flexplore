@@ -117,7 +117,11 @@ fn emit_rn_corners(buf: &mut String, pad: &str, corners: &Corners) -> std::fmt::
         return Ok(());
     }
     if corners.is_uniform() {
-        writeln!(buf, "{pad}  borderRadius: {},", format_num(corners.top_left))
+        writeln!(
+            buf,
+            "{pad}  borderRadius: {},",
+            format_num(corners.top_left)
+        )
     } else {
         writeln!(
             buf,

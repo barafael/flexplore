@@ -183,28 +183,47 @@ fn emit_tailwind_node(
     if is_grid {
         // Grid template — use arbitrary Tailwind values
         if !node.grid_template_columns.is_empty() {
-            let val: Vec<_> = node.grid_template_columns.iter().map(|t| t.display_short()).collect();
+            let val: Vec<_> = node
+                .grid_template_columns
+                .iter()
+                .map(|t| t.display_short())
+                .collect();
             classes.push(format!("grid-cols-[{}]", val.join("_")));
         }
         if !node.grid_template_rows.is_empty() {
-            let val: Vec<_> = node.grid_template_rows.iter().map(|t| t.display_short()).collect();
+            let val: Vec<_> = node
+                .grid_template_rows
+                .iter()
+                .map(|t| t.display_short())
+                .collect();
             classes.push(format!("grid-rows-[{}]", val.join("_")));
         }
         if !node.grid_auto_columns.is_empty() {
-            let val: Vec<_> = node.grid_auto_columns.iter().map(|t| t.display_short()).collect();
+            let val: Vec<_> = node
+                .grid_auto_columns
+                .iter()
+                .map(|t| t.display_short())
+                .collect();
             classes.push(format!("auto-cols-[{}]", val.join("_")));
         }
         if !node.grid_auto_rows.is_empty() {
-            let val: Vec<_> = node.grid_auto_rows.iter().map(|t| t.display_short()).collect();
+            let val: Vec<_> = node
+                .grid_auto_rows
+                .iter()
+                .map(|t| t.display_short())
+                .collect();
             classes.push(format!("auto-rows-[{}]", val.join("_")));
         }
         if node.grid_auto_flow != GridAutoFlow::Row {
-            classes.push(match node.grid_auto_flow {
-                GridAutoFlow::Column => "grid-flow-col",
-                GridAutoFlow::RowDense => "grid-flow-row-dense",
-                GridAutoFlow::ColumnDense => "grid-flow-col-dense",
-                _ => "grid-flow-row",
-            }.into());
+            classes.push(
+                match node.grid_auto_flow {
+                    GridAutoFlow::Column => "grid-flow-col",
+                    GridAutoFlow::RowDense => "grid-flow-row-dense",
+                    GridAutoFlow::ColumnDense => "grid-flow-col-dense",
+                    _ => "grid-flow-row",
+                }
+                .into(),
+            );
         }
     } else {
         if node.flex_direction != FlexDirection::Row {

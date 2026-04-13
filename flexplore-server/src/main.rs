@@ -13,14 +13,17 @@ use lightyear::webtransport::prelude::{Identity, server::WebTransportServerIo};
 
 use flexplore_core::config::NodeConfig;
 use flexplore_protocol::{
-    self as proto, LayoutEdit, LayoutInput, PeerCursor, ProtocolPlugin, SharedLayout,
-    FIXED_TIMESTEP_HZ, PRIVATE_KEY, PROTOCOL_ID, REPLICATION_INTERVAL, SERVER_PORT,
+    self as proto, FIXED_TIMESTEP_HZ, LayoutEdit, LayoutInput, PRIVATE_KEY, PROTOCOL_ID,
+    PeerCursor, ProtocolPlugin, REPLICATION_INTERVAL, SERVER_PORT, SharedLayout,
 };
 
 // --- CLI ---
 
 #[derive(Parser, Debug)]
-#[command(name = "flexplore-server", about = "Flexplore collaborative layout server")]
+#[command(
+    name = "flexplore-server",
+    about = "Flexplore collaborative layout server"
+)]
 struct Args {
     /// Port to listen on.
     #[arg(short, long, default_value_t = SERVER_PORT)]
@@ -228,7 +231,9 @@ fn handle_client_connected(
         ))
         .id();
 
-    registry.peers.push((peer_id, cursor_entity, session_entity, color));
+    registry
+        .peers
+        .push((peer_id, cursor_entity, session_entity, color));
     info!("Client {peer_id:?} connected (color {color})");
 }
 
@@ -245,10 +250,8 @@ fn handle_client_disconnected(
     let peer_id = client_id.0;
 
     // Despawn cursor and session entities.
-    if let Some((_, cursor_entity, session_entity, _)) = registry
-        .peers
-        .iter()
-        .find(|(id, _, _, _)| *id == peer_id)
+    if let Some((_, cursor_entity, session_entity, _)) =
+        registry.peers.iter().find(|(id, _, _, _)| *id == peer_id)
     {
         commands.entity(*cursor_entity).despawn();
         commands.entity(*session_entity).despawn();

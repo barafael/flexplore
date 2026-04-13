@@ -426,10 +426,8 @@ mod tests {
 
     #[test]
     fn grid_emits_display_grid() {
-        let mut root = NodeConfig::new_grid(
-            "grid",
-            vec![GridTrackSize::Fr(1.0), GridTrackSize::Fr(2.0)],
-        );
+        let mut root =
+            NodeConfig::new_grid("grid", vec![GridTrackSize::Fr(1.0), GridTrackSize::Fr(2.0)]);
         root.children = vec![
             NodeConfig::new_leaf("A", 80.0, 80.0),
             NodeConfig::new_leaf("B", 80.0, 80.0),
@@ -455,7 +453,11 @@ mod tests {
     fn grid_emits_item_placement() {
         let mut root = NodeConfig::new_grid(
             "grid",
-            vec![GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0)],
+            vec![
+                GridTrackSize::Fr(1.0),
+                GridTrackSize::Fr(1.0),
+                GridTrackSize::Fr(1.0),
+            ],
         );
         let mut item = NodeConfig::new_leaf("wide", 80.0, 80.0);
         item.grid_column = GridPlacement::StartSpan(1, 3);

@@ -296,10 +296,11 @@ fn emit_flutter_inner(
             (g * 255.0) as u8,
             (b * 255.0) as u8,
         );
-        let has_border_or_radius =
-            !node.border_width.is_zero() || !node.border_radius.is_zero();
+        let has_border_or_radius = !node.border_width.is_zero() || !node.border_radius.is_zero();
         if has_border_or_radius {
-            if let Some(deco) = dart_box_decoration(&node.border_width, &node.border_radius, Some(&bg_str)) {
+            if let Some(deco) =
+                dart_box_decoration(&node.border_width, &node.border_radius, Some(&bg_str))
+            {
                 writeln!(buf, "{pad}  decoration: {deco},")?;
             }
         } else {
@@ -362,27 +363,53 @@ fn emit_flutter_inner(
 
         if is_grid {
             // CSS Grid layout — use GridView.count or a custom grid widget
-            writeln!(buf, "{ipad}// CSS Grid layout — use GridView.count or a custom grid widget")?;
+            writeln!(
+                buf,
+                "{ipad}// CSS Grid layout — use GridView.count or a custom grid widget"
+            )?;
             writeln!(buf, "{ipad}Wrap(")?;
-            writeln!(buf, "{ipad}  // grid-template-columns / rows not directly supported in Flutter")?;
+            writeln!(
+                buf,
+                "{ipad}  // grid-template-columns / rows not directly supported in Flutter"
+            )?;
             if !node.grid_template_columns.is_empty() {
-                let val: Vec<_> = node.grid_template_columns.iter().map(|t| t.display_short()).collect();
+                let val: Vec<_> = node
+                    .grid_template_columns
+                    .iter()
+                    .map(|t| t.display_short())
+                    .collect();
                 writeln!(buf, "{ipad}  // grid-template-columns: {}", val.join(" "))?;
             }
             if !node.grid_template_rows.is_empty() {
-                let val: Vec<_> = node.grid_template_rows.iter().map(|t| t.display_short()).collect();
+                let val: Vec<_> = node
+                    .grid_template_rows
+                    .iter()
+                    .map(|t| t.display_short())
+                    .collect();
                 writeln!(buf, "{ipad}  // grid-template-rows: {}", val.join(" "))?;
             }
             if !node.grid_auto_columns.is_empty() {
-                let val: Vec<_> = node.grid_auto_columns.iter().map(|t| t.display_short()).collect();
+                let val: Vec<_> = node
+                    .grid_auto_columns
+                    .iter()
+                    .map(|t| t.display_short())
+                    .collect();
                 writeln!(buf, "{ipad}  // grid-auto-columns: {}", val.join(" "))?;
             }
             if !node.grid_auto_rows.is_empty() {
-                let val: Vec<_> = node.grid_auto_rows.iter().map(|t| t.display_short()).collect();
+                let val: Vec<_> = node
+                    .grid_auto_rows
+                    .iter()
+                    .map(|t| t.display_short())
+                    .collect();
                 writeln!(buf, "{ipad}  // grid-auto-rows: {}", val.join(" "))?;
             }
             if node.grid_auto_flow != GridAutoFlow::Row {
-                writeln!(buf, "{ipad}  // grid-auto-flow: {}", node.grid_auto_flow.to_css_str())?;
+                writeln!(
+                    buf,
+                    "{ipad}  // grid-auto-flow: {}",
+                    node.grid_auto_flow.to_css_str()
+                )?;
             }
             if let Some(s) = dart_value(&node.column_gap) {
                 writeln!(buf, "{ipad}  spacing: {s},")?;

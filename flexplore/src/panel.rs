@@ -90,10 +90,8 @@ fn draw_tree_ui(
     if is_drop_here {
         ui.horizontal(|ui| {
             ui.add_space(path.len() as f32 * 14.0);
-            let (rect, _) = ui.allocate_exact_size(
-                egui::vec2(ui.available_width(), 2.0),
-                egui::Sense::hover(),
-            );
+            let (rect, _) =
+                ui.allocate_exact_size(egui::vec2(ui.available_width(), 2.0), egui::Sense::hover());
             ui.painter()
                 .rect_filled(rect, 0.0, egui::Color32::from_rgb(0x60, 0xA0, 0xFF));
         });
@@ -128,7 +126,13 @@ fn draw_tree_ui(
     let pointer = ui.ctx().input(|i| i.pointer.hover_pos());
     if !is_root {
         // Start drag on this row
-        if ui.ctx().input(|i| i.pointer.any_pressed()) && row_rect.contains(ui.ctx().input(|i| i.pointer.press_origin().unwrap_or_default())) && drag.dragging.is_none() {
+        if ui.ctx().input(|i| i.pointer.any_pressed())
+            && row_rect.contains(
+                ui.ctx()
+                    .input(|i| i.pointer.press_origin().unwrap_or_default()),
+            )
+            && drag.dragging.is_none()
+        {
             // Only start drag after a small movement
             if let Some(pos) = pointer {
                 if let Some(origin) = ui.ctx().input(|i| i.pointer.press_origin()) {
@@ -146,7 +150,11 @@ fn draw_tree_ui(
                     let parent_path = path[..path.len() - 1].to_vec();
                     let idx = *path.last().unwrap();
                     // Drop above or below based on pointer position relative to row center
-                    let insert_idx = if pos.y < row_rect.center().y { idx } else { idx + 1 };
+                    let insert_idx = if pos.y < row_rect.center().y {
+                        idx
+                    } else {
+                        idx + 1
+                    };
                     drag.drop_target = Some((parent_path, insert_idx));
                 }
             }
@@ -167,9 +175,10 @@ fn draw_tree_ui(
 
     // ── Drop target indicator (after last child, at end) ──
     if !node.children.is_empty() {
-        let after_last = drag.drop_target.as_ref().is_some_and(|(dp, di)| {
-            dp.as_slice() == path.as_slice() && *di == node.children.len()
-        });
+        let after_last = drag
+            .drop_target
+            .as_ref()
+            .is_some_and(|(dp, di)| dp.as_slice() == path.as_slice() && *di == node.children.len());
         if after_last {
             ui.horizontal(|ui| {
                 ui.add_space((path.len() + 1) as f32 * 14.0);
@@ -266,12 +275,10 @@ pub fn panel_system(
         ctx.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::Enter));
     let key_delete = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete));
     let key_parent = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
-    let key_duplicate =
-        ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::D));
+    let key_duplicate = ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::D));
     let key_save = ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
     let key_open = ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::O));
-    let key_help =
-        ctx.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::Slash));
+    let key_help = ctx.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::Slash));
 
     // Arrow keys → spatial navigation
     let arrow_up = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp));
@@ -408,21 +415,31 @@ pub fn panel_system(
                         .show_ui(ui, |ui| {
                             for t in Theme::iter() {
                                 let r = ui.selectable_label(cfg.theme == t, t.to_string());
-                                if r.clicked() { cfg.theme = t; changed = true; }
-                                else if r.hovered() { hover_theme = Some(t); }
+                                if r.clicked() {
+                                    cfg.theme = t;
+                                    changed = true;
+                                } else if r.hovered() {
+                                    hover_theme = Some(t);
+                                }
                             }
                         });
-                    if theme_resp.inner.is_some() { any_hovered = true; }
+                    if theme_resp.inner.is_some() {
+                        any_hovered = true;
+                    }
                     if let Some(t) = hover_theme {
                         any_hovered = true;
                         if cfg.theme != t {
-                            if preview.is_none() { *preview = Some(cfg.clone()); }
+                            if preview.is_none() {
+                                *preview = Some(cfg.clone());
+                            }
                             cfg.theme = t;
                             *applied_theme = None;
                         }
                     }
                     ui.separator();
-                    if ui.add_enabled(history.can_undo(), egui::Button::new("⟲ Undo")).clicked()
+                    if ui
+                        .add_enabled(history.can_undo(), egui::Button::new("⟲ Undo"))
+                        .clicked()
                         && let Some(snapshot) = history.undo()
                     {
                         *cfg = snapshot.clone();
@@ -430,7 +447,9 @@ pub fn panel_system(
                         *preview = None;
                         cg.dirty = true;
                     }
-                    if ui.add_enabled(history.can_redo(), egui::Button::new("⟳ Redo")).clicked()
+                    if ui
+                        .add_enabled(history.can_redo(), egui::Button::new("⟳ Redo"))
+                        .clicked()
                         && let Some(snapshot) = history.redo()
                     {
                         *cfg = snapshot.clone();
@@ -438,7 +457,11 @@ pub fn panel_system(
                         *preview = None;
                         cg.dirty = true;
                     }
-                    if ui.button("?").on_hover_text("Keyboard shortcuts (Shift+/)").clicked() {
+                    if ui
+                        .button("?")
+                        .on_hover_text("Keyboard shortcuts (Shift+/)")
+                        .clicked()
+                    {
                         *show_help = !*show_help;
                     }
                 });
@@ -532,7 +555,11 @@ pub fn panel_system(
                                 }
                             }
                         });
-                    if ui.button("Copy").on_hover_text("Copy to clipboard").clicked() {
+                    if ui
+                        .button("Copy")
+                        .on_hover_text("Copy to clipboard")
+                        .clicked()
+                    {
                         if !cg.cached_code.is_empty() {
                             ui.ctx().copy_text(cg.cached_code.clone());
                             let now = ui.ctx().input(|i| i.time);
@@ -688,14 +715,16 @@ pub fn panel_system(
             edits.0.push(flexplore_protocol::LayoutEdit::ReplaceRoot(
                 cfg.root.clone(),
             ));
-            edits.0.push(flexplore_protocol::LayoutEdit::UpdateSettings {
-                bg_mode: cfg.bg_mode,
-                art_style: cfg.art_style,
-                art_seed: cfg.art_seed,
-                art_depth: cfg.art_depth,
-                theme: cfg.theme,
-                palette: cfg.palette,
-            });
+            edits
+                .0
+                .push(flexplore_protocol::LayoutEdit::UpdateSettings {
+                    bg_mode: cfg.bg_mode,
+                    art_style: cfg.art_style,
+                    art_seed: cfg.art_seed,
+                    art_depth: cfg.art_depth,
+                    theme: cfg.theme,
+                    palette: cfg.palette,
+                });
         }
     }
 
@@ -751,17 +780,14 @@ fn draw_layout_panel(
                     let n = cfg.root.count_leaves();
                     let lbl = format!("node{}", n + 1);
                     if let Some(node) = cfg.root.get_mut(sel_path) {
-                        node.children
-                            .push(NodeConfig::new_leaf(&lbl, 80.0, 80.0));
+                        node.children.push(NodeConfig::new_leaf(&lbl, 80.0, 80.0));
                         *changed = true;
                     }
                 }
                 if !*is_root
                     && ui
                         .button("+ Sibling")
-                        .on_hover_text(
-                            "Add a new node next to the selected node (same parent)",
-                        )
+                        .on_hover_text("Add a new node next to the selected node (same parent)")
                         .clicked()
                 {
                     let pidx = sel_path.len() - 1;
@@ -857,23 +883,37 @@ fn draw_layout_panel(
         }
         ui.add_space(4.0);
 
-        let sel_display_mode = cfg.root.get(sel_path).map(|n| n.display_mode).unwrap_or(DisplayMode::Flex);
+        let sel_display_mode = cfg
+            .root
+            .get(sel_path)
+            .map(|n| n.display_mode)
+            .unwrap_or(DisplayMode::Flex);
 
         if sel_display_mode == DisplayMode::Grid {
             // ── Grid Container ───────────────────────────────────────
-            draw_grid_container_section(ui, cfg, sel_path, changed, any_hovered, hover_row_gap, hover_column_gap, hover_justify, hover_align_items, hover_align_content, preview);
+            draw_grid_container_section(
+                ui,
+                cfg,
+                sel_path,
+                changed,
+                any_hovered,
+                hover_row_gap,
+                hover_column_gap,
+                hover_justify,
+                hover_align_items,
+                hover_align_content,
+                preview,
+            );
         } else {
-
-        // ── Flex Container ────────────────────────────────────────────
-        egui::CollapsingHeader::new("Flex Container")
-            .default_open(true)
-            .show(ui, |ui| {
-                ui.add_space(4.0);
-                egui::Grid::new("cg1")
-                    .num_columns(2)
-                    .spacing([10.0, 6.0])
-                    .show(ui, |ui| {
-                        {
+            // ── Flex Container ────────────────────────────────────────────
+            egui::CollapsingHeader::new("Flex Container")
+                .default_open(true)
+                .show(ui, |ui| {
+                    ui.add_space(4.0);
+                    egui::Grid::new("cg1")
+                        .num_columns(2)
+                        .spacing([10.0, 6.0])
+                        .show(ui, |ui| {
                             let Some(n) = cfg.root.get_mut(sel_path) else {
                                 return;
                             };
@@ -991,16 +1031,14 @@ fn draw_layout_panel(
                                 any_hovered,
                             );
                             ui.end_row();
-                        }
-                    });
-                ui.add_space(4.0);
-                ui.separator();
-                ui.add_space(4.0);
-                egui::Grid::new("cg2")
-                    .num_columns(2)
-                    .spacing([10.0, 6.0])
-                    .show(ui, |ui| {
-                        {
+                        });
+                    ui.add_space(4.0);
+                    ui.separator();
+                    ui.add_space(4.0);
+                    egui::Grid::new("cg2")
+                        .num_columns(2)
+                        .spacing([10.0, 6.0])
+                        .show(ui, |ui| {
                             let Some(n) = cfg.root.get_mut(sel_path) else {
                                 return;
                             };
@@ -1008,38 +1046,83 @@ fn draw_layout_panel(
                             *hover_row_gap =
                                 val_row(ui, "rg", &mut n.row_gap, changed, any_hovered);
                             ui.end_row();
-                            label_with_help(ui, "column-gap", "Spacing between columns of children");
+                            label_with_help(
+                                ui,
+                                "column-gap",
+                                "Spacing between columns of children",
+                            );
                             *hover_column_gap =
                                 val_row(ui, "cgap", &mut n.column_gap, changed, any_hovered);
                             ui.end_row();
+                        });
+                    ui.add_space(2.0);
+
+                    let has_container_hover = hover_direction.is_some()
+                        || hover_wrap.is_some()
+                        || hover_justify.is_some()
+                        || hover_align_items.is_some()
+                        || hover_align_content.is_some()
+                        || hover_row_gap.is_some()
+                        || hover_column_gap.is_some();
+                    if has_container_hover {
+                        *any_hovered = true;
+                        let p = &mut **preview;
+                        let sp = sel_path.as_slice();
+                        let needs_rebuild = apply_hover(
+                            *hover_direction,
+                            cfg,
+                            p,
+                            sp,
+                            |n| n.flex_direction,
+                            |n, v| n.flex_direction = v,
+                        ) | apply_hover(
+                            *hover_wrap,
+                            cfg,
+                            p,
+                            sp,
+                            |n| n.flex_wrap,
+                            |n, v| n.flex_wrap = v,
+                        ) | apply_hover(
+                            *hover_justify,
+                            cfg,
+                            p,
+                            sp,
+                            |n| n.justify_content,
+                            |n, v| n.justify_content = v,
+                        ) | apply_hover(
+                            *hover_align_items,
+                            cfg,
+                            p,
+                            sp,
+                            |n| n.align_items,
+                            |n, v| n.align_items = v,
+                        ) | apply_hover(
+                            *hover_align_content,
+                            cfg,
+                            p,
+                            sp,
+                            |n| n.align_content,
+                            |n, v| n.align_content = v,
+                        ) | apply_hover(
+                            *hover_row_gap,
+                            cfg,
+                            p,
+                            sp,
+                            |n| n.row_gap,
+                            |n, v| n.row_gap = v,
+                        ) | apply_hover(
+                            *hover_column_gap,
+                            cfg,
+                            p,
+                            sp,
+                            |n| n.column_gap,
+                            |n, v| n.column_gap = v,
+                        );
+                        if needs_rebuild {
+                            cfg.request_rebuild();
                         }
-                    });
-                ui.add_space(2.0);
-
-                let has_container_hover = hover_direction.is_some()
-                    || hover_wrap.is_some()
-                    || hover_justify.is_some()
-                    || hover_align_items.is_some()
-                    || hover_align_content.is_some()
-                    || hover_row_gap.is_some()
-                    || hover_column_gap.is_some();
-                if has_container_hover {
-                    *any_hovered = true;
-                    let p = &mut **preview;
-                    let sp = sel_path.as_slice();
-                    let needs_rebuild = apply_hover(*hover_direction, cfg, p, sp, |n| n.flex_direction, |n, v| n.flex_direction = v)
-                        | apply_hover(*hover_wrap, cfg, p, sp, |n| n.flex_wrap, |n, v| n.flex_wrap = v)
-                        | apply_hover(*hover_justify, cfg, p, sp, |n| n.justify_content, |n, v| n.justify_content = v)
-                        | apply_hover(*hover_align_items, cfg, p, sp, |n| n.align_items, |n, v| n.align_items = v)
-                        | apply_hover(*hover_align_content, cfg, p, sp, |n| n.align_content, |n, v| n.align_content = v)
-                        | apply_hover(*hover_row_gap, cfg, p, sp, |n| n.row_gap, |n, v| n.row_gap = v)
-                        | apply_hover(*hover_column_gap, cfg, p, sp, |n| n.column_gap, |n, v| n.column_gap = v);
-                    if needs_rebuild {
-                        cfg.request_rebuild();
                     }
-                }
-            });
-
+                });
         } // end else (Flex Container)
 
         ui.add_space(6.0);
@@ -1053,29 +1136,43 @@ fn draw_layout_panel(
                     .num_columns(2)
                     .spacing([10.0, 6.0])
                     .show(ui, |ui| {
-                        {
-                            let Some(n) = cfg.root.get_mut(sel_path) else {
-                                return;
-                            };
-                            label_with_help(ui, "width", "The preferred width of this node");
-                            *hover_width = val_row(ui, "sw", &mut n.width, changed, any_hovered);
-                            ui.end_row();
-                            label_with_help(ui, "height", "The preferred height of this node");
-                            *hover_height = val_row(ui, "sh", &mut n.height, changed, any_hovered);
-                            ui.end_row();
-                            label_with_help(ui, "min-width", "The minimum width this node can shrink to");
-                            *hover_min_width = val_row(ui, "sminw", &mut n.min_width, changed, any_hovered);
-                            ui.end_row();
-                            label_with_help(ui, "min-height", "The minimum height this node can shrink to");
-                            *hover_min_height = val_row(ui, "sminh", &mut n.min_height, changed, any_hovered);
-                            ui.end_row();
-                            label_with_help(ui, "max-width", "The maximum width this node can grow to");
-                            *hover_max_width = val_row(ui, "smaxw", &mut n.max_width, changed, any_hovered);
-                            ui.end_row();
-                            label_with_help(ui, "max-height", "The maximum height this node can grow to");
-                            *hover_max_height = val_row(ui, "smaxh", &mut n.max_height, changed, any_hovered);
-                            ui.end_row();
-                        }
+                        let Some(n) = cfg.root.get_mut(sel_path) else {
+                            return;
+                        };
+                        label_with_help(ui, "width", "The preferred width of this node");
+                        *hover_width = val_row(ui, "sw", &mut n.width, changed, any_hovered);
+                        ui.end_row();
+                        label_with_help(ui, "height", "The preferred height of this node");
+                        *hover_height = val_row(ui, "sh", &mut n.height, changed, any_hovered);
+                        ui.end_row();
+                        label_with_help(
+                            ui,
+                            "min-width",
+                            "The minimum width this node can shrink to",
+                        );
+                        *hover_min_width =
+                            val_row(ui, "sminw", &mut n.min_width, changed, any_hovered);
+                        ui.end_row();
+                        label_with_help(
+                            ui,
+                            "min-height",
+                            "The minimum height this node can shrink to",
+                        );
+                        *hover_min_height =
+                            val_row(ui, "sminh", &mut n.min_height, changed, any_hovered);
+                        ui.end_row();
+                        label_with_help(ui, "max-width", "The maximum width this node can grow to");
+                        *hover_max_width =
+                            val_row(ui, "smaxw", &mut n.max_width, changed, any_hovered);
+                        ui.end_row();
+                        label_with_help(
+                            ui,
+                            "max-height",
+                            "The maximum height this node can grow to",
+                        );
+                        *hover_max_height =
+                            val_row(ui, "smaxh", &mut n.max_height, changed, any_hovered);
+                        ui.end_row();
                     });
                 ui.add_space(2.0);
 
@@ -1089,12 +1186,48 @@ fn draw_layout_panel(
                     *any_hovered = true;
                     let p = &mut **preview;
                     let sp = sel_path.as_slice();
-                    let needs_rebuild = apply_hover(*hover_width, cfg, p, sp, |n| n.width, |n, v| n.width = v)
-                        | apply_hover(*hover_height, cfg, p, sp, |n| n.height, |n, v| n.height = v)
-                        | apply_hover(*hover_min_width, cfg, p, sp, |n| n.min_width, |n, v| n.min_width = v)
-                        | apply_hover(*hover_min_height, cfg, p, sp, |n| n.min_height, |n, v| n.min_height = v)
-                        | apply_hover(*hover_max_width, cfg, p, sp, |n| n.max_width, |n, v| n.max_width = v)
-                        | apply_hover(*hover_max_height, cfg, p, sp, |n| n.max_height, |n, v| n.max_height = v);
+                    let needs_rebuild =
+                        apply_hover(*hover_width, cfg, p, sp, |n| n.width, |n, v| n.width = v)
+                            | apply_hover(
+                                *hover_height,
+                                cfg,
+                                p,
+                                sp,
+                                |n| n.height,
+                                |n, v| n.height = v,
+                            )
+                            | apply_hover(
+                                *hover_min_width,
+                                cfg,
+                                p,
+                                sp,
+                                |n| n.min_width,
+                                |n, v| n.min_width = v,
+                            )
+                            | apply_hover(
+                                *hover_min_height,
+                                cfg,
+                                p,
+                                sp,
+                                |n| n.min_height,
+                                |n, v| n.min_height = v,
+                            )
+                            | apply_hover(
+                                *hover_max_width,
+                                cfg,
+                                p,
+                                sp,
+                                |n| n.max_width,
+                                |n, v| n.max_width = v,
+                            )
+                            | apply_hover(
+                                *hover_max_height,
+                                cfg,
+                                p,
+                                sp,
+                                |n| n.max_height,
+                                |n, v| n.max_height = v,
+                            );
                     if needs_rebuild {
                         cfg.request_rebuild();
                     }
@@ -1112,9 +1245,23 @@ fn draw_layout_panel(
                     let Some(n) = cfg.root.get_mut(sel_path) else {
                         return;
                     };
-                    sides_editor(ui, "padding", "pad", "Space between border and children", &mut n.padding, changed);
+                    sides_editor(
+                        ui,
+                        "padding",
+                        "pad",
+                        "Space between border and children",
+                        &mut n.padding,
+                        changed,
+                    );
                     ui.add_space(4.0);
-                    sides_editor(ui, "margin", "mar", "Space outside the border", &mut n.margin, changed);
+                    sides_editor(
+                        ui,
+                        "margin",
+                        "mar",
+                        "Space outside the border",
+                        &mut n.margin,
+                        changed,
+                    );
                 }
             });
 
@@ -1129,9 +1276,23 @@ fn draw_layout_panel(
                     let Some(n) = cfg.root.get_mut(sel_path) else {
                         return;
                     };
-                    sides_editor(ui, "border-width", "bw", "Border thickness per side", &mut n.border_width, changed);
+                    sides_editor(
+                        ui,
+                        "border-width",
+                        "bw",
+                        "Border thickness per side",
+                        &mut n.border_width,
+                        changed,
+                    );
                     ui.add_space(4.0);
-                    corners_editor(ui, "border-radius", "br", "Corner rounding", &mut n.border_radius, changed);
+                    corners_editor(
+                        ui,
+                        "border-radius",
+                        "br",
+                        "Corner rounding",
+                        &mut n.border_radius,
+                        changed,
+                    );
                 }
             });
 
@@ -1149,7 +1310,15 @@ fn draw_layout_panel(
                 .unwrap_or(DisplayMode::Flex)
         };
         if !*is_root && parent_display_mode == DisplayMode::Grid {
-            draw_grid_item_section(ui, cfg, sel_path, changed, hover_align_self, any_hovered, preview);
+            draw_grid_item_section(
+                ui,
+                cfg,
+                sel_path,
+                changed,
+                hover_align_self,
+                any_hovered,
+                preview,
+            );
 
             ui.add_space(6.0);
         }
@@ -1361,11 +1530,8 @@ fn draw_layout_panel(
                     }
                 }
                 let pd = cfg.art_depth;
-                ui.add(
-                    egui::Slider::new(&mut cfg.art_depth, 1..=9)
-                        .text("depth"),
-                )
-                .on_hover_text("Expression tree depth — higher = more complex");
+                ui.add(egui::Slider::new(&mut cfg.art_depth, 1..=9).text("depth"))
+                    .on_hover_text("Expression tree depth — higher = more complex");
                 if cfg.art_depth != pd {
                     *changed = true;
                 }
@@ -1458,7 +1624,11 @@ fn draw_layout_panel(
             #[cfg(target_arch = "wasm32")]
             {
                 ui.add_space(4.0);
-                if ui.button("Share URL").on_hover_text("Copy a shareable URL to clipboard").clicked() {
+                if ui
+                    .button("Share URL")
+                    .on_hover_text("Copy a shareable URL to clipboard")
+                    .clicked()
+                {
                     if let Some(url) = crate::persist::make_share_url(cfg) {
                         ui.ctx().copy_text(url);
                         let now = ui.ctx().input(|i| i.time);
@@ -1496,7 +1666,11 @@ fn draw_layout_panel(
     });
 
     ui.add_space(4.0);
-    if ui.button("Preview code").on_hover_text("Open the code preview panel on the right").clicked() {
+    if ui
+        .button("Preview code")
+        .on_hover_text("Open the code preview panel on the right")
+        .clicked()
+    {
         cg.preview_open = true;
         cg.dirty = true;
     }
@@ -1590,14 +1764,18 @@ fn draw_grid_container_section(
 
             // ── Template Columns ─────────────────────────────────────
             {
-                let Some(n) = cfg.root.get_mut(sel_path) else { return };
+                let Some(n) = cfg.root.get_mut(sel_path) else {
+                    return;
+                };
                 track_list_editor(ui, "columns", "gtc", &mut n.grid_template_columns, changed);
             }
             ui.add_space(4.0);
 
             // ── Template Rows ────────────────────────────────────────
             {
-                let Some(n) = cfg.root.get_mut(sel_path) else { return };
+                let Some(n) = cfg.root.get_mut(sel_path) else {
+                    return;
+                };
                 track_list_editor(ui, "rows", "gtr", &mut n.grid_template_rows, changed);
             }
             ui.add_space(4.0);
@@ -1609,7 +1787,9 @@ fn draw_grid_container_section(
                 .num_columns(2)
                 .spacing([10.0, 6.0])
                 .show(ui, |ui| {
-                    let Some(n) = cfg.root.get_mut(sel_path) else { return };
+                    let Some(n) = cfg.root.get_mut(sel_path) else {
+                        return;
+                    };
                     label_with_help(ui, "auto-flow", "Direction that auto-placed items flow");
                     combo(
                         ui,
@@ -1631,12 +1811,16 @@ fn draw_grid_container_section(
 
             // ── Auto Rows / Auto Columns ─────────────────────────────
             {
-                let Some(n) = cfg.root.get_mut(sel_path) else { return };
+                let Some(n) = cfg.root.get_mut(sel_path) else {
+                    return;
+                };
                 track_list_editor(ui, "auto-cols", "gac", &mut n.grid_auto_columns, changed);
             }
             ui.add_space(2.0);
             {
-                let Some(n) = cfg.root.get_mut(sel_path) else { return };
+                let Some(n) = cfg.root.get_mut(sel_path) else {
+                    return;
+                };
                 track_list_editor(ui, "auto-rows", "gar", &mut n.grid_auto_rows, changed);
             }
 
@@ -1649,7 +1833,9 @@ fn draw_grid_container_section(
                 .num_columns(2)
                 .spacing([10.0, 6.0])
                 .show(ui, |ui| {
-                    let Some(n) = cfg.root.get_mut(sel_path) else { return };
+                    let Some(n) = cfg.root.get_mut(sel_path) else {
+                        return;
+                    };
                     label_with_help(ui, "row-gap", "Spacing between rows");
                     *hover_row_gap = val_row(ui, "grg", &mut n.row_gap, changed, any_hovered);
                     ui.end_row();
@@ -1667,10 +1853,18 @@ fn draw_grid_container_section(
                 .num_columns(2)
                 .spacing([10.0, 6.0])
                 .show(ui, |ui| {
-                    let Some(n) = cfg.root.get_mut(sel_path) else { return };
-                    label_with_help(ui, "justify", "How items are distributed along the row axis");
+                    let Some(n) = cfg.root.get_mut(sel_path) else {
+                        return;
+                    };
+                    label_with_help(
+                        ui,
+                        "justify",
+                        "How items are distributed along the row axis",
+                    );
                     *hover_justify = combo(
-                        ui, "gjc", &mut n.justify_content,
+                        ui,
+                        "gjc",
+                        &mut n.justify_content,
                         &[
                             ("Default", JustifyContent::Default),
                             ("Start", JustifyContent::Start),
@@ -1681,12 +1875,19 @@ fn draw_grid_container_section(
                             ("SpaceAround", JustifyContent::SpaceAround),
                             ("SpaceEvenly", JustifyContent::SpaceEvenly),
                         ],
-                        changed, any_hovered,
+                        changed,
+                        any_hovered,
                     );
                     ui.end_row();
-                    label_with_help(ui, "align-items", "How items are aligned along the column axis");
+                    label_with_help(
+                        ui,
+                        "align-items",
+                        "How items are aligned along the column axis",
+                    );
                     *hover_align_items = combo(
-                        ui, "gai", &mut n.align_items,
+                        ui,
+                        "gai",
+                        &mut n.align_items,
                         &[
                             ("Default", AlignItems::Default),
                             ("Start", AlignItems::Start),
@@ -1695,12 +1896,19 @@ fn draw_grid_container_section(
                             ("Baseline", AlignItems::Baseline),
                             ("Stretch", AlignItems::Stretch),
                         ],
-                        changed, any_hovered,
+                        changed,
+                        any_hovered,
                     );
                     ui.end_row();
-                    label_with_help(ui, "align-content", "How grid tracks are distributed along the column axis");
+                    label_with_help(
+                        ui,
+                        "align-content",
+                        "How grid tracks are distributed along the column axis",
+                    );
                     *hover_align_content = combo(
-                        ui, "gac2", &mut n.align_content,
+                        ui,
+                        "gac2",
+                        &mut n.align_content,
                         &[
                             ("Default", AlignContent::Default),
                             ("Start", AlignContent::Start),
@@ -1711,7 +1919,8 @@ fn draw_grid_container_section(
                             ("SpaceAround", AlignContent::SpaceAround),
                             ("SpaceEvenly", AlignContent::SpaceEvenly),
                         ],
-                        changed, any_hovered,
+                        changed,
+                        any_hovered,
                     );
                     ui.end_row();
                 });
@@ -1725,12 +1934,42 @@ fn draw_grid_container_section(
                 *any_hovered = true;
                 let p = &mut **preview;
                 let sp = sel_path.as_slice();
-                let needs_rebuild =
-                    apply_hover(*hover_row_gap, cfg, p, sp, |n| n.row_gap, |n, v| n.row_gap = v)
-                    | apply_hover(*hover_column_gap, cfg, p, sp, |n| n.column_gap, |n, v| n.column_gap = v)
-                    | apply_hover(*hover_justify, cfg, p, sp, |n| n.justify_content, |n, v| n.justify_content = v)
-                    | apply_hover(*hover_align_items, cfg, p, sp, |n| n.align_items, |n, v| n.align_items = v)
-                    | apply_hover(*hover_align_content, cfg, p, sp, |n| n.align_content, |n, v| n.align_content = v);
+                let needs_rebuild = apply_hover(
+                    *hover_row_gap,
+                    cfg,
+                    p,
+                    sp,
+                    |n| n.row_gap,
+                    |n, v| n.row_gap = v,
+                ) | apply_hover(
+                    *hover_column_gap,
+                    cfg,
+                    p,
+                    sp,
+                    |n| n.column_gap,
+                    |n, v| n.column_gap = v,
+                ) | apply_hover(
+                    *hover_justify,
+                    cfg,
+                    p,
+                    sp,
+                    |n| n.justify_content,
+                    |n, v| n.justify_content = v,
+                ) | apply_hover(
+                    *hover_align_items,
+                    cfg,
+                    p,
+                    sp,
+                    |n| n.align_items,
+                    |n, v| n.align_items = v,
+                ) | apply_hover(
+                    *hover_align_content,
+                    cfg,
+                    p,
+                    sp,
+                    |n| n.align_content,
+                    |n, v| n.align_content = v,
+                );
                 if needs_rebuild {
                     cfg.request_rebuild();
                 }
@@ -1755,7 +1994,9 @@ fn draw_grid_item_section(
                 .num_columns(2)
                 .spacing([10.0, 6.0])
                 .show(ui, |ui| {
-                    let Some(n) = cfg.root.get_mut(sel_path) else { return };
+                    let Some(n) = cfg.root.get_mut(sel_path) else {
+                        return;
+                    };
 
                     // ── grid-column ──
                     label_with_help(ui, "grid-column", "Column placement (start line / span)");
@@ -1768,9 +2009,15 @@ fn draw_grid_item_section(
                     ui.end_row();
 
                     // ── align-self ──
-                    label_with_help(ui, "align-self", "Override parent's align-items for this child");
+                    label_with_help(
+                        ui,
+                        "align-self",
+                        "Override parent's align-items for this child",
+                    );
                     *hover_align_self = combo(
-                        ui, "gias", &mut n.align_self,
+                        ui,
+                        "gias",
+                        &mut n.align_self,
                         &[
                             ("Auto", AlignSelf::Auto),
                             ("Start", AlignSelf::Start),
@@ -1779,7 +2026,8 @@ fn draw_grid_item_section(
                             ("Baseline", AlignSelf::Baseline),
                             ("Stretch", AlignSelf::Stretch),
                         ],
-                        changed, any_hovered,
+                        changed,
+                        any_hovered,
                     );
                     ui.end_row();
 
@@ -1794,8 +2042,12 @@ fn draw_grid_item_section(
                 let p = &mut **preview;
                 let sp = sel_path.as_slice();
                 let needs_rebuild = apply_hover(
-                    *hover_align_self, cfg, p, sp,
-                    |n| n.align_self, |n, v| n.align_self = v,
+                    *hover_align_self,
+                    cfg,
+                    p,
+                    sp,
+                    |n| n.align_self,
+                    |n, v| n.align_self = v,
                 );
                 if needs_rebuild {
                     cfg.request_rebuild();
@@ -1813,11 +2065,7 @@ fn track_list_editor(
     changed: &mut bool,
 ) {
     ui.horizontal(|ui| {
-        label_with_help(
-            ui,
-            label,
-            &format!("Grid track definitions for {label}"),
-        );
+        label_with_help(ui, label, &format!("Grid track definitions for {label}"));
         if ui.small_button("+").on_hover_text("Add track").clicked() {
             tracks.push(GridTrackSize::Fr(1.0));
             *changed = true;
@@ -1834,7 +2082,10 @@ fn track_list_editor(
                 .selected_text(cur_kind.to_string())
                 .show_ui(ui, |ui| {
                     for kind in GridTrackKind::iter() {
-                        if ui.selectable_label(cur_kind == kind, kind.to_string()).clicked() {
+                        if ui
+                            .selectable_label(cur_kind == kind, kind.to_string())
+                            .clicked()
+                        {
                             let n = track.num().unwrap_or(1.0);
                             *track = GridTrackSize::cast(kind, n);
                             *changed = true;
@@ -1848,8 +2099,15 @@ fn track_list_editor(
                     GridTrackKind::Fr => (0.1_f32, 10.0_f32),
                     _ => (0.0_f32, 100.0_f32),
                 };
-                let decimals = if matches!(track.kind(), GridTrackKind::Fr) { 1 } else { 0 };
-                if ui.add(egui::Slider::new(&mut n, lo..=hi).max_decimals(decimals)).changed() {
+                let decimals = if matches!(track.kind(), GridTrackKind::Fr) {
+                    1
+                } else {
+                    0
+                };
+                if ui
+                    .add(egui::Slider::new(&mut n, lo..=hi).max_decimals(decimals))
+                    .changed()
+                {
                     track.set_num(n);
                     *changed = true;
                 }
@@ -1900,14 +2158,20 @@ fn grid_placement_editor(
         match placement {
             GridPlacement::Start(s) => {
                 let mut v = *s as i32;
-                if ui.add(egui::Slider::new(&mut v, -10..=20).prefix("line ")).changed() {
+                if ui
+                    .add(egui::Slider::new(&mut v, -10..=20).prefix("line "))
+                    .changed()
+                {
                     *s = v as i16;
                     *changed = true;
                 }
             }
             GridPlacement::Span(n) => {
                 let mut v = *n as i32;
-                if ui.add(egui::Slider::new(&mut v, 1..=12).prefix("span ")).changed() {
+                if ui
+                    .add(egui::Slider::new(&mut v, 1..=12).prefix("span "))
+                    .changed()
+                {
                     *n = v as u16;
                     *changed = true;
                 }
@@ -1915,11 +2179,17 @@ fn grid_placement_editor(
             GridPlacement::StartSpan(s, n) => {
                 let mut vs = *s as i32;
                 let mut vn = *n as i32;
-                if ui.add(egui::Slider::new(&mut vs, -10..=20).prefix("line ")).changed() {
+                if ui
+                    .add(egui::Slider::new(&mut vs, -10..=20).prefix("line "))
+                    .changed()
+                {
                     *s = vs as i16;
                     *changed = true;
                 }
-                if ui.add(egui::Slider::new(&mut vn, 1..=12).prefix("span ")).changed() {
+                if ui
+                    .add(egui::Slider::new(&mut vn, 1..=12).prefix("span "))
+                    .changed()
+                {
                     *n = vn as u16;
                     *changed = true;
                 }
@@ -2066,10 +2336,30 @@ fn sides_editor(
         }
     } else {
         for (side_label, side_id, getter, setter) in [
-            ("top", format!("{id_prefix}_t"), (|s: &Sides| s.top) as fn(&Sides) -> ValueConfig, (|s: &mut Sides, v: ValueConfig| s.top = v) as fn(&mut Sides, ValueConfig)),
-            ("right", format!("{id_prefix}_r"), (|s: &Sides| s.right) as fn(&Sides) -> ValueConfig, (|s: &mut Sides, v: ValueConfig| s.right = v) as fn(&mut Sides, ValueConfig)),
-            ("bottom", format!("{id_prefix}_b"), (|s: &Sides| s.bottom) as fn(&Sides) -> ValueConfig, (|s: &mut Sides, v: ValueConfig| s.bottom = v) as fn(&mut Sides, ValueConfig)),
-            ("left", format!("{id_prefix}_l"), (|s: &Sides| s.left) as fn(&Sides) -> ValueConfig, (|s: &mut Sides, v: ValueConfig| s.left = v) as fn(&mut Sides, ValueConfig)),
+            (
+                "top",
+                format!("{id_prefix}_t"),
+                (|s: &Sides| s.top) as fn(&Sides) -> ValueConfig,
+                (|s: &mut Sides, v: ValueConfig| s.top = v) as fn(&mut Sides, ValueConfig),
+            ),
+            (
+                "right",
+                format!("{id_prefix}_r"),
+                (|s: &Sides| s.right) as fn(&Sides) -> ValueConfig,
+                (|s: &mut Sides, v: ValueConfig| s.right = v) as fn(&mut Sides, ValueConfig),
+            ),
+            (
+                "bottom",
+                format!("{id_prefix}_b"),
+                (|s: &Sides| s.bottom) as fn(&Sides) -> ValueConfig,
+                (|s: &mut Sides, v: ValueConfig| s.bottom = v) as fn(&mut Sides, ValueConfig),
+            ),
+            (
+                "left",
+                format!("{id_prefix}_l"),
+                (|s: &Sides| s.left) as fn(&Sides) -> ValueConfig,
+                (|s: &mut Sides, v: ValueConfig| s.left = v) as fn(&mut Sides, ValueConfig),
+            ),
         ] {
             ui.horizontal(|ui| {
                 ui.add_space(14.0);
@@ -2193,11 +2483,7 @@ fn single_val_editor(
 // ─── File picker helpers ─────────────────────────────────────────────────────
 
 #[allow(unused_variables)]
-fn save_file(
-    cfg: &FlexConfig,
-    toast: &mut Local<Option<(String, f64)>>,
-    ctx: &egui::Context,
-) {
+fn save_file(cfg: &FlexConfig, toast: &mut Local<Option<(String, f64)>>, ctx: &egui::Context) {
     #[cfg(target_arch = "wasm32")]
     {
         if let Some(json) = crate::persist::export_json(cfg) {
