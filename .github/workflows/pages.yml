@@ -41,7 +41,9 @@ jobs:
           restore-keys: wasm-
 
       - name: Install wasm-bindgen-cli
-        run: cargo install wasm-bindgen-cli
+        run: |
+          wb_version=$(grep -A 2 '^name = "wasm-bindgen"' Cargo.lock | grep version | head -1 | cut -d '"' -f 2)
+          cargo install wasm-bindgen-cli --version "$wb_version"
 
       - name: Build WASM
         run: cargo build --release --target wasm32-unknown-unknown
