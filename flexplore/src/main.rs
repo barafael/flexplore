@@ -1,5 +1,6 @@
 //! Flexplore — interactive Bevy 0.18 flexbox explorer.
 
+mod cursors;
 mod highlight;
 mod history;
 #[cfg(feature = "multiplayer")]
@@ -15,42 +16,7 @@ use flexplore::art::ArtState;
 use flexplore::config::FlexConfig;
 use history::UndoHistory;
 
-/// Parsed CLI args for the flexplore app.
-#[cfg(not(target_arch = "wasm32"))]
-struct CliArgs {
-    /// If set, connect to this server address for multiplayer.
-    server: Option<std::net::SocketAddr>,
-    /// Client id (defaults to random).
-    client_id: u64,
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn parse_cli() -> CliArgs {
-    let mut server = None;
-    let mut client_id: u64 = rand::random();
-    let args: Vec<String> = std::env::args().collect();
-    let mut i = 1;
-    while i < args.len() {
-        match args[i].as_str() {
-            "--server" | "-s" if i + 1 < args.len() => {
-                i += 1;
-                server = args[i].parse().ok();
-            }
-            "--id" if i + 1 < args.len() => {
-                i += 1;
-                client_id = args[i].parse().unwrap_or(client_id);
-            }
-            _ => {}
-        }
-        i += 1;
-    }
-    CliArgs { server, client_id }
-}
-
 fn main() {
-    #[cfg(not(target_arch = "wasm32"))]
-    let cli = parse_cli();
-
     let mut app = App::new();
 
     app.add_plugins((
@@ -84,15 +50,9 @@ fn main() {
             .chain(),
     );
 
-    // ── Multiplayer (opt-in via --server) ────────────────────────────────────
-    #[cfg(all(feature = "multiplayer", not(target_arch = "wasm32")))]
-    if let Some(server_addr) = cli.server {
-        app.insert_resource(net::NetConfig {
-            server_addr,
-            client_id: cli.client_id,
-        });
-        app.add_plugins(net::NetPlugin);
-    }
+    // ── Multiplayer (WebRTC P2P via matchbox) ───────────────────────────────
+    #[cfg(feature = "multiplayer")]
+    app.add_plugins(net::NetPlugin);
 
     app.run();
 }

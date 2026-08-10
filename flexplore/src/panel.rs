@@ -712,12 +712,12 @@ pub fn panel_system(
     #[cfg(feature = "multiplayer")]
     if net_dirty {
         if let Some(ref mut edits) = pending_edits {
-            edits.0.push(flexplore_protocol::LayoutEdit::ReplaceRoot(
+            edits.0.push(flexplore_net::LayoutEdit::ReplaceRoot(
                 cfg.root.clone(),
             ));
             edits
                 .0
-                .push(flexplore_protocol::LayoutEdit::UpdateSettings {
+                .push(flexplore_net::LayoutEdit::UpdateSettings {
                     bg_mode: cfg.bg_mode,
                     art_style: cfg.art_style,
                     art_seed: cfg.art_seed,
