@@ -4036,17 +4036,25 @@ name = "flexplore-net"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "flexplore-core",
+ "flexplore-proto",
  "getrandom 0.2.17",
  "matchbox_socket",
- "postcard",
  "rand 0.8.5",
  "rustls 0.23.37",
- "serde",
  "tokio",
  "uuid",
  "wasm-bindgen",
  "web-sys",
+]
+
+[[package]]
+name = "flexplore-proto"
+version = "0.1.0"
+dependencies = [
+ "flexplore-core",
+ "postcard",
+ "serde",
+ "tracing",
 ]
 
 [[package]]

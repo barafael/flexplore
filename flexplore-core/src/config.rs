@@ -330,31 +330,102 @@ impl<'de> Deserialize<'de> for Sides {
     where
         D: serde::Deserializer<'de>,
     {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum Helper {
-            PerSide {
-                top: ValueConfig,
-                right: ValueConfig,
-                bottom: ValueConfig,
-                left: ValueConfig,
-            },
-            Uniform(ValueConfig),
+        const FIELDS: &[&str] = &["top", "right", "bottom", "left"];
+
+        struct SidesVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for SidesVisitor {
+            type Value = Sides;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a per-side object or a uniform value")
+            }
+
+            /// postcard wire format: fixed four fields in declaration order.
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let missing = |what: &str| serde::de::Error::custom(format!("missing `{what}`"));
+                let top = seq.next_element()?.ok_or_else(|| missing("top"))?;
+                let right = seq.next_element()?.ok_or_else(|| missing("right"))?;
+                let bottom = seq.next_element()?.ok_or_else(|| missing("bottom"))?;
+                let left = seq.next_element()?.ok_or_else(|| missing("left"))?;
+                Ok(Sides {
+                    top,
+                    right,
+                    bottom,
+                    left,
+                })
+            }
+
+            /// JSON: either the per-side object (`{"top": …}`) or the uniform
+            /// `ValueConfig` object (`{"Px": 12.0}`) accepted by older layout
+            /// files. (A uniform `"Auto"` string or bare-number corner radius
+            /// is not reachable through `deserialize_struct`.)
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                let Some(first) = map.next_key::<String>()? else {
+                    return Err(serde::de::Error::custom("expected a padding/margin value"));
+                };
+                let uniform = match first.as_str() {
+                    "top" | "right" | "bottom" | "left" => {
+                        return self.per_side(first, map);
+                    }
+                    "Px" => ValueConfig::Px(map.next_value()?),
+                    "Percent" => ValueConfig::Percent(map.next_value()?),
+                    "Vw" => ValueConfig::Vw(map.next_value()?),
+                    "Vh" => ValueConfig::Vh(map.next_value()?),
+                    _ => {
+                        return Err(serde::de::Error::custom(format!(
+                            "unknown padding/margin field `{first}`"
+                        )));
+                    }
+                };
+                while map.next_key::<serde::de::IgnoredAny>()?.is_some() {
+                    map.next_value::<serde::de::IgnoredAny>()?;
+                }
+                Ok(Sides::uniform(uniform))
+            }
         }
-        match Helper::deserialize(deserializer)? {
-            Helper::PerSide {
-                top,
-                right,
-                bottom,
-                left,
-            } => Ok(Sides {
-                top,
-                right,
-                bottom,
-                left,
-            }),
-            Helper::Uniform(v) => Ok(Sides::uniform(v)),
+
+        impl SidesVisitor {
+            fn per_side<'de, A: serde::de::MapAccess<'de>>(
+                &self,
+                first: String,
+                mut map: A,
+            ) -> Result<Sides, A::Error> {
+                let first_value: ValueConfig = map.next_value()?;
+                let mut top = None;
+                let mut right = None;
+                let mut bottom = None;
+                let mut left = None;
+                let mut set = |key: &str, v: ValueConfig| match key {
+                    "top" => top = Some(v),
+                    "right" => right = Some(v),
+                    "bottom" => bottom = Some(v),
+                    _ => left = Some(v),
+                };
+                set(&first, first_value);
+                while let Some(key) = map.next_key::<String>()? {
+                    let value: ValueConfig = map.next_value()?;
+                    if matches!(key.as_str(), "top" | "right" | "bottom" | "left") {
+                        set(&key, value);
+                    }
+                }
+                let missing = |what: &str| serde::de::Error::custom(format!("missing `{what}`"));
+                Ok(Sides {
+                    top: top.ok_or_else(|| missing("top"))?,
+                    right: right.ok_or_else(|| missing("right"))?,
+                    bottom: bottom.ok_or_else(|| missing("bottom"))?,
+                    left: left.ok_or_else(|| missing("left"))?,
+                })
+            }
         }
+
+        deserializer.deserialize_struct("Sides", FIELDS, SidesVisitor)
     }
 }
 
@@ -403,31 +474,64 @@ impl<'de> Deserialize<'de> for Corners {
     where
         D: serde::Deserializer<'de>,
     {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum Helper {
-            PerCorner {
-                top_left: f32,
-                top_right: f32,
-                bottom_right: f32,
-                bottom_left: f32,
-            },
-            Uniform(f32),
+        const FIELDS: &[&str] = &["top_left", "top_right", "bottom_right", "bottom_left"];
+
+        struct CornersVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for CornersVisitor {
+            type Value = Corners;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a per-corner object")
+            }
+
+            /// postcard wire format: fixed four fields in declaration order.
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let missing = |what: &str| serde::de::Error::custom(format!("missing `{what}`"));
+                let top_left = seq.next_element()?.ok_or_else(|| missing("top_left"))?;
+                let top_right = seq.next_element()?.ok_or_else(|| missing("top_right"))?;
+                let bottom_right = seq.next_element()?.ok_or_else(|| missing("bottom_right"))?;
+                let bottom_left = seq.next_element()?.ok_or_else(|| missing("bottom_left"))?;
+                Ok(Corners {
+                    top_left,
+                    top_right,
+                    bottom_right,
+                    bottom_left,
+                })
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                let mut top_left = None;
+                let mut top_right = None;
+                let mut bottom_right = None;
+                let mut bottom_left = None;
+                while let Some(key) = map.next_key::<String>()? {
+                    let value: f32 = map.next_value()?;
+                    match key.as_str() {
+                        "top_left" => top_left = Some(value),
+                        "top_right" => top_right = Some(value),
+                        "bottom_right" => bottom_right = Some(value),
+                        "bottom_left" => bottom_left = Some(value),
+                        _ => {}
+                    }
+                }
+                let missing = |what: &str| serde::de::Error::custom(format!("missing `{what}`"));
+                Ok(Corners {
+                    top_left: top_left.ok_or_else(|| missing("top_left"))?,
+                    top_right: top_right.ok_or_else(|| missing("top_right"))?,
+                    bottom_right: bottom_right.ok_or_else(|| missing("bottom_right"))?,
+                    bottom_left: bottom_left.ok_or_else(|| missing("bottom_left"))?,
+                })
+            }
         }
-        match Helper::deserialize(deserializer)? {
-            Helper::PerCorner {
-                top_left,
-                top_right,
-                bottom_right,
-                bottom_left,
-            } => Ok(Corners {
-                top_left,
-                top_right,
-                bottom_right,
-                bottom_left,
-            }),
-            Helper::Uniform(v) => Ok(Corners::uniform(v)),
-        }
+
+        deserializer.deserialize_struct("Corners", FIELDS, CornersVisitor)
     }
 }
 

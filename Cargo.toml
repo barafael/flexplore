@@ -2,7 +2,7 @@
 
 resolver = "3"
 
-members = ["flexplore", "flexplore-core", "flexplore-net", "tools/update-snapshots", "tools/bevy-golden", "tools/iced-golden", "tools/egui-golden", "tools/dioxus-golden", "tools/react-native-golden", "tools/build-overview"]
+members = ["flexplore", "flexplore-core", "flexplore-net", "flexplore-proto", "tools/update-snapshots", "tools/bevy-golden", "tools/iced-golden", "tools/egui-golden", "tools/dioxus-golden", "tools/react-native-golden", "tools/build-overview"]
 
 default-members = ["flexplore"]
 

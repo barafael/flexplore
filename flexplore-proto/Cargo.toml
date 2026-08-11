@@ -1,0 +1,11 @@
+[package]
+name = "flexplore-proto"
+version = "0.1.0"
+edition = "2024"
+description = "Wire protocol for flexplore multiplayer: host-sequenced layout edits, snapshots, and ephemeral state over postcard"
+
+[dependencies]
+flexplore-core = { path = "../flexplore-core" }
+postcard = { version = "1", features = ["alloc"] }
+serde = { version = "1", features = ["derive"] }
+tracing = "0.1"
