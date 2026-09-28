@@ -7,7 +7,7 @@ description = "P2P WebRTC networking for flexplore: host-sequenced layout edits 
 [dependencies]
 bevy = "0.18"
 flexplore-proto = { path = "../flexplore-proto" }
-matchbox_socket = { git = "https://github.com/barafael/matchbox.git" }
+matchbox_socket = { git = "https://github.com/barafael/matchbox.git", branch = "bevy-0.19-socket-hardening" }
 rand = "0.8"
 uuid = "1"
 
