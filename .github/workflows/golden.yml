@@ -76,7 +76,7 @@ jobs:
           git add testdata/*/rendered_*.png testdata/overview.html
           git diff --cached --quiet && exit 0
           git commit -m "Update golden screenshots (Linux backends)"
-          git pull --rebase origin main
+          git pull --rebase --autostash origin main
           git push origin HEAD:main
 
   swift:
@@ -104,5 +104,5 @@ jobs:
           git add testdata/*/rendered_swift.png testdata/overview.html
           git diff --cached --quiet && exit 0
           git commit -m "Update golden screenshots (SwiftUI)"
-          git pull --rebase origin main
+          git pull --rebase --autostash origin main
           git push origin HEAD:main

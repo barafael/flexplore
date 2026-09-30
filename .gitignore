@@ -1,2 +1,7 @@
 /target
 /dist
+# Build outputs of the golden harness; the PNGs are copied into testdata/.
+/tools/flutter-golden/test/goldens/
+/tools/flutter-golden/pubspec.lock
+/tools/swift-golden/.build/
+/tools/swift-golden/Tests/SwiftGoldenTests/__Snapshots__/
