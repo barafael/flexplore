@@ -20,12 +20,23 @@ pub const DOCUMENT_COMPLETE: &str = "document.readyState === 'complete'";
 
 /// Launch a headless Chromium sized to the golden viewport.
 pub fn launch_browser() -> Result<Browser> {
+    // CI runners (Ubuntu 24.04+) restrict unprivileged user namespaces, which
+    // Chrome's sandbox needs; without `--no-sandbox` the browser never comes
+    // up and the launch times out.
+    let on_ci = std::env::var_os("CI").is_some();
     let options = LaunchOptions {
         window_size: Some((VIEWPORT_W as u32, VIEWPORT_H as u32)),
         headless: true,
+        sandbox: !on_ci,
         ..Default::default()
     };
-    Browser::new(options).context("failed to launch Chromium")
+    Browser::new(options).with_context(|| {
+        format!(
+            "failed to launch Chromium (CHROME={:?}, sandbox={})",
+            std::env::var_os("CHROME"),
+            !on_ci
+        )
+    })
 }
 
 /// Pin the tab's viewport to exactly the golden size at 1× DPI (no
