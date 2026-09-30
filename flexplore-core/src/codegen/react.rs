@@ -3,16 +3,12 @@ use std::fmt::Write;
 use crate::config::*;
 use anyhow::Result;
 
-use crate::art::palette_color;
+use super::common::{
+    css_align_content, css_align_items, css_align_self, css_flex_direction, css_flex_wrap,
+    css_justify_content, grid_tracks, is_auto_or_zero, jsx_text_escape, rgb8, sorted_children,
+    take_leaf_color,
+};
 use crate::config::{ColorPalette, Corners, NodeConfig, Sides, ValueConfig};
-
-fn format_num(v: f32) -> String {
-    if (v - v.round()).abs() < 0.005 {
-        format!("{}", v as i32)
-    } else {
-        format!("{v:.1}")
-    }
-}
 
 fn css_value(v: &ValueConfig) -> String {
     match v {
@@ -22,6 +18,11 @@ fn css_value(v: &ValueConfig) -> String {
         ValueConfig::Vw(n) => format!("'{n:.1}vw'"),
         ValueConfig::Vh(n) => format!("'{n:.1}vh'"),
     }
+}
+
+/// Single-quoted JS string for a CSS keyword.
+fn quoted(keyword: &str) -> String {
+    format!("'{keyword}'")
 }
 
 fn emit_react_sides(buf: &mut String, pad: &str, prop: &str, sides: &Sides) -> std::fmt::Result {
@@ -68,79 +69,6 @@ fn emit_react_corners(buf: &mut String, pad: &str, corners: &Corners) -> std::fm
     }
 }
 
-fn camel_direction(d: FlexDirection) -> &'static str {
-    match d {
-        FlexDirection::Row => "'row'",
-        FlexDirection::Column => "'column'",
-        FlexDirection::RowReverse => "'row-reverse'",
-        FlexDirection::ColumnReverse => "'column-reverse'",
-    }
-}
-
-fn camel_wrap(w: FlexWrap) -> &'static str {
-    match w {
-        FlexWrap::NoWrap => "'nowrap'",
-        FlexWrap::Wrap => "'wrap'",
-        FlexWrap::WrapReverse => "'wrap-reverse'",
-    }
-}
-
-fn camel_justify(j: JustifyContent) -> &'static str {
-    match j {
-        JustifyContent::FlexStart => "'flex-start'",
-        JustifyContent::FlexEnd => "'flex-end'",
-        JustifyContent::Center => "'center'",
-        JustifyContent::SpaceBetween => "'space-between'",
-        JustifyContent::SpaceAround => "'space-around'",
-        JustifyContent::SpaceEvenly => "'space-evenly'",
-        JustifyContent::Stretch => "'stretch'",
-        JustifyContent::Start => "'start'",
-        JustifyContent::End => "'end'",
-        _ => "'flex-start'",
-    }
-}
-
-fn camel_align_items(a: AlignItems) -> &'static str {
-    match a {
-        AlignItems::FlexStart => "'flex-start'",
-        AlignItems::FlexEnd => "'flex-end'",
-        AlignItems::Center => "'center'",
-        AlignItems::Baseline => "'baseline'",
-        AlignItems::Stretch => "'stretch'",
-        AlignItems::Start => "'start'",
-        AlignItems::End => "'end'",
-        _ => "'stretch'",
-    }
-}
-
-fn camel_align_content(a: AlignContent) -> &'static str {
-    match a {
-        AlignContent::FlexStart => "'flex-start'",
-        AlignContent::FlexEnd => "'flex-end'",
-        AlignContent::Center => "'center'",
-        AlignContent::SpaceBetween => "'space-between'",
-        AlignContent::SpaceAround => "'space-around'",
-        AlignContent::SpaceEvenly => "'space-evenly'",
-        AlignContent::Stretch => "'stretch'",
-        AlignContent::Start => "'start'",
-        AlignContent::End => "'end'",
-        _ => "'stretch'",
-    }
-}
-
-fn camel_align_self(a: AlignSelf) -> &'static str {
-    match a {
-        AlignSelf::Auto => "'auto'",
-        AlignSelf::FlexStart => "'flex-start'",
-        AlignSelf::FlexEnd => "'flex-end'",
-        AlignSelf::Center => "'center'",
-        AlignSelf::Baseline => "'baseline'",
-        AlignSelf::Stretch => "'stretch'",
-        AlignSelf::Start => "'start'",
-        AlignSelf::End => "'end'",
-    }
-}
-
 pub fn emit_react(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
     let mut buf = String::from("export default function FlexLayout() {\n  return (\n");
     emit_react_node(&mut buf, root, 2, &mut 0, palette)?;
@@ -159,14 +87,9 @@ fn emit_react_node(
     let is_leaf = node.children.is_empty();
 
     let bg = if is_leaf {
-        let (r, g, b) = palette_color(palette, *leaf_idx);
-        *leaf_idx += 1;
-        format!(
-            "'rgb({}, {}, {})'",
-            (r * 255.0) as u8,
-            (g * 255.0) as u8,
-            (b * 255.0) as u8,
-        )
+        let (r, g, b) = take_leaf_color(palette, leaf_idx);
+        let (r, g, b) = rgb8(r, g, b);
+        format!("'rgb({r}, {g}, {b})'")
     } else {
         "'rgba(28, 28, 43, 1)'".into()
     };
@@ -183,36 +106,32 @@ fn emit_react_node(
     }
     if is_grid {
         if !node.grid_template_columns.is_empty() {
-            let val: Vec<_> = node
-                .grid_template_columns
-                .iter()
-                .map(|t| t.display_short())
-                .collect();
-            writeln!(buf, "{pad}  gridTemplateColumns: '{}',", val.join(" "))?;
+            writeln!(
+                buf,
+                "{pad}  gridTemplateColumns: '{}',",
+                grid_tracks(&node.grid_template_columns)
+            )?;
         }
         if !node.grid_template_rows.is_empty() {
-            let val: Vec<_> = node
-                .grid_template_rows
-                .iter()
-                .map(|t| t.display_short())
-                .collect();
-            writeln!(buf, "{pad}  gridTemplateRows: '{}',", val.join(" "))?;
+            writeln!(
+                buf,
+                "{pad}  gridTemplateRows: '{}',",
+                grid_tracks(&node.grid_template_rows)
+            )?;
         }
         if !node.grid_auto_columns.is_empty() {
-            let val: Vec<_> = node
-                .grid_auto_columns
-                .iter()
-                .map(|t| t.display_short())
-                .collect();
-            writeln!(buf, "{pad}  gridAutoColumns: '{}',", val.join(" "))?;
+            writeln!(
+                buf,
+                "{pad}  gridAutoColumns: '{}',",
+                grid_tracks(&node.grid_auto_columns)
+            )?;
         }
         if !node.grid_auto_rows.is_empty() {
-            let val: Vec<_> = node
-                .grid_auto_rows
-                .iter()
-                .map(|t| t.display_short())
-                .collect();
-            writeln!(buf, "{pad}  gridAutoRows: '{}',", val.join(" "))?;
+            writeln!(
+                buf,
+                "{pad}  gridAutoRows: '{}',",
+                grid_tracks(&node.grid_auto_rows)
+            )?;
         }
         if node.grid_auto_flow != GridAutoFlow::Row {
             writeln!(
@@ -226,11 +145,15 @@ fn emit_react_node(
             writeln!(
                 buf,
                 "{pad}  flexDirection: {},",
-                camel_direction(node.flex_direction)
+                quoted(css_flex_direction(node.flex_direction))
             )?;
         }
         if node.flex_wrap != FlexWrap::NoWrap {
-            writeln!(buf, "{pad}  flexWrap: {},", camel_wrap(node.flex_wrap))?;
+            writeln!(
+                buf,
+                "{pad}  flexWrap: {},",
+                quoted(css_flex_wrap(node.flex_wrap))
+            )?;
         }
     }
     if !matches!(
@@ -240,14 +163,14 @@ fn emit_react_node(
         writeln!(
             buf,
             "{pad}  justifyContent: {},",
-            camel_justify(node.justify_content)
+            quoted(css_justify_content(node.justify_content))
         )?;
     }
     if !matches!(node.align_items, AlignItems::Default | AlignItems::Stretch) {
         writeln!(
             buf,
             "{pad}  alignItems: {},",
-            camel_align_items(node.align_items)
+            quoted(css_align_items(node.align_items))
         )?;
     }
     if !matches!(
@@ -257,24 +180,24 @@ fn emit_react_node(
         writeln!(
             buf,
             "{pad}  alignContent: {},",
-            camel_align_content(node.align_content)
+            quoted(css_align_content(node.align_content))
         )?;
     }
-    if !matches!(node.row_gap, ValueConfig::Auto)
-        && !matches!(node.row_gap, ValueConfig::Px(v) if v == 0.0)
-    {
+    if !is_auto_or_zero(&node.row_gap) {
         writeln!(buf, "{pad}  rowGap: {},", css_value(&node.row_gap))?;
     }
-    if !matches!(node.column_gap, ValueConfig::Auto)
-        && !matches!(node.column_gap, ValueConfig::Px(v) if v == 0.0)
-    {
+    if !is_auto_or_zero(&node.column_gap) {
         writeln!(buf, "{pad}  columnGap: {},", css_value(&node.column_gap))?;
     }
     if node.flex_grow != 0.0 {
-        writeln!(buf, "{pad}  flexGrow: {},", format_num(node.flex_grow))?;
+        writeln!(buf, "{pad}  flexGrow: {},", format_float(node.flex_grow))?;
     }
     if node.flex_shrink != 1.0 {
-        writeln!(buf, "{pad}  flexShrink: {},", format_num(node.flex_shrink))?;
+        writeln!(
+            buf,
+            "{pad}  flexShrink: {},",
+            format_float(node.flex_shrink)
+        )?;
     }
     if !matches!(node.flex_basis, ValueConfig::Auto) {
         writeln!(buf, "{pad}  flexBasis: {},", css_value(&node.flex_basis))?;
@@ -283,7 +206,7 @@ fn emit_react_node(
         writeln!(
             buf,
             "{pad}  alignSelf: {},",
-            camel_align_self(node.align_self)
+            quoted(css_align_self(node.align_self))
         )?;
     }
     if node.grid_column != GridPlacement::Auto {
@@ -333,12 +256,10 @@ fn emit_react_node(
     write!(buf, "{pad}}}}}")?;
 
     if is_leaf {
-        writeln!(buf, ">{}</div>", node.label)?;
+        writeln!(buf, ">{}</div>", jsx_text_escape(node.display_text()))?;
     } else {
         writeln!(buf, ">")?;
-        let mut sorted: Vec<&NodeConfig> = node.children.iter().collect();
-        sorted.sort_by_key(|c| c.order);
-        for child in sorted {
+        for child in sorted_children(node) {
             emit_react_node(buf, child, depth + 1, leaf_idx, palette)?;
         }
         writeln!(buf, "{pad}</div>")?;
@@ -403,5 +324,13 @@ mod tests {
     fn emits_leaf_label() {
         let code = emit_react(&test_container(), ColorPalette::Pastel1).unwrap();
         assert!(code.contains(">A</div>"));
+    }
+
+    #[test]
+    fn escapes_jsx_text() {
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![NodeConfig::new_leaf("{x} <b>", 80.0, 80.0)];
+        let code = emit_react(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains(">&#123;x&#125; &lt;b&gt;</div>"), "{code}");
     }
 }

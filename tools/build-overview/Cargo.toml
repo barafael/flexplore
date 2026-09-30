@@ -6,5 +6,5 @@ edition = "2024"
 [dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
-headless_chrome = "1.0"
+golden-common = { path = "../golden-common", features = ["chrome"] }
 regex = "1"

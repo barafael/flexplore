@@ -17,8 +17,7 @@ Widget build(BuildContext context) {
           child: Text('50vw x 20vh',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Container(
           width: MediaQuery.of(context).size.width * 0.750,
           height: MediaQuery.of(context).size.height * 0.300,
@@ -28,8 +27,7 @@ Widget build(BuildContext context) {
           child: Text('75vw x 30vh',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
       ],
     )
   )

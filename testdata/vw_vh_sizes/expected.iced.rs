@@ -5,7 +5,8 @@ fn view(&self) -> iced::Element<'_, Message> {
             .width(Length::Fixed(50.0) /* 50vw — no viewport units in Iced */)
             .height(Length::Fixed(20.0) /* 20vh — no viewport units in Iced */)
             .padding(8.0)
-            .center(Length::Fill)
+            .align_x(Horizontal::Center)
+            .align_y(Vertical::Center)
             .style(|_| container::Style {
                 background: Some(Color::from_rgb(0.98, 0.71, 0.68).into()),
                 ..Default::default()
@@ -14,7 +15,8 @@ fn view(&self) -> iced::Element<'_, Message> {
             .width(Length::Fixed(75.0) /* 75vw — no viewport units in Iced */)
             .height(Length::Fixed(30.0) /* 30vh — no viewport units in Iced */)
             .padding(8.0)
-            .center(Length::Fill)
+            .align_x(Horizontal::Center)
+            .align_y(Vertical::Center)
             .style(|_| container::Style {
                 background: Some(Color::from_rgb(0.70, 0.80, 0.89).into()),
                 ..Default::default()

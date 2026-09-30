@@ -10,6 +10,7 @@ use bevy::{
     window::{PrimaryWindow, WindowResolution},
 };
 
+use crate::bevy_node;
 use crate::config::{ColorPalette, NodeConfig};
 
 /// Frames to let Bevy's UI layout settle after spawning a new tree.
@@ -51,18 +52,21 @@ pub fn render_to_images(jobs: Vec<RenderJob>, output_dir: PathBuf) {
                     ..default()
                 })
                 .set(RenderPlugin {
-                    render_creation: RenderCreation::Automatic(WgpuSettings {
+                    render_creation: RenderCreation::Automatic(Box::new(WgpuSettings {
+                        // `None` would disable rendering entirely; keep the
+                        // default (all backends, honouring WGPU_BACKEND) except
+                        // on Windows, where DX12 is the reliable choice.
                         backends: if cfg!(windows) {
                             Some(Backends::DX12)
                         } else {
-                            None // auto-detect on other platforms
+                            WgpuSettings::default().backends
                         },
                         ..default()
-                    }),
+                    })),
                     ..default()
                 }),
         )
-        .insert_resource(ClearColor(Color::srgba(0.11, 0.11, 0.17, 1.0)))
+        .insert_resource(ClearColor(bevy_node::CONTAINER_BG))
         .insert_resource(RenderQueue {
             jobs,
             current: 0,
@@ -225,6 +229,8 @@ fn spawn_node_tree(commands: &mut Commands, root: &NodeConfig, palette: ColorPal
     spawn_node_entity(commands, root, &mut leaf_idx, palette, true);
 }
 
+/// Spawn `node` exactly as the app's live preview does (see `viz.rs`), minus
+/// the selection outline and generative-art textures.
 fn spawn_node_entity(
     commands: &mut Commands,
     node: &NodeConfig,
@@ -239,88 +245,34 @@ fn spawn_node_entity(
         *leaf_idx += 1;
         Color::srgb(r, g, b)
     } else {
-        Color::srgba(0.11, 0.11, 0.17, 1.0)
+        bevy_node::CONTAINER_BG
     };
 
-    // Force root to fill the viewport, matching HTML `body { height: 100% }`.
-    let height = if is_root {
-        Val::Percent(100.0)
-    } else {
-        to_val(&node.height)
-    };
-
-    let style = Node {
-        flex_direction: node.flex_direction.into(),
-        flex_wrap: node.flex_wrap.into(),
-        justify_content: node.justify_content.into(),
-        align_items: node.align_items.into(),
-        align_content: node.align_content.into(),
-        align_self: node.align_self.into(),
-        flex_grow: node.flex_grow,
-        flex_shrink: node.flex_shrink,
-        flex_basis: to_val(&node.flex_basis),
-        row_gap: to_val(&node.row_gap),
-        column_gap: to_val(&node.column_gap),
-        width: to_val(&node.width),
-        height,
-        min_width: to_val(&node.min_width),
-        min_height: to_val(&node.min_height),
-        max_width: to_val(&node.max_width),
-        max_height: to_val(&node.max_height),
-        padding: node.padding.to_bevy_ui_rect(),
-        margin: node.margin.to_bevy_ui_rect(),
-        ..default()
-    };
-
-    let mut ec = commands.spawn((style, BackgroundColor(bg)));
-
-    if !node.visible {
-        ec.insert(Visibility::Hidden);
+    let mut style = bevy_node::node_to_bevy(node);
+    if is_root {
+        // Force root to fill the viewport, matching HTML `body { height: 100% }`.
+        style.height = Val::Percent(100.0);
     }
 
-    let entity = ec.id();
+    let entity = commands
+        .spawn((
+            style,
+            BackgroundColor(bg),
+            BorderColor::all(bevy_node::BORDER_COLOR),
+            bevy_node::node_visibility(node),
+        ))
+        .id();
 
     if is_leaf {
-        ec.with_children(|parent| {
-            parent
-                .spawn(Node {
-                    position_type: PositionType::Absolute,
-                    top: Val::Px(0.0),
-                    left: Val::Px(0.0),
-                    right: Val::Px(0.0),
-                    bottom: Val::Px(0.0),
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    ..default()
-                })
-                .with_child((
-                    Text::new(&node.label),
-                    TextFont {
-                        font_size: 26.0,
-                        ..default()
-                    },
-                    TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
-                ));
-        });
+        bevy_node::spawn_leaf_text(commands, entity, node);
     } else {
-        let mut sorted: Vec<&NodeConfig> = node.children.iter().collect();
-        sorted.sort_by_key(|c| c.order);
-        let child_entities: Vec<Entity> = sorted
-            .iter()
-            .map(|child| spawn_node_entity(commands, child, leaf_idx, palette, false))
+        bevy_node::spawn_container_label(commands, entity, node);
+        let child_entities: Vec<Entity> = bevy_node::sorted_child_indices(node)
+            .into_iter()
+            .map(|i| spawn_node_entity(commands, &node.children[i], leaf_idx, palette, false))
             .collect();
         commands.entity(entity).add_children(&child_entities);
     }
 
     entity
-}
-
-fn to_val(v: &crate::config::ValueConfig) -> Val {
-    match v {
-        crate::config::ValueConfig::Auto => Val::Auto,
-        crate::config::ValueConfig::Px(n) => Val::Px(*n),
-        crate::config::ValueConfig::Percent(n) => Val::Percent(*n),
-        crate::config::ValueConfig::Vw(n) => Val::Vw(*n),
-        crate::config::ValueConfig::Vh(n) => Val::Vh(*n),
-    }
 }

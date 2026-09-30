@@ -17,8 +17,7 @@ Widget build(BuildContext context) {
           child: Text('visible',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Visibility(
           visible: false,
           maintainSize: true,
@@ -34,8 +33,7 @@ Widget build(BuildContext context) {
               style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
             ),
           )
-        )
-        ,
+        ),
       ],
     )
   )

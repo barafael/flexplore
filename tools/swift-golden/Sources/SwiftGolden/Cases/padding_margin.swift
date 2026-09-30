@@ -1,8 +1,8 @@
-// AUTO-GENERATED — do not edit. Run tool/generate_cases.py to regenerate.
+// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview -- --generate-only` to regenerate.
 import SwiftUI
 
 public struct PaddingMarginView: View {
-    var body: some View {
+    public var body: some View {
         HStack(alignment: .top, spacing: 8.0) {
             Text("A")
                 .font(.system(size: 26))
@@ -26,10 +26,9 @@ public struct PaddingMarginView: View {
                 .background(Color(red: 0.80, green: 0.92, blue: 0.77))
                 .padding(16.0) /* margin */
         }
-        .frame(width: 100.0 /* 100.0% — use GeometryReader for relative sizing */, height: nil)
-        .frame(minWidth: nil, minHeight: 0.0, maxWidth: nil, maxHeight: nil)
+        .frame(minWidth: nil, maxWidth: .infinity, minHeight: nil, maxHeight: .infinity, alignment: .topLeading)
         .padding(20.0)
         .background(Color(red: 0.11, green: 0.11, blue: 0.17))
-        .padding(0.0) /* margin */
     }
 }
+

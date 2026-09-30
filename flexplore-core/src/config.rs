@@ -361,8 +361,8 @@ impl<'de> Deserialize<'de> for Sides {
 
             /// JSON: either the per-side object (`{"top": …}`) or the uniform
             /// `ValueConfig` object (`{"Px": 12.0}`) accepted by older layout
-            /// files. (A uniform `"Auto"` string or bare-number corner radius
-            /// is not reachable through `deserialize_struct`.)
+            /// files. (A uniform `"Auto"` string is not reachable through
+            /// `deserialize_struct`.)
             fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
             where
                 A: serde::de::MapAccess<'de>,
@@ -410,9 +410,11 @@ impl<'de> Deserialize<'de> for Sides {
                 };
                 set(&first, first_value);
                 while let Some(key) = map.next_key::<String>()? {
-                    let value: ValueConfig = map.next_value()?;
                     if matches!(key.as_str(), "top" | "right" | "bottom" | "left") {
-                        set(&key, value);
+                        set(&key, map.next_value()?);
+                    } else {
+                        // Unknown keys are skipped, not parsed as ValueConfig.
+                        map.next_value::<serde::de::IgnoredAny>()?;
                     }
                 }
                 let missing = |what: &str| serde::de::Error::custom(format!("missing `{what}`"));
@@ -1088,6 +1090,17 @@ mod tests {
             GridPlacement::StartSpan(1, 2)
         );
         assert_eq!(deser.children[0].grid_row, GridPlacement::Span(3));
+    }
+
+    #[test]
+    fn sides_per_side_ignores_unknown_keys() {
+        let json = r#"{"top": {"Px": 1.0}, "note": "hi", "right": {"Px": 2.0},
+                       "bottom": {"Px": 3.0}, "left": {"Px": 4.0}, "extra": [1, 2]}"#;
+        let sides: Sides = serde_json::from_str(json).unwrap();
+        assert_eq!(sides.top, ValueConfig::Px(1.0));
+        assert_eq!(sides.right, ValueConfig::Px(2.0));
+        assert_eq!(sides.bottom, ValueConfig::Px(3.0));
+        assert_eq!(sides.left, ValueConfig::Px(4.0));
     }
 
     #[test]

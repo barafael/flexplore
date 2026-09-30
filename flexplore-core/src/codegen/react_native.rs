@@ -3,28 +3,23 @@ use std::fmt::Write;
 use crate::config::*;
 use anyhow::Result;
 
-use crate::art::palette_color;
+use super::common::{is_auto_or_zero, jsx_text_escape, rgb8, sorted_children, take_leaf_color};
 use crate::config::{ColorPalette, Corners, NodeConfig, Sides, ValueConfig};
-
-fn format_num(v: f32) -> String {
-    if (v - v.round()).abs() < 0.005 {
-        format!("{}", v as i32)
-    } else {
-        format!("{v:.1}")
-    }
-}
 
 /// React Native uses plain numbers for dp, strings for percentages.
 /// vw/vh have no native equivalent — we emit a `Dimensions` expression.
 fn rn_value(v: &ValueConfig) -> String {
     match v {
         ValueConfig::Auto => "'auto'".into(),
-        ValueConfig::Px(n) => format_num(*n),
+        ValueConfig::Px(n) => format_float(*n),
         ValueConfig::Percent(n) => format!("'{n:.1}%'"),
         ValueConfig::Vw(n) => format!("Dimensions.get('window').width * {:.2}", n / 100.0),
         ValueConfig::Vh(n) => format!("Dimensions.get('window').height * {:.2}", n / 100.0),
     }
 }
+
+// React Native's Yoga has no `start`/`end` keywords, so those fold into
+// `flex-start`/`flex-end` — these tables intentionally differ from CSS.
 
 fn rn_direction(d: FlexDirection) -> &'static str {
     match d {
@@ -120,28 +115,28 @@ fn emit_rn_corners(buf: &mut String, pad: &str, corners: &Corners) -> std::fmt::
         writeln!(
             buf,
             "{pad}  borderRadius: {},",
-            format_num(corners.top_left)
+            format_float(corners.top_left)
         )
     } else {
         writeln!(
             buf,
             "{pad}  borderTopLeftRadius: {},",
-            format_num(corners.top_left)
+            format_float(corners.top_left)
         )?;
         writeln!(
             buf,
             "{pad}  borderTopRightRadius: {},",
-            format_num(corners.top_right)
+            format_float(corners.top_right)
         )?;
         writeln!(
             buf,
             "{pad}  borderBottomRightRadius: {},",
-            format_num(corners.bottom_right)
+            format_float(corners.bottom_right)
         )?;
         writeln!(
             buf,
             "{pad}  borderBottomLeftRadius: {},",
-            format_num(corners.bottom_left)
+            format_float(corners.bottom_left)
         )
     }
 }
@@ -200,14 +195,9 @@ fn emit_rn_node(
     let is_leaf = node.children.is_empty();
 
     let bg = if is_leaf {
-        let (r, g, b) = palette_color(palette, *leaf_idx);
-        *leaf_idx += 1;
-        format!(
-            "'rgb({}, {}, {})'",
-            (r * 255.0) as u8,
-            (g * 255.0) as u8,
-            (b * 255.0) as u8,
-        )
+        let (r, g, b) = take_leaf_color(palette, leaf_idx);
+        let (r, g, b) = rgb8(r, g, b);
+        format!("'rgb({r}, {g}, {b})'")
     } else {
         "'rgba(28, 28, 43, 1)'".into()
     };
@@ -271,22 +261,22 @@ fn emit_rn_node(
             rn_align_content(node.align_content)
         )?;
     }
-    if !matches!(node.row_gap, ValueConfig::Auto)
-        && !matches!(node.row_gap, ValueConfig::Px(v) if v == 0.0)
-    {
+    if !is_auto_or_zero(&node.row_gap) {
         writeln!(buf, "{pad}  rowGap: {},", rn_value(&node.row_gap))?;
     }
-    if !matches!(node.column_gap, ValueConfig::Auto)
-        && !matches!(node.column_gap, ValueConfig::Px(v) if v == 0.0)
-    {
+    if !is_auto_or_zero(&node.column_gap) {
         writeln!(buf, "{pad}  columnGap: {},", rn_value(&node.column_gap))?;
     }
     if node.flex_grow != 0.0 {
-        writeln!(buf, "{pad}  flexGrow: {},", format_num(node.flex_grow))?;
+        writeln!(buf, "{pad}  flexGrow: {},", format_float(node.flex_grow))?;
     }
     // RN default flexShrink is 0, not 1 like CSS.
     if node.flex_shrink != 0.0 {
-        writeln!(buf, "{pad}  flexShrink: {},", format_num(node.flex_shrink))?;
+        writeln!(
+            buf,
+            "{pad}  flexShrink: {},",
+            format_float(node.flex_shrink)
+        )?;
     }
     if !matches!(node.flex_basis, ValueConfig::Auto) {
         writeln!(buf, "{pad}  flexBasis: {},", rn_value(&node.flex_basis))?;
@@ -323,25 +313,24 @@ fn emit_rn_node(
         writeln!(
             buf,
             "{pad}  <Text style={{{{ color: 'rgba(13, 13, 26, 0.85)', fontSize: 26 }}}}>{}</Text>",
-            node.label
+            jsx_text_escape(node.display_text())
         )?;
         writeln!(buf, "{pad}</View>")?;
     } else {
         writeln!(buf, "{pad}}}}}>")?;
-        let mut sorted: Vec<&NodeConfig> = node.children.iter().collect();
-        sorted.sort_by_key(|c| c.order);
+        let child_pad = "  ".repeat(depth + 1);
         if is_grid && grid_col_count > 0 {
-            // Approximate child widths from grid-template-columns
-            let child_pad = "  ".repeat(depth + 1);
+            // Children keep their own sizes; RN has no grid tracks, so the
+            // column count is only advisory.
             writeln!(
                 buf,
-                "{child_pad}{{/* Grid children — each sized to ~1/{grid_col_count} of container width */}}"
+                "{child_pad}{{/* Grid children — RN has no grid tracks; give each child width: '{:.1}%' (or flexBasis) to approximate {grid_col_count} columns */}}",
+                100.0 / grid_col_count as f32
             )?;
         }
-        for child in sorted {
+        for child in sorted_children(node) {
             // Emit grid-item placement comments for non-auto placements
             if is_grid {
-                let child_pad = "  ".repeat(depth + 1);
                 if child.grid_column != GridPlacement::Auto {
                     writeln!(
                         buf,
@@ -426,6 +415,14 @@ mod tests {
         let code = emit_react_native(&test_container(), ColorPalette::Pastel1).unwrap();
         assert!(code.contains(">A</Text>"));
         assert!(code.contains(">B</Text>"));
+    }
+
+    #[test]
+    fn escapes_jsx_text() {
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![NodeConfig::new_leaf("{x} <b>", 80.0, 80.0)];
+        let code = emit_react_native(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains(">&#123;x&#125; &lt;b&gt;</Text>"), "{code}");
     }
 
     #[test]

@@ -1,37 +1,42 @@
-//! P2P WebRTC multiplayer via matchbox, ported from the omdurman/gnils approach.
+//! Multiplayer systems: socket handling, host election, edit sequencing with
+//! client-side prediction, snapshots and presence routing.
 //!
-//! Architecture: *host-sequenced event sourcing*. Every peer holds the full
-//! layout state. A non-host submits its edit as [`NetMsg::Game`] to the host
-//! only; the host assigns the next canonical sequence number and rebroadcasts
-//! it as [`NetMsg::Sequenced`] to every peer (including looping it back to
-//! itself). Every peer — originator included — applies an edit only when it
-//! arrives as `Sequenced`, so all peers observe one canonical, ordered stream.
-//!
-//! The host is the lowest-sorted `PeerId`, re-derived on every peer change, so
-//! when the host disconnects the next peer is promoted automatically and
-//! resumes sequencing at `last_applied_seq + 1`.
+//! See the `flexplore-proto` crate docs for the model. In short: every edit is
+//! applied locally the moment the user makes it, then submitted to the host.
+//! The host orders edits and echoes them to everyone. A peer skips the echo of
+//! its own edits and re-applies its still-pending edits on top of foreign
+//! ones, so every peer converges on the host's order.
 
 use bevy::prelude::*;
 
 use flexplore_net::{
-    CH_RELIABLE, CH_UNRELIABLE, Control, Ephemeral, FlexSnapshot, LayoutEdit, MatchboxSocket,
-    NetMsg, NetState, PeerId, PeerState, RoomId, build_socket, decode, enc_msg, new_player_name,
-    room_id,
+    CH_RELIABLE, CH_UNRELIABLE, CLAIM_GRACE_SECS, Control, Ephemeral, FlexSnapshot, HostKey,
+    LayoutEdit, MatchboxSocket, NetMsg, NetState, PROMOTE_GRACE_SECS, PROTOCOL_VERSION, PeerId,
+    PeerInfo, PeerState, build_socket, decode, enc_msg, new_player_name, peer_from_bytes,
+    peer_to_bytes, room_id, unix_ms,
 };
 
-use flexplore::config::FlexConfig;
 use crate::cursors::{RemotePeers, color_for_peer};
 use crate::history::UndoHistory;
+use crate::panel::HoverPreview;
+use flexplore::config::FlexConfig;
+
+/// Foreign edits arriving faster than this (a peer dragging a slider) share
+/// one undo entry.
+const FOREIGN_HISTORY_COALESCE_SECS: f64 = 0.5;
+/// Upper bound on unacknowledged own edits we remember. Older ones are
+/// superseded anyway (every edit replaces whole state), so dropping them only
+/// affects echo matching, which treats an unknown old echo as superseded.
+const MAX_PENDING_OWN: usize = 256;
 
 // ── Resources ────────────────────────────────────────────────────────────────
 
-/// Layout edits staged by the UI this frame; routed onto the wire by
-/// [`flush_pending`] (guest→host) or the host loopback (host→self sequence).
+/// Layout edits the UI made this frame (already applied locally). Routed onto
+/// the wire by [`flush_pending`].
 #[derive(Resource, Default)]
 pub struct PendingEdits(pub Vec<LayoutEdit>);
 
-/// Wire-level outgoing staging: reliable broadcast + reliable targeted. Filled
-/// by [`handle_socket`] (sequenced echoes, control replies) and drained by
+/// Outgoing reliable messages staged by the systems, drained by
 /// [`flush_pending`].
 #[derive(Resource, Default)]
 pub struct WirePending {
@@ -39,12 +44,10 @@ pub struct WirePending {
     pub targeted: Vec<(NetMsg, PeerId)>,
 }
 
-/// Frame-scoped incoming buffers: ephemeral messages for
-/// [`apply_ephemeral`], and the host's self-loopback queue.
+/// Ephemeral messages received this frame, consumed by [`apply_ephemeral`].
 #[derive(Resource, Default)]
 pub struct PendingIncoming {
     pub ephemeral: Vec<(Ephemeral, PeerId)>,
-    pub loopback: Vec<NetMsg>,
 }
 
 /// The local player's display identity (announced to peers on connect).
@@ -67,20 +70,20 @@ pub struct NetPlugin;
 
 impl Plugin for NetPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(NetState::default())
-            .insert_resource(PendingEdits::default())
-            .insert_resource(WirePending::default())
-            .insert_resource(PendingIncoming::default())
-            .insert_resource(LocalPlayer::default())
-            .insert_resource(crate::cursors::RemotePeers::default())
-            .insert_resource(crate::cursors::CursorBroadcastTimer::default())
+        app.init_resource::<NetState>()
+            .init_resource::<PendingEdits>()
+            .init_resource::<WirePending>()
+            .init_resource::<PendingIncoming>()
+            .init_resource::<LocalPlayer>()
+            .init_resource::<crate::cursors::RemotePeers>()
+            .init_resource::<crate::cursors::CursorBroadcastTimer>()
             .add_systems(Startup, open_socket_for_room)
             .add_systems(
                 Update,
                 (
                     handle_socket,
+                    elect_host,
                     retry_snapshot_request,
-                    send_player_info_on_connect,
                     apply_ephemeral,
                     prune_remote_peers,
                     flush_pending,
@@ -92,18 +95,21 @@ impl Plugin for NetPlugin {
                 (
                     crate::cursors::broadcast_cursor,
                     crate::cursors::broadcast_selection,
-                    crate::cursors::cursor_overlay_ui,
                     crate::cursors::remote_selection_highlight,
                 ),
+            )
+            // Painting must happen inside egui's pass, or the next pass clears it.
+            .add_systems(
+                bevy_egui::EguiPrimaryContextPass,
+                crate::cursors::cursor_overlay_ui.after(crate::panel::panel_system),
             );
     }
 }
 
-/// Mint a room id, register it, and open the matchbox socket.
+/// Mint a room id and open the matchbox socket.
 fn open_socket_for_room(mut commands: Commands) {
     let room = room_id();
     info!(%room, "joining room");
-    commands.insert_resource(RoomId(room.clone()));
     commands.insert_resource(build_socket(&room));
 }
 
@@ -111,37 +117,58 @@ fn open_socket_for_room(mut commands: Commands) {
 
 #[allow(clippy::too_many_arguments)]
 fn handle_socket(
+    mut commands: Commands,
     socket: Option<ResMut<MatchboxSocket>>,
     mut net: ResMut<NetState>,
-    mut pending: ResMut<PendingEdits>,
     mut wire: ResMut<WirePending>,
     mut incoming: ResMut<PendingIncoming>,
     mut cfg: ResMut<FlexConfig>,
     mut history: ResMut<UndoHistory>,
+    mut preview: ResMut<HoverPreview>,
+    local: Res<LocalPlayer>,
+    time: Res<Time>,
+    mut last_foreign_push: Local<f64>,
 ) {
     let Some(mut socket) = socket else {
         return;
     };
-    let Ok(peer_updates) = socket.try_update_peers() else {
-        return;
+    let now = time.elapsed_secs_f64();
+
+    let peer_updates = match socket.try_update_peers() {
+        Ok(updates) => updates,
+        Err(e) => {
+            // The socket is gone for good; carry on as a local-only session.
+            warn!(error = %e, "socket closed; continuing offline");
+            commands.remove_resource::<MatchboxSocket>();
+            net.peers.clear();
+            net.info.clear();
+            net.host = None;
+            net.pending_own.clear();
+            wire.broadcast.clear();
+            wire.targeted.clear();
+            return;
+        }
     };
 
-    // ── Peer tracking + host election ──────────────────────────────────────
-    let mut peers_changed = false;
+    // ── Peer tracking ──────────────────────────────────────────────────────
     let mut newly_connected: Vec<PeerId> = Vec::new();
     for (peer, peer_state) in peer_updates {
         match peer_state {
             PeerState::Connected if !net.peers.contains(&peer) => {
                 net.peers.push(peer);
                 newly_connected.push(peer);
-                peers_changed = true;
                 info!(?peer, "peer connected");
             }
             PeerState::Disconnected => {
-                let before = net.peers.len();
                 net.peers.retain(|&p| p != peer);
-                peers_changed |= net.peers.len() != before;
+                net.info.retain(|(p, _)| *p != peer);
                 info!(?peer, "peer disconnected");
+                if net.host_id() == Some(peer) {
+                    info!("host left; waiting for a successor");
+                    net.host = None;
+                    net.unhosted_since = Some(now);
+                    net.needs_snapshot = false;
+                }
             }
             _ => {}
         }
@@ -150,207 +177,438 @@ fn handle_socket(
     // Reconcile my_id with the socket's assigned id (None until the signalling
     // server hands one out; differs after a reconnect that swaps the socket).
     let socket_id = socket.id();
-    let my_id_changed = socket_id.is_some_and(|id| Some(id) != net.my_id);
-    if my_id_changed {
+    if socket_id.is_some_and(|id| Some(id) != net.my_id) {
+        if net.my_id.is_some() {
+            // New identity: peers see the old id leave. Start over as a joiner
+            // (we keep the document, so we stay eligible for promotion).
+            net.host = None;
+            net.unhosted_since = Some(now);
+        }
         net.my_id = socket_id;
     }
-    if peers_changed || my_id_changed {
-        net.refresh_sorted();
-    }
-    if let Some(my_id) = net.my_id
-        && (peers_changed || my_id_changed)
-    {
-        let new_host_is_me = net.sorted_all().first() == Some(&my_id);
-        let promoted = new_host_is_me && !net.is_host;
-        if promoted {
-            // A freshly promoted host must resume sequencing where the previous
-            // host left off; otherwise it would re-issue seqs that the dedup
-            // (`last_applied_seq`) would silently drop — a permanent desync.
-            net.next_seq = net.last_applied_seq.map_or(0, |s| s + 1);
-            info!(
-                next_seq = net.next_seq,
-                "promoted to host after previous host disconnect; resumed sequence numbering"
-            );
-        }
-        net.is_host = new_host_is_me;
-    }
-
-    // ── Snapshot handshake on (re)connect ──────────────────────────────────
-    // Host: proactively push the current document to any peer that just
-    // connected (catches up both late joiners and reconnecting peers that
-    // missed `Sequenced` echoes during a WebRTC blip).
-    if net.is_host && !newly_connected.is_empty() {
-        let snapshot = build_snapshot(&cfg, net.last_applied_seq.unwrap_or(0));
-        for peer in &newly_connected {
-            info!(?peer, "host: pushing snapshot to (re)connected peer");
-            wire.targeted.push((
-                NetMsg::Control(Control::Snapshot(Box::new(snapshot.clone()))),
-                *peer,
-            ));
-        }
-    }
-    // Non-host: ask the host for the document (fallback in case the proactive
-    // push is lost). Retried by `retry_snapshot_request` until applied.
-    if !net.is_host && !newly_connected.is_empty() && !net.snapshot_applied {
-        net.needs_snapshot = true;
-        net.snapshot_retry_timer = 0.0;
-        if let Some(host) = net.host_id() {
-            wire.targeted
-                .push((NetMsg::Control(Control::RequestSnapshot), host));
-        }
-    }
-
-    // ── Receive + decode ───────────────────────────────────────────────────
-    let reliable: Vec<(PeerId, Box<[u8]>)> = socket.channel_mut(CH_RELIABLE).receive();
-    let unreliable: Vec<(PeerId, Box<[u8]>)> = socket.channel_mut(CH_UNRELIABLE).receive();
-    let is_host = net.is_host;
-
-    // Host loopback: events the host sequenced for itself (below). They flow
-    // through the identical apply path as remote `Sequenced` events so every
-    // peer — host included — observes the same ordered stream.
-    let loopback: Vec<(PeerId, NetMsg)> = if let Some(my_id) = net.my_id {
-        incoming
-            .loopback
-            .drain(..)
-            .map(|msg| (my_id, msg))
-            .collect()
-    } else {
-        incoming.loopback.clear();
-        Vec::new()
+    let Some(my_id) = net.my_id else {
+        // Nothing can be addressed until we have an id; keep messages queued.
+        return;
     };
 
+    // ── Greet new peers ────────────────────────────────────────────────────
+    for &peer in &newly_connected {
+        wire.targeted.push((hello(&net), peer));
+        wire.targeted.push((
+            NetMsg::Ephemeral(Ephemeral::PlayerInfo {
+                name: local.name.clone(),
+                color: color_for_peer(my_id),
+            }),
+            peer,
+        ));
+        if net.is_host() {
+            info!(?peer, "host: pushing snapshot to new peer");
+            let snapshot = build_snapshot(&cfg, &net);
+            wire.targeted
+                .push((NetMsg::Control(Control::Snapshot(Box::new(snapshot))), peer));
+        }
+    }
+    // A joiner asks its host for the document as soon as the host is
+    // reachable (the host's proactive push covers the usual case).
+    if !net.is_host()
+        && let Some(host) = net.host_id()
+        && newly_connected.contains(&host)
+        && !net.has_document
+    {
+        net.needs_snapshot = true;
+        wire.targeted
+            .push((NetMsg::Control(Control::RequestSnapshot), host));
+    }
+
+    // ── Receive + dispatch ─────────────────────────────────────────────────
+    let reliable: Vec<(PeerId, Box<[u8]>)> = socket.channel_mut(CH_RELIABLE).receive();
+    let unreliable: Vec<(PeerId, Box<[u8]>)> = socket.channel_mut(CH_UNRELIABLE).receive();
     let decoded = reliable
         .into_iter()
         .chain(unreliable)
-        .filter_map(|(peer, raw)| match decode(&raw) {
-            Some(msg) => Some((peer, msg)),
-            None => {
-                warn!("unknown message, ignoring");
-                None
-            }
-        })
-        .chain(loopback);
+        .filter_map(|(peer, raw)| decode(&raw).map(|msg| (peer, msg)));
 
     for (peer, msg) in decoded {
+        // Ignore peers speaking another protocol version (logged on Hello).
+        if net.peer_info(peer).is_some_and(|i| !i.protocol_ok) {
+            continue;
+        }
         match msg {
-            NetMsg::Game(edit) => {
-                if !is_host {
-                    // Not the host — re-forward to whoever we currently consider
-                    // host (transient election disagreement right after a peer
-                    // change). If no host is known yet, bounce it back onto our
-                    // own pending buffer for retry.
-                    match net.host_id() {
-                        Some(host) => {
-                            wire.targeted.push((NetMsg::Game(edit), host));
-                        }
-                        None => {
-                            pending.0.push(edit);
-                        }
+            NetMsg::Game {
+                client,
+                local_id,
+                edit,
+            } => {
+                if !net.is_host() {
+                    // Sent to us by a peer that still thinks we host. Forward
+                    // to the host we know, if any; otherwise the sender's
+                    // pending list resends it once a host is known.
+                    if let Some(host) = net.host_id() {
+                        wire.targeted.push((
+                            NetMsg::Game {
+                                client,
+                                local_id,
+                                edit,
+                            },
+                            host,
+                        ));
                     }
                     continue;
                 }
+                let Some(key) = net.host else { continue };
                 let seq = net.next_seq;
-                net.next_seq += 1;
-                let sequenced = NetMsg::Sequenced { seq, edit };
-                wire.broadcast.push(sequenced.clone());
-                // Echo to our own loopback so the host applies its own sequenced
-                // events through the same path as everyone else (next frame).
-                incoming.loopback.push(sequenced);
+                net.next_seq = net.next_seq.wrapping_add(1);
+                net.last_applied_seq = Some(seq);
+                wire.broadcast.push(NetMsg::Sequenced {
+                    epoch: key.epoch,
+                    seq,
+                    client,
+                    local_id,
+                    edit: edit.clone(),
+                });
+                // The host applies foreign edits at sequencing time.
+                if client != net.client {
+                    apply_foreign(
+                        &mut cfg,
+                        &mut preview,
+                        &mut history,
+                        &net,
+                        &edit,
+                        now,
+                        &mut last_foreign_push,
+                    );
+                }
             }
-            NetMsg::Sequenced { seq, edit } => {
-                // Apply each seq exactly once. The reliable channel is ordered
-                // and `seq` is monotonic, so any seq at or below the highest
-                // applied is a duplicate — drop it.
+
+            NetMsg::Sequenced {
+                epoch,
+                seq,
+                client,
+                local_id,
+                edit,
+            } => {
+                // Our own broadcasts never come back; anything sequenced by a
+                // higher epoch than ours means we were superseded as host.
+                let from_current_host = net
+                    .host
+                    .is_some_and(|k| k.host() == peer && k.epoch == epoch);
+                if !from_current_host {
+                    if net.host.is_none_or(|k| epoch > k.epoch) {
+                        // A host we have not heard about yet (its snapshot or
+                        // Hello is still in flight). Follow it provisionally
+                        // with the weakest possible key so its real key wins
+                        // ties, and fetch its document.
+                        adopt_host(&mut net, HostKey::new(epoch, u64::MAX, peer), &mut wire);
+                        net.needs_snapshot = true;
+                        wire.targeted
+                            .push((NetMsg::Control(Control::RequestSnapshot), peer));
+                    } else {
+                        debug!(?peer, epoch, "dropping Sequenced from a stale host");
+                        continue;
+                    }
+                }
+                // Each seq is applied at most once; the channel is ordered, so
+                // anything at or below the watermark is a duplicate.
                 if net.last_applied_seq.is_some_and(|last| seq <= last) {
                     continue;
                 }
+                if net
+                    .last_applied_seq
+                    .is_some_and(|last| seq > last.wrapping_add(1))
+                {
+                    warn!(seq, "gap in sequenced edits; requesting a snapshot");
+                    net.needs_snapshot = true;
+                }
                 net.last_applied_seq = Some(seq);
-                apply_edit(&mut cfg, &edit);
-                cfg.request_rebuild();
-                history.push(cfg.clone());
+
+                if client == net.client {
+                    // Our own edit coming back. If it is still pending we have
+                    // already applied it (and everything older is now acked).
+                    // If it is older than everything pending, a newer edit of
+                    // ours supersedes it. Only a duplicate sequencing of an
+                    // already-acked edit (a resend after a host change) needs
+                    // applying, to match what every other peer just did.
+                    if let Some(pos) = net.pending_own.iter().position(|(id, _)| *id == local_id) {
+                        net.pending_own.drain(..=pos);
+                        continue;
+                    }
+                    if net
+                        .pending_own
+                        .first()
+                        .is_some_and(|(first, _)| *first > local_id)
+                    {
+                        continue;
+                    }
+                }
+                apply_foreign(
+                    &mut cfg,
+                    &mut preview,
+                    &mut history,
+                    &net,
+                    &edit,
+                    now,
+                    &mut last_foreign_push,
+                );
             }
+
             NetMsg::Ephemeral(eph) => {
                 incoming.ephemeral.push((eph, peer));
             }
+
+            NetMsg::Control(Control::Hello {
+                protocol,
+                client,
+                epoch,
+                claimed_at_ms,
+                epoch_host,
+                has_document,
+            }) => {
+                let protocol_ok = protocol == PROTOCOL_VERSION;
+                if !protocol_ok {
+                    warn!(
+                        ?peer,
+                        theirs = protocol,
+                        ours = PROTOCOL_VERSION,
+                        "peer speaks another protocol version; ignoring it"
+                    );
+                }
+                net.set_peer_info(
+                    peer,
+                    PeerInfo {
+                        client,
+                        has_document,
+                        protocol_ok,
+                    },
+                );
+                if !protocol_ok {
+                    continue;
+                }
+                net.max_epoch_seen = net.max_epoch_seen.max(epoch);
+                if let Some(host) = epoch_host {
+                    let key = HostKey::new(epoch, claimed_at_ms, peer_from_bytes(host));
+                    if net.host.is_none_or(|cur| key > cur) {
+                        adopt_host(&mut net, key, &mut wire);
+                        if !net.is_host() && !net.has_document {
+                            net.needs_snapshot = true;
+                            if net.peers.contains(&key.host()) {
+                                wire.targeted
+                                    .push((NetMsg::Control(Control::RequestSnapshot), key.host()));
+                            }
+                        }
+                    }
+                }
+            }
+
             NetMsg::Control(Control::RequestSnapshot) => {
-                if !is_host {
+                if !net.is_host() {
                     continue;
                 }
                 info!(?peer, "host: peer requested snapshot");
-                let snapshot = build_snapshot(&cfg, net.last_applied_seq.unwrap_or(0));
+                let snapshot = build_snapshot(&cfg, &net);
                 wire.targeted
                     .push((NetMsg::Control(Control::Snapshot(Box::new(snapshot))), peer));
             }
-            NetMsg::Control(Control::SnapshotReceived) => {
-                net.snapshot_pending.retain(|&p| p != peer);
-            }
+
             NetMsg::Control(Control::Snapshot(snapshot)) => {
-                // Accept only if it carries state ahead of what we have.
-                let ahead = match net.last_applied_seq {
-                    Some(applied) => snapshot.last_seq > applied,
-                    None => true,
-                };
-                if !ahead {
-                    info!("ignoring snapshot that is not ahead of local state");
+                let key = HostKey::new(snapshot.epoch, snapshot.claimed_at_ms, peer);
+                // Accept from the host we follow (a refresh) or from a host
+                // with a stronger claim (a promotion, or a real key replacing
+                // a provisional one).
+                let accept = net
+                    .host
+                    .is_none_or(|cur| key >= cur || (cur.host() == peer && cur.epoch == key.epoch));
+                if !accept {
+                    info!(?peer, "ignoring snapshot from a stale host");
                     continue;
                 }
-                net.snapshot_applied = true;
+                let was_host = net.is_host();
+                adopt_host(&mut net, key, &mut wire);
+                net.last_applied_seq = snapshot.last_seq;
                 net.needs_snapshot = false;
                 net.snapshot_retry_timer = 0.0;
+                let first_document = !net.has_document;
+                net.has_document = true;
                 info!(
-                    last_seq = snapshot.last_seq,
-                    "received snapshot, installing"
+                    ?peer,
+                    epoch = snapshot.epoch,
+                    last_seq = ?snapshot.last_seq,
+                    was_host,
+                    "installing snapshot"
                 );
                 install_snapshot(&mut cfg, &snapshot);
+                // Whatever we were previewing is gone with the old tree.
+                preview.0 = None;
+                // Keep our unacknowledged edits on top and hand them to this
+                // host; duplicates are harmless (whole-state edits).
+                for (local_id, edit) in &net.pending_own {
+                    apply_edit(&mut cfg, edit);
+                    wire.targeted.push((
+                        NetMsg::Game {
+                            client: net.client,
+                            local_id: *local_id,
+                            edit: edit.clone(),
+                        },
+                        peer,
+                    ));
+                }
+                cfg.sanitize_selection();
                 cfg.request_rebuild();
                 history.push(cfg.clone());
-                net.last_applied_seq = Some(snapshot.last_seq);
-                if let Some(host) = net.host_id() {
-                    wire.targeted
-                        .push((NetMsg::Control(Control::SnapshotReceived), host));
+                if first_document {
+                    // We are now eligible to take over: tell everyone.
+                    let msg = hello(&net);
+                    for &p in &net.peers {
+                        wire.targeted.push((msg.clone(), p));
+                    }
                 }
             }
         }
     }
 }
 
-/// Re-request the snapshot every 2s until it arrives (covers a lost first push).
-fn retry_snapshot_request(time: Res<Time>, mut net: ResMut<NetState>, mut wire: ResMut<WirePending>) {
-    if !net.needs_snapshot || net.snapshot_applied {
+/// Follow `key` as the current host. Resets the per-epoch watermark when the
+/// epoch or host actually changes.
+fn adopt_host(net: &mut NetState, key: HostKey, wire: &mut WirePending) {
+    let changed = net
+        .host
+        .is_none_or(|cur| cur.host() != key.host() || cur.epoch != key.epoch);
+    let was_host = net.is_host();
+    net.host = Some(key);
+    net.max_epoch_seen = net.max_epoch_seen.max(key.epoch);
+    net.unhosted_since = None;
+    if changed {
+        net.last_applied_seq = None;
+        if was_host && !net.is_host() {
+            info!(host = ?key.host(), epoch = key.epoch, "demoted; following the new host");
+            // Our sequencing role ended; from now on our edits are predictions.
+            let msg = hello(net);
+            for &p in &net.peers {
+                wire.targeted.push((msg.clone(), p));
+            }
+        } else if !net.is_host() {
+            info!(host = ?key.host(), epoch = key.epoch, "following host");
+        }
+    }
+}
+
+/// Apply an edit from another peer, then re-apply our own unacknowledged
+/// edits on top (prediction rebase), mirroring both into the hover preview's
+/// saved copy so ending a hover cannot undo a remote change.
+fn apply_foreign(
+    cfg: &mut FlexConfig,
+    preview: &mut HoverPreview,
+    history: &mut UndoHistory,
+    net: &NetState,
+    edit: &LayoutEdit,
+    now: f64,
+    last_history_push: &mut f64,
+) {
+    apply_edit(cfg, edit);
+    for (_, own) in &net.pending_own {
+        apply_edit(cfg, own);
+    }
+    if let Some(saved) = preview.0.as_mut() {
+        apply_edit(saved, edit);
+        for (_, own) in &net.pending_own {
+            apply_edit(saved, own);
+        }
+    }
+    cfg.sanitize_selection();
+    cfg.request_rebuild();
+    if now - *last_history_push >= FOREIGN_HISTORY_COALESCE_SECS {
+        history.push(cfg.clone());
+    } else {
+        history.replace_top(cfg.clone());
+    }
+    *last_history_push = now;
+}
+
+/// Our membership announcement.
+fn hello(net: &NetState) -> NetMsg {
+    NetMsg::Control(Control::Hello {
+        protocol: PROTOCOL_VERSION,
+        client: net.client,
+        epoch: net.host.map_or(0, |k| k.epoch),
+        claimed_at_ms: net.host.map_or(0, |k| k.claimed_at_ms()),
+        epoch_host: net.host.map(|k| peer_to_bytes(k.host())),
+        has_document: net.has_document,
+    })
+}
+
+// ── Host election ────────────────────────────────────────────────────────────
+
+/// While nobody hosts, the most senior eligible peer claims hosting after a
+/// grace period: 5 s when alone (a slow WebRTC handshake to an existing room
+/// must not look like an empty room), 1 s after a host leaves.
+fn elect_host(
+    time: Res<Time>,
+    mut net: ResMut<NetState>,
+    mut wire: ResMut<WirePending>,
+    cfg: Res<FlexConfig>,
+) {
+    let Some(my_id) = net.my_id else { return };
+    if net.host.is_some() {
+        net.unhosted_since = None;
+        return;
+    }
+    let now = time.elapsed_secs_f64();
+    let since = *net.unhosted_since.get_or_insert(now);
+    let grace = if net.peers.is_empty() {
+        CLAIM_GRACE_SECS
+    } else {
+        PROMOTE_GRACE_SECS
+    };
+    if now - since < grace || net.election_winner() != Some(my_id) {
+        return;
+    }
+
+    let epoch = net.max_epoch_seen.wrapping_add(1);
+    let key = HostKey::new(epoch, unix_ms(), my_id);
+    net.host = Some(key);
+    net.max_epoch_seen = epoch;
+    net.has_document = true;
+    net.next_seq = 0;
+    net.last_applied_seq = None;
+    net.needs_snapshot = false;
+    // Everything we did so far is the document now.
+    net.pending_own.clear();
+    net.unhosted_since = None;
+    if net.peers.is_empty() {
+        info!(epoch, "hosting a new room");
+    } else {
+        info!(epoch, peers = net.peers.len(), "promoted to host");
+    }
+    let announce = hello(&net);
+    let snapshot = NetMsg::Control(Control::Snapshot(Box::new(build_snapshot(&cfg, &net))));
+    for &peer in &net.peers {
+        wire.targeted.push((announce.clone(), peer));
+        wire.targeted.push((snapshot.clone(), peer));
+    }
+}
+
+/// Re-request the snapshot every 2 s until it arrives (covers a lost push).
+fn retry_snapshot_request(
+    time: Res<Time>,
+    mut net: ResMut<NetState>,
+    mut wire: ResMut<WirePending>,
+) {
+    if !net.needs_snapshot || net.is_host() {
+        return;
+    }
+    let Some(host) = net.host_id() else { return };
+    if !net.peers.contains(&host) {
         return;
     }
     net.snapshot_retry_timer += time.delta_secs_f64();
     if net.snapshot_retry_timer > 2.0 {
         net.snapshot_retry_timer = 0.0;
-        if let Some(host) = net.host_id() {
-            info!("retrying snapshot request");
-            wire.targeted
-                .push((NetMsg::Control(Control::RequestSnapshot), host));
-        }
+        info!("retrying snapshot request");
+        wire.targeted
+            .push((NetMsg::Control(Control::RequestSnapshot), host));
     }
 }
 
-/// Announce our identity to each peer exactly once (targeted, reliable).
-fn send_player_info_on_connect(
-    net: Res<NetState>,
-    local: Res<LocalPlayer>,
-    mut wire: ResMut<WirePending>,
-    mut notified: Local<Vec<PeerId>>,
-) {
-    let color = net.my_id.map_or([0xFFu8, 0xFF, 0xFF], color_for_peer);
-    for &peer in &net.peers {
-        if !notified.contains(&peer) {
-            notified.push(peer);
-            wire.targeted.push((
-                NetMsg::Ephemeral(Ephemeral::PlayerInfo {
-                    name: local.name.clone(),
-                    color,
-                }),
-                peer,
-            ));
-        }
-    }
-}
+// ── Presence ─────────────────────────────────────────────────────────────────
 
 /// Move ephemeral messages (cursors, selection, identity) into [`RemotePeers`].
 fn apply_ephemeral(
@@ -387,134 +645,89 @@ fn prune_remote_peers(net: Res<NetState>, mut remote: ResMut<RemotePeers>) {
 
 // ── Flush outbound ───────────────────────────────────────────────────────────
 
-/// Route staged messages onto the wire. Local edits ([`PendingEdits`]) wrap as
-/// [`NetMsg::Game`]: the host loops them back through its own sequencing arm,
-/// a guest sends them targeted to the host. Wire-level broadcast/targeted
-/// (sequenced echoes, control replies) are sent directly. Failed sends are
-/// retained for retry next frame.
+/// Route this frame's local edits and staged wire messages onto the socket.
+/// Sends are best effort: the reliable channel only fails once a peer is gone,
+/// and whole-state edits make any later edit a full repair.
 fn flush_pending(
     mut pending: ResMut<PendingEdits>,
     mut wire: ResMut<WirePending>,
-    mut incoming: ResMut<PendingIncoming>,
-    net: Res<NetState>,
+    mut net: ResMut<NetState>,
     mut socket: Option<ResMut<MatchboxSocket>>,
 ) {
-    let i_sequence = net.is_host || net.peers.is_empty();
-    let host = net.host_id();
-
-    // Local edits → NetMsg::Game, routed by role.
     let local_edits = std::mem::take(&mut pending.0);
-    for edit in local_edits {
-        if i_sequence {
-            // The sequencer's own events loop back unsequenced so handle_socket
-            // assigns their seq through the same arm as guest submissions — a
-            // single serialization point.
-            incoming.loopback.push(NetMsg::Game(edit));
-        } else {
-            let submission = NetMsg::Game(edit);
-            let sent = match (host, enc_msg(&submission), socket.as_deref_mut()) {
-                (Some(host), Some(encoded), Some(socket)) => socket
-                    .channel_mut(CH_RELIABLE)
-                    .try_send(encoded, host)
-                    .inspect_err(|e| warn!(error = %e, "submit to host failed; will retry"))
-                    .is_ok(),
-                _ => false,
-            };
-            if !sent {
-                pending.0.push(match submission {
-                    NetMsg::Game(e) => e,
-                    other => unreachable!("submission was Game, got {other:?}"),
+    if !net.peers.is_empty() {
+        for edit in local_edits {
+            let local_id = net.next_local_id();
+            if let Some(key) = net.host.filter(|_| net.is_host()) {
+                let seq = net.next_seq;
+                net.next_seq = net.next_seq.wrapping_add(1);
+                net.last_applied_seq = Some(seq);
+                wire.broadcast.push(NetMsg::Sequenced {
+                    epoch: key.epoch,
+                    seq,
+                    client: net.client,
+                    local_id,
+                    edit,
                 });
+            } else {
+                if let Some(host) = net.host_id() {
+                    wire.targeted.push((
+                        NetMsg::Game {
+                            client: net.client,
+                            local_id,
+                            edit: edit.clone(),
+                        },
+                        host,
+                    ));
+                }
+                // Kept until the host echoes it (or a newer edit of ours is
+                // acked); resent to whichever host sends us a snapshot.
+                net.pending_own.push((local_id, edit));
+                if net.pending_own.len() > MAX_PENDING_OWN {
+                    let excess = net.pending_own.len() - MAX_PENDING_OWN;
+                    net.pending_own.drain(..excess);
+                }
             }
         }
     }
+    // Alone: edits are local only, and nothing is worth queueing.
 
-    // Wire-level targeted (reliable).
-    let targeted = std::mem::take(&mut wire.targeted);
-    let mut retained_targeted: Vec<(NetMsg, PeerId)> = Vec::new();
-    for (msg, peer) in targeted {
-        let sent = match (enc_msg(&msg), socket.as_deref_mut()) {
-            (Some(encoded), Some(socket)) => socket
-                .channel_mut(CH_RELIABLE)
-                .try_send(encoded, peer)
-                .inspect_err(|e| warn!(error = %e, "reliable targeted send failed; will retry"))
-                .is_ok(),
-            _ => false,
-        };
-        if !sent {
-            retained_targeted.push((msg, peer));
+    let Some(socket) = socket.as_deref_mut() else {
+        wire.targeted.clear();
+        wire.broadcast.clear();
+        return;
+    };
+    let channel = socket.channel_mut(CH_RELIABLE);
+    for (msg, peer) in wire.targeted.drain(..) {
+        if !net.peers.contains(&peer) {
+            continue;
+        }
+        if let Some(encoded) = enc_msg(&msg)
+            && let Err(e) = channel.try_send(encoded, peer)
+        {
+            warn!(?peer, error = %e, "reliable send failed; dropping message");
         }
     }
-    wire.targeted = retained_targeted;
-
-    // Wire-level broadcast (reliable).
-    let broadcast = std::mem::take(&mut wire.broadcast);
-    let mut retained_broadcast: Vec<NetMsg> = Vec::new();
-    for msg in broadcast {
-        if net.peers.is_empty() {
-            // No peers yet — retain non-sequenced; drop already-applied echoes.
-            if !matches!(msg, NetMsg::Sequenced { .. }) {
-                retained_broadcast.push(msg);
-            }
-            continue;
-        }
-        let Some(socket) = socket.as_deref_mut() else {
-            retained_broadcast.push(msg);
-            continue;
-        };
+    for msg in wire.broadcast.drain(..) {
         let Some(encoded) = enc_msg(&msg) else {
-            retained_broadcast.push(msg);
             continue;
         };
-        let channel = socket.channel_mut(CH_RELIABLE);
-        let mut all_ok = true;
         for &peer in &net.peers {
             if let Err(e) = channel.try_send(encoded.clone(), peer) {
-                warn!(error = %e, "reliable broadcast send failed; will retry");
-                all_ok = false;
+                warn!(?peer, error = %e, "reliable broadcast failed; dropping message");
             }
         }
-        if !all_ok {
-            retained_broadcast.push(msg);
-        }
     }
-    wire.broadcast = retained_broadcast;
 }
 
 // ── Edit application ─────────────────────────────────────────────────────────
 
-/// Apply a [`LayoutEdit`] to the document in place. A stale-path op (e.g. a
-/// concurrent delete invalidated it) is logged and skipped — consistency is
-/// still guaranteed because every peer applies the same host-ordered stream, so
-/// all peers skip the identical op and stay in sync.
-fn apply_edit(cfg: &mut FlexConfig, edit: &LayoutEdit) {
+/// Apply a [`LayoutEdit`] to the document in place. Both variants replace
+/// whole state, so applying is idempotent and order alone decides the result.
+pub fn apply_edit(cfg: &mut FlexConfig, edit: &LayoutEdit) {
     match edit {
         LayoutEdit::ReplaceRoot(node) => {
-            cfg.root = node.clone();
-        }
-        LayoutEdit::UpdateNode { path, node } => {
-            if let Some(n) = cfg.root.get_mut(path) {
-                *n = node.clone();
-            } else {
-                warn!(?path, "UpdateNode: path not found, skipping");
-            }
-        }
-        LayoutEdit::AddChild { parent_path, child } => {
-            if let Some(p) = cfg.root.get_mut(parent_path) {
-                p.children.push(child.clone());
-            } else {
-                warn!(?parent_path, "AddChild: parent not found, skipping");
-            }
-        }
-        LayoutEdit::RemoveNode { path } => {
-            remove_node(&mut cfg.root, path);
-        }
-        LayoutEdit::MoveNode {
-            src_path,
-            dst_parent,
-            dst_index,
-        } => {
-            move_node(&mut cfg.root, src_path, dst_parent, *dst_index);
+            cfg.root = (**node).clone();
         }
         LayoutEdit::UpdateSettings {
             bg_mode,
@@ -534,72 +747,10 @@ fn apply_edit(cfg: &mut FlexConfig, edit: &LayoutEdit) {
     }
 }
 
-fn remove_node(root: &mut flexplore_core::config::NodeConfig, path: &[usize]) {
-    let Some((last, parent_path)) = path.split_last() else {
-        warn!("RemoveNode: cannot remove root");
-        return;
-    };
-    if let Some(parent) = root.get_mut(parent_path) {
-        if *last < parent.children.len() {
-            parent.children.remove(*last);
-        } else {
-            warn!(?path, "RemoveNode: index out of range, skipping");
-        }
-    } else {
-        warn!(?parent_path, "RemoveNode: parent not found, skipping");
-    }
-}
-
-#[allow(clippy::ptr_arg)]
-fn move_node(
-    root: &mut flexplore_core::config::NodeConfig,
-    src_path: &[usize],
-    dst_parent: &[usize],
-    dst_index: usize,
-) {
-    if src_path.is_empty() {
-        warn!("MoveNode: cannot move root");
-        return;
-    }
-    // Guard: refuse to move a node into its own descendant.
-    if dst_parent.starts_with(src_path) {
-        warn!("MoveNode: destination is inside source, skipping");
-        return;
-    }
-    let Some((src_last, src_parent_path)) = src_path.split_last() else {
-        return;
-    };
-    let node = {
-        let Some(src_parent) = root.get_mut(src_parent_path) else {
-            warn!(?src_parent_path, "MoveNode: source parent not found, skipping");
-            return;
-        };
-        if *src_last >= src_parent.children.len() {
-            warn!(?src_path, "MoveNode: source index out of range, skipping");
-            return;
-        }
-        src_parent.children.remove(*src_last)
-    };
-    // Adjust the destination if it was within the same parent after the removal.
-    let mut adjusted_dst = dst_parent.to_vec();
-    if adjusted_dst.len() >= src_parent_path.len()
-        && adjusted_dst[..src_parent_path.len()] == *src_parent_path
-        && adjusted_dst.len() > src_parent_path.len()
-        && adjusted_dst[src_parent_path.len()] > *src_last
-    {
-        adjusted_dst[src_parent_path.len()] -= 1;
-    }
-    let Some(dst_p) = root.get_mut(&adjusted_dst) else {
-        warn!(?adjusted_dst, "MoveNode: destination parent not found, skipping");
-        return;
-    };
-    let idx = dst_index.min(dst_p.children.len());
-    dst_p.children.insert(idx, node);
-}
-
 // ── Snapshot helpers ─────────────────────────────────────────────────────────
 
-fn build_snapshot(cfg: &FlexConfig, last_seq: u32) -> FlexSnapshot {
+fn build_snapshot(cfg: &FlexConfig, net: &NetState) -> FlexSnapshot {
+    let key = net.host.expect("only the host builds snapshots");
     FlexSnapshot {
         root: cfg.root.clone(),
         bg_mode: cfg.bg_mode,
@@ -608,7 +759,9 @@ fn build_snapshot(cfg: &FlexConfig, last_seq: u32) -> FlexSnapshot {
         art_depth: cfg.art_depth,
         theme: cfg.theme,
         palette: cfg.palette,
-        last_seq,
+        epoch: key.epoch,
+        claimed_at_ms: key.claimed_at_ms(),
+        last_seq: net.last_applied_seq,
     }
 }
 

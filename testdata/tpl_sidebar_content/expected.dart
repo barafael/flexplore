@@ -51,8 +51,7 @@ Widget build(BuildContext context) {
               ),
             ],
           )
-        )
-        ,
+        ),
         Expanded(
           flex: 1,
           child:           Container(

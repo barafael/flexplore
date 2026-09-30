@@ -46,7 +46,7 @@ fn FlexLayout() -> Element {
                 box_sizing: "border-box",
                 color: "rgba(13, 13, 26, 0.85)",
                 font_size: "26px",
-                "25%"
+                "25%-b"
             }
             div {
                 display: "flex",
@@ -63,7 +63,7 @@ fn FlexLayout() -> Element {
                 box_sizing: "border-box",
                 color: "rgba(13, 13, 26, 0.85)",
                 font_size: "26px",
-                "25%"
+                "25%-c"
             }
         }
     }

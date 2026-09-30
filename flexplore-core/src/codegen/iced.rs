@@ -3,24 +3,11 @@ use std::fmt::Write;
 use crate::config::*;
 use anyhow::Result;
 
-use crate::art::palette_color;
+use super::common::{
+    grid_tracks, is_full_percent, rust_string_literal, sides_short,
+    sorted_children_with_leaf_starts, take_leaf_color,
+};
 use crate::config::{ColorPalette, NodeConfig, ValueConfig};
-
-fn count_leaves(node: &NodeConfig) -> usize {
-    if node.children.is_empty() {
-        1
-    } else {
-        node.children.iter().map(count_leaves).sum()
-    }
-}
-
-fn is_zero_px(v: &ValueConfig) -> bool {
-    matches!(v, ValueConfig::Px(n) if *n == 0.0)
-}
-
-fn is_full_percent(v: &ValueConfig) -> bool {
-    matches!(v, ValueConfig::Percent(n) if *n >= 100.0)
-}
 
 fn iced_length(v: &ValueConfig) -> String {
     match v {
@@ -28,7 +15,8 @@ fn iced_length(v: &ValueConfig) -> String {
         ValueConfig::Px(n) => format!("Length::Fixed({n:.1})"),
         ValueConfig::Percent(n) if (*n - 100.0).abs() < 0.01 => "Length::Fill".into(),
         ValueConfig::Percent(n) => {
-            format!("Length::FillPortion({}) /* {n:.0}% */", *n as u16)
+            // FillPortion(0) is meaningless; anything under 1% still gets a share.
+            format!("Length::FillPortion({}) /* {n:.0}% */", (*n as u16).max(1))
         }
         ValueConfig::Vw(n) => {
             format!("Length::Fixed({n:.1}) /* {n:.0}vw — no viewport units in Iced */")
@@ -36,6 +24,15 @@ fn iced_length(v: &ValueConfig) -> String {
         ValueConfig::Vh(n) => {
             format!("Length::Fixed({n:.1}) /* {n:.0}vh — no viewport units in Iced */")
         }
+    }
+}
+
+/// `Length::Fill`, or `FillPortion(n)` when flex-grow is above 1.
+fn iced_grow_length(flex_grow: f32) -> String {
+    if flex_grow > 1.0 {
+        format!("Length::FillPortion({})", flex_grow as u16)
+    } else {
+        "Length::Fill".into()
     }
 }
 
@@ -111,11 +108,103 @@ fn space_widget(is_row: bool) -> &'static str {
     }
 }
 
+/// The `border: Border { ... }` fragment for a `.style()` closure comment.
+fn iced_border_fields(node: &NodeConfig) -> String {
+    let mut s = String::new();
+    if !node.border_radius.is_zero() {
+        let c = &node.border_radius;
+        if c.is_uniform() {
+            let _ = write!(s, "radius: {:.1}.into(), ", c.top_left);
+        } else {
+            let _ = write!(
+                s,
+                "radius: [{:.1}, {:.1}, {:.1}, {:.1}].into(), ",
+                c.top_left, c.top_right, c.bottom_right, c.bottom_left
+            );
+        }
+    }
+    if !node.border_width.is_zero() {
+        let w = node.border_width.first().num().unwrap_or(0.0);
+        let _ = write!(s, "width: {w:.1}, color: Color::WHITE, ");
+    }
+    s
+}
+
+/// `// NOTE:` comments for properties Iced cannot express, appended after
+/// the widget expression. Leaves and containers share the same order; only
+/// the border advice differs (a leaf already is a `container`).
+fn emit_iced_unsupported_notes(
+    buf: &mut String,
+    node: &NodeConfig,
+    prefix: &str,
+    is_leaf: bool,
+) -> Result<()> {
+    let mut notes: Vec<String> = Vec::new();
+    if !node.margin.is_zero() {
+        notes.push(format!(
+            "margin: {} — no Iced equivalent",
+            sides_short(&node.margin)
+        ));
+    }
+    if !node.border_width.is_zero() || !node.border_radius.is_zero() {
+        let how = if is_leaf {
+            "apply via .style("
+        } else {
+            "wrap in container().style("
+        };
+        notes.push(format!(
+            "border — {how}|_| container::Style {{ border: Border {{ {}..Default::default() }}, ..Default::default() }})",
+            iced_border_fields(node)
+        ));
+    }
+    if node.flex_shrink != 1.0 {
+        notes.push(format!(
+            "flex-shrink: {} — no Iced equivalent",
+            format_float(node.flex_shrink)
+        ));
+    }
+    if !matches!(node.flex_basis, ValueConfig::Auto) {
+        notes.push(format!(
+            "flex-basis: {} — no Iced equivalent",
+            node.flex_basis.display_short()
+        ));
+    }
+    if node.align_self != AlignSelf::Auto {
+        notes.push(format!(
+            "align-self: {:?} — no Iced equivalent",
+            node.align_self
+        ));
+    }
+    if !node.visible {
+        notes.push(
+            "hidden — Iced has no visibility modifier; conditionally include this widget".into(),
+        );
+    }
+    if node.order != 0 {
+        notes.push(format!(
+            "order: {} — children pre-sorted in source",
+            node.order
+        ));
+    }
+    for note in notes {
+        writeln!(buf)?;
+        write!(buf, "{prefix}// NOTE: {note}")?;
+    }
+    Ok(())
+}
+
 pub fn emit_iced(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
     let mut buf = String::from("fn view(&self) -> iced::Element<'_, Message> {\n");
     emit_iced_node(&mut buf, root, 1, &mut 0, palette, true, false)?;
     buf.push_str("\n    .into()\n}\n");
     Ok(buf)
+}
+
+/// Layout context a node inherits from its parent.
+#[derive(Clone, Copy)]
+struct Parent {
+    is_row: bool,
+    stretch: bool,
 }
 
 fn emit_iced_node(
@@ -127,632 +216,401 @@ fn emit_iced_node(
     parent_is_row: bool,
     parent_stretch: bool,
 ) -> Result<()> {
-    let pad = "    ".repeat(depth);
-    let is_leaf = node.children.is_empty();
-
-    if is_leaf {
-        let (r, g, b) = palette_color(palette, *leaf_idx);
-        *leaf_idx += 1;
-
-        writeln!(
-            buf,
-            "{pad}container(text({:?}).size(26).color(Color::from_rgba(0.05, 0.05, 0.1, 0.85)))",
-            node.label
-        )?;
-
-        // Determine effective width: flex-grow or stretch may override Auto
-        let grow_overrides_width =
-            node.flex_grow > 0.0 && parent_is_row && matches!(node.width, ValueConfig::Auto);
-        let stretch_overrides_width =
-            parent_stretch && !parent_is_row && matches!(node.width, ValueConfig::Auto);
-        let grow_overrides_height =
-            node.flex_grow > 0.0 && !parent_is_row && matches!(node.height, ValueConfig::Auto);
-        let stretch_overrides_height =
-            parent_stretch && parent_is_row && matches!(node.height, ValueConfig::Auto);
-
-        // Width
-        if grow_overrides_width {
-            let fill = if node.flex_grow > 1.0 {
-                format!("Length::FillPortion({})", node.flex_grow as u16)
-            } else {
-                "Length::Fill".into()
-            };
-            writeln!(buf, "{pad}    .width({fill})")?;
-        } else if stretch_overrides_width {
-            writeln!(buf, "{pad}    .width(Length::Fill)")?;
-        } else {
-            writeln!(buf, "{pad}    .width({})", iced_length(&node.width))?;
-        }
-
-        // Height
-        if grow_overrides_height {
-            let fill = if node.flex_grow > 1.0 {
-                format!("Length::FillPortion({})", node.flex_grow as u16)
-            } else {
-                "Length::Fill".into()
-            };
-            writeln!(buf, "{pad}    .height({fill})")?;
-        } else if stretch_overrides_height {
-            writeln!(buf, "{pad}    .height(Length::Fill)")?;
-        } else {
-            writeln!(buf, "{pad}    .height({})", iced_length(&node.height))?;
-        }
-
-        // Min/max constraints
-        if !matches!(node.min_width, ValueConfig::Auto) && !is_zero_px(&node.min_width) {
-            writeln!(
-                buf,
-                "{pad}    // NOTE: min-width: {} — no Iced equivalent",
-                node.min_width.display_short()
-            )?;
-        }
-        if !matches!(node.min_height, ValueConfig::Auto) && !is_zero_px(&node.min_height) {
-            writeln!(
-                buf,
-                "{pad}    // NOTE: min-height: {} — no Iced equivalent",
-                node.min_height.display_short()
-            )?;
-        }
-        if !matches!(node.max_width, ValueConfig::Auto) {
-            writeln!(
-                buf,
-                "{pad}    .max_width({})",
-                match &node.max_width {
-                    ValueConfig::Px(n) => format!("{n:.1}"),
-                    other => format!(
-                        "{} /* {} — approximated */",
-                        other.num().unwrap_or(0.0),
-                        other.display_short()
-                    ),
-                }
-            )?;
-        }
-        if !matches!(node.max_height, ValueConfig::Auto) {
-            writeln!(
-                buf,
-                "{pad}    // NOTE: max-height: {} — use Container wrapper for max_height",
-                node.max_height.display_short()
-            )?;
-        }
-
-        // Padding
-        if let Some(p) = iced_padding(&node.padding) {
-            writeln!(buf, "{pad}    .padding({p})")?;
-        }
-
-        // Center the text content
-        writeln!(buf, "{pad}    .center(Length::Fill)")?;
-
-        // Background color
-        writeln!(buf, "{pad}    .style(|_| container::Style {{")?;
-        writeln!(
-            buf,
-            "{pad}        background: Some(Color::from_rgb({r:.2}, {g:.2}, {b:.2}).into()),"
-        )?;
-        writeln!(buf, "{pad}        ..Default::default()")?;
-        write!(buf, "{pad}    }})")?;
-
-        // Margin — no Iced equivalent
-        if !node.margin.is_zero() {
-            writeln!(buf)?;
-            if node.margin.is_uniform() {
-                write!(
-                    buf,
-                    "{pad}    // NOTE: margin: {} — no Iced equivalent",
-                    node.margin.first().display_short()
-                )?;
-            } else {
-                write!(
-                    buf,
-                    "{pad}    // NOTE: margin: {}/{}/{}/{} — no Iced equivalent",
-                    node.margin.top.display_short(),
-                    node.margin.right.display_short(),
-                    node.margin.bottom.display_short(),
-                    node.margin.left.display_short()
-                )?;
-            }
-        }
-
-        // Border — via .style() closure
-        if !node.border_width.is_zero() || !node.border_radius.is_zero() {
-            writeln!(buf)?;
-            write!(
-                buf,
-                "{pad}    // NOTE: border — apply via .style(|_| container::Style {{ border: Border {{ "
-            )?;
-            if !node.border_radius.is_zero() {
-                if node.border_radius.is_uniform() {
-                    write!(buf, "radius: {:.1}.into(), ", node.border_radius.top_left)?;
-                } else {
-                    write!(
-                        buf,
-                        "radius: [{:.1}, {:.1}, {:.1}, {:.1}].into(), ",
-                        node.border_radius.top_left,
-                        node.border_radius.top_right,
-                        node.border_radius.bottom_right,
-                        node.border_radius.bottom_left
-                    )?;
-                }
-            }
-            if !node.border_width.is_zero() {
-                let w = node.border_width.first().num().unwrap_or(0.0);
-                write!(buf, "width: {w:.1}, color: Color::WHITE, ")?;
-            }
-            write!(buf, "..Default::default() }}, ..Default::default() }})")?;
-        }
-
-        // Flex-shrink — no Iced equivalent
-        if node.flex_shrink != 1.0 {
-            writeln!(buf)?;
-            write!(
-                buf,
-                "{pad}    // NOTE: flex-shrink: {} — no Iced equivalent",
-                format_float(node.flex_shrink)
-            )?;
-        }
-
-        // Flex-basis — no Iced equivalent
-        if !matches!(node.flex_basis, ValueConfig::Auto) {
-            writeln!(buf)?;
-            write!(
-                buf,
-                "{pad}    // NOTE: flex-basis: {} — no Iced equivalent",
-                node.flex_basis.display_short()
-            )?;
-        }
-
-        // Align-self — no Iced equivalent
-        if node.align_self != AlignSelf::Auto {
-            writeln!(buf)?;
-            write!(
-                buf,
-                "{pad}    // NOTE: align-self: {:?} — no Iced equivalent",
-                node.align_self
-            )?;
-        }
-
-        // Visibility
-        if !node.visible {
-            writeln!(buf)?;
-            write!(
-                buf,
-                "{pad}    // NOTE: hidden — Iced has no visibility modifier; conditionally include this widget"
-            )?;
-        }
-
-        // Order
-        if node.order != 0 {
-            writeln!(buf)?;
-            write!(
-                buf,
-                "{pad}    // NOTE: order: {} — children pre-sorted in source",
-                node.order
-            )?;
-        }
+    let parent = Parent {
+        is_row: parent_is_row,
+        stretch: parent_stretch,
+    };
+    if node.children.is_empty() {
+        emit_iced_leaf(buf, node, depth, leaf_idx, palette, parent)
     } else {
-        // ── Container node ──────────────────────────────────────────────
-        let is_grid = node.display_mode == DisplayMode::Grid;
-        let grid_col_count = if is_grid && !node.grid_template_columns.is_empty() {
-            node.grid_template_columns.len()
-        } else if is_grid {
-            1
-        } else {
-            0
-        };
-
-        let is_row = if is_grid {
-            true // Grid approximation uses row-based layout
-        } else {
-            matches!(
-                node.flex_direction,
-                FlexDirection::Row | FlexDirection::RowReverse
-            )
-        };
-        let is_reversed = matches!(
-            node.flex_direction,
-            FlexDirection::RowReverse | FlexDirection::ColumnReverse
-        );
-
-        let macro_name = if is_row { "row!" } else { "column!" };
-        let jc = node.justify_content;
-
-        let uses_space_justification = matches!(
-            jc,
-            JustifyContent::SpaceBetween
-                | JustifyContent::SpaceEvenly
-                | JustifyContent::SpaceAround
-                | JustifyContent::Center
-                | JustifyContent::FlexEnd
-                | JustifyContent::End
-        );
-
-        // Gap: main-axis gap
-        let gap = if is_row {
-            &node.column_gap
-        } else {
-            &node.row_gap
-        };
-
-        // CSS Grid comment
-        if is_grid {
-            writeln!(
-                buf,
-                "{pad}// CSS Grid: {grid_col_count} column{plural}",
-                plural = if grid_col_count == 1 { "" } else { "s" }
-            )?;
-            if !node.grid_template_columns.is_empty() {
-                let tracks: Vec<_> = node
-                    .grid_template_columns
-                    .iter()
-                    .map(|t| t.display_short())
-                    .collect();
-                writeln!(buf, "{pad}// grid-template-columns: {}", tracks.join(" "))?;
-            }
-            if !node.grid_template_rows.is_empty() {
-                let tracks: Vec<_> = node
-                    .grid_template_rows
-                    .iter()
-                    .map(|t| t.display_short())
-                    .collect();
-                writeln!(buf, "{pad}// grid-template-rows: {}", tracks.join(" "))?;
-            }
-            writeln!(
-                buf,
-                "{pad}// Approximated with Row/Column — Iced has no CSS Grid support"
-            )?;
-        }
-
-        writeln!(buf, "{pad}{macro_name}[")?;
-
-        // Flex-wrap note
-        if node.flex_wrap != FlexWrap::NoWrap && !is_row {
-            writeln!(
-                buf,
-                "{pad}    // NOTE: flex-wrap: {:?} — Iced Column does not support wrapping",
-                node.flex_wrap
-            )?;
-        }
-
-        // Align-content note (no Iced equivalent)
-        if !matches!(
-            node.align_content,
-            AlignContent::Default | AlignContent::FlexStart | AlignContent::Start
-        ) {
-            writeln!(
-                buf,
-                "{pad}    // NOTE: align-content: {:?} — no Iced equivalent",
-                node.align_content
-            )?;
-        }
-
-        // Sort children by order
-        let mut children: Vec<&NodeConfig> = node.children.iter().collect();
-        children.sort_by_key(|c| c.order);
-
-        // Pre-compute leaf_idx starts for each child in sorted order
-        let mut starts = Vec::with_capacity(children.len());
-        let mut acc = *leaf_idx;
-        for child in &children {
-            starts.push(acc);
-            acc += count_leaves(child);
-        }
-        *leaf_idx = acc;
-
-        if is_reversed {
-            let dir_label = match node.flex_direction {
-                FlexDirection::RowReverse => "RowReverse",
-                FlexDirection::ColumnReverse => "ColumnReverse",
-                _ => unreachable!(),
-            };
-            writeln!(
-                buf,
-                "{pad}    // NOTE: flex-direction: {dir_label} — children reversed in source; Iced has no reverse direction"
-            )?;
-            children.reverse();
-            starts.reverse();
-        }
-
-        let stretch = node.align_items == AlignItems::Stretch;
-        let space = space_widget(is_row);
-
-        match jc {
-            JustifyContent::SpaceBetween => {
-                for (i, (child, start)) in children.iter().zip(starts.iter()).enumerate() {
-                    if i > 0 {
-                        writeln!(buf, "{pad}    {space},")?;
-                    }
-                    let mut idx = *start;
-                    emit_iced_node(buf, child, depth + 1, &mut idx, palette, is_row, stretch)?;
-                    writeln!(buf, ",")?;
-                }
-            }
-            JustifyContent::Center => {
-                writeln!(buf, "{pad}    {space},")?;
-                for (child, start) in children.iter().zip(starts.iter()) {
-                    let mut idx = *start;
-                    emit_iced_node(buf, child, depth + 1, &mut idx, palette, is_row, stretch)?;
-                    writeln!(buf, ",")?;
-                }
-                writeln!(buf, "{pad}    {space},")?;
-            }
-            JustifyContent::SpaceEvenly | JustifyContent::SpaceAround => {
-                for (child, start) in children.iter().zip(starts.iter()) {
-                    writeln!(buf, "{pad}    {space},")?;
-                    let mut idx = *start;
-                    emit_iced_node(buf, child, depth + 1, &mut idx, palette, is_row, stretch)?;
-                    writeln!(buf, ",")?;
-                }
-                writeln!(buf, "{pad}    {space},")?;
-            }
-            JustifyContent::FlexEnd | JustifyContent::End => {
-                writeln!(buf, "{pad}    {space},")?;
-                for (child, start) in children.iter().zip(starts.iter()) {
-                    let mut idx = *start;
-                    emit_iced_node(buf, child, depth + 1, &mut idx, palette, is_row, stretch)?;
-                    writeln!(buf, ",")?;
-                }
-            }
-            _ => {
-                // FlexStart / Start / Default / Stretch
-                for (child, start) in children.iter().zip(starts.iter()) {
-                    let mut idx = *start;
-                    emit_iced_node(buf, child, depth + 1, &mut idx, palette, is_row, stretch)?;
-                    writeln!(buf, ",")?;
-                }
-            }
-        }
-
-        write!(buf, "{pad}]")?;
-
-        // Wrapping — emit .wrap() on Row
-        if (is_grid || node.flex_wrap != FlexWrap::NoWrap) && is_row {
-            writeln!(buf)?;
-            write!(buf, "{pad}.wrap()")?;
-        }
-
-        // Spacing
-        if uses_space_justification {
-            // When using Space widgets for justification, suppress gap
-            // but note the original gap value if nonzero.
-            if let Some(g) = iced_spacing(gap) {
-                writeln!(buf)?;
-                write!(
-                    buf,
-                    "{pad}.spacing(0) // original gap: {g}; suppressed for Space-based justification"
-                )?;
-            }
-        } else if let Some(g) = iced_spacing(gap) {
-            writeln!(buf)?;
-            write!(buf, "{pad}.spacing({g})")?;
-        }
-
-        // Cross-axis alignment
-        let align = if is_row {
-            iced_cross_align_row(node.align_items)
-        } else {
-            iced_cross_align_col(node.align_items)
-        };
-        let default_align = if is_row {
-            "Vertical::Center"
-        } else {
-            "Horizontal::Center"
-        };
-        if align != default_align {
-            writeln!(buf)?;
-            if is_row {
-                write!(buf, "{pad}.align_y({align})")?;
-            } else {
-                write!(buf, "{pad}.align_x({align})")?;
-            }
-        }
-
-        if node.align_items == AlignItems::Baseline {
-            writeln!(buf)?;
-            write!(
-                buf,
-                "{pad}// NOTE: align-items: Baseline — approximated as Top/Left; Iced has no baseline alignment"
-            )?;
-        }
-
-        // Width
-        let full_w = is_full_percent(&node.width);
-        if full_w {
-            writeln!(buf)?;
-            write!(buf, "{pad}.width(Length::Fill)")?;
-        } else if !matches!(node.width, ValueConfig::Auto) {
-            writeln!(buf)?;
-            write!(buf, "{pad}.width({})", iced_length(&node.width))?;
-        }
-
-        // Height
-        let full_h = is_full_percent(&node.height);
-        if full_h {
-            writeln!(buf)?;
-            write!(buf, "{pad}.height(Length::Fill)")?;
-        } else if !matches!(node.height, ValueConfig::Auto) {
-            writeln!(buf)?;
-            write!(buf, "{pad}.height({})", iced_length(&node.height))?;
-        }
-
-        // Min/max constraints
-        if !matches!(node.min_width, ValueConfig::Auto) && !is_zero_px(&node.min_width) {
-            writeln!(buf)?;
-            write!(
-                buf,
-                "{pad}// NOTE: min-width: {} — no Iced equivalent on Row/Column",
-                node.min_width.display_short()
-            )?;
-        }
-        if !matches!(node.min_height, ValueConfig::Auto) && !is_zero_px(&node.min_height) {
-            writeln!(buf)?;
-            write!(
-                buf,
-                "{pad}// NOTE: min-height: {} — no Iced equivalent on Row/Column",
-                node.min_height.display_short()
-            )?;
-        }
-        if !matches!(node.max_width, ValueConfig::Auto) {
-            writeln!(buf)?;
-            write!(
-                buf,
-                "{pad}// NOTE: max-width: {} — wrap in Container for .max_width()",
-                node.max_width.display_short()
-            )?;
-        }
-        if !matches!(node.max_height, ValueConfig::Auto) {
-            writeln!(buf)?;
-            write!(
-                buf,
-                "{pad}// NOTE: max-height: {} — wrap in Container for .max_height()",
-                node.max_height.display_short()
-            )?;
-        }
-
-        // Flex-grow: expand along parent's main axis
-        if node.flex_grow > 0.0 {
-            if parent_is_row && !full_w && matches!(node.width, ValueConfig::Auto) {
-                let fill = if node.flex_grow > 1.0 {
-                    format!("Length::FillPortion({})", node.flex_grow as u16)
-                } else {
-                    "Length::Fill".into()
-                };
-                writeln!(buf)?;
-                write!(buf, "{pad}.width({fill})")?;
-            } else if !parent_is_row && !full_h && matches!(node.height, ValueConfig::Auto) {
-                let fill = if node.flex_grow > 1.0 {
-                    format!("Length::FillPortion({})", node.flex_grow as u16)
-                } else {
-                    "Length::Fill".into()
-                };
-                writeln!(buf)?;
-                write!(buf, "{pad}.height({fill})")?;
-            }
-        }
-
-        // align-items: Stretch from parent — expand along cross axis
-        if parent_stretch {
-            if parent_is_row && !full_h && matches!(node.height, ValueConfig::Auto) {
-                writeln!(buf)?;
-                write!(buf, "{pad}.height(Length::Fill)")?;
-            } else if !parent_is_row && !full_w && matches!(node.width, ValueConfig::Auto) {
-                writeln!(buf)?;
-                write!(buf, "{pad}.width(Length::Fill)")?;
-            }
-        }
-
-        // Padding
-        if let Some(p) = iced_padding(&node.padding) {
-            writeln!(buf)?;
-            write!(buf, "{pad}.padding({p})")?;
-        }
-
-        // Margin — no Iced equivalent
-        if !node.margin.is_zero() {
-            writeln!(buf)?;
-            if node.margin.is_uniform() {
-                write!(
-                    buf,
-                    "{pad}// NOTE: margin: {} — no Iced equivalent",
-                    node.margin.first().display_short()
-                )?;
-            } else {
-                write!(
-                    buf,
-                    "{pad}// NOTE: margin: {}/{}/{}/{} — no Iced equivalent",
-                    node.margin.top.display_short(),
-                    node.margin.right.display_short(),
-                    node.margin.bottom.display_short(),
-                    node.margin.left.display_short()
-                )?;
-            }
-        }
-
-        // Border — via .style() closure on container wrapper
-        if !node.border_width.is_zero() || !node.border_radius.is_zero() {
-            writeln!(buf)?;
-            write!(
-                buf,
-                "{pad}// NOTE: border — wrap in container().style(|_| container::Style {{ border: Border {{ "
-            )?;
-            if !node.border_radius.is_zero() {
-                if node.border_radius.is_uniform() {
-                    write!(buf, "radius: {:.1}.into(), ", node.border_radius.top_left)?;
-                } else {
-                    write!(
-                        buf,
-                        "radius: [{:.1}, {:.1}, {:.1}, {:.1}].into(), ",
-                        node.border_radius.top_left,
-                        node.border_radius.top_right,
-                        node.border_radius.bottom_right,
-                        node.border_radius.bottom_left
-                    )?;
-                }
-            }
-            if !node.border_width.is_zero() {
-                let w = node.border_width.first().num().unwrap_or(0.0);
-                write!(buf, "width: {w:.1}, color: Color::WHITE, ")?;
-            }
-            write!(buf, "..Default::default() }}, ..Default::default() }})")?;
-        }
-
-        // Flex-shrink — no Iced equivalent
-        if node.flex_shrink != 1.0 {
-            writeln!(buf)?;
-            write!(
-                buf,
-                "{pad}// NOTE: flex-shrink: {} — no Iced equivalent",
-                format_float(node.flex_shrink)
-            )?;
-        }
-
-        // Flex-basis — no Iced equivalent
-        if !matches!(node.flex_basis, ValueConfig::Auto) {
-            writeln!(buf)?;
-            write!(
-                buf,
-                "{pad}// NOTE: flex-basis: {} — no Iced equivalent",
-                node.flex_basis.display_short()
-            )?;
-        }
-
-        // Align-self — no Iced equivalent
-        if node.align_self != AlignSelf::Auto {
-            writeln!(buf)?;
-            write!(
-                buf,
-                "{pad}// NOTE: align-self: {:?} — no Iced equivalent",
-                node.align_self
-            )?;
-        }
-
-        // Visibility
-        if !node.visible {
-            writeln!(buf)?;
-            write!(
-                buf,
-                "{pad}// NOTE: hidden — Iced has no visibility modifier; conditionally include this widget"
-            )?;
-        }
-
-        // Order
-        if node.order != 0 {
-            writeln!(buf)?;
-            write!(
-                buf,
-                "{pad}// NOTE: order: {} — children pre-sorted in source",
-                node.order
-            )?;
-        }
+        emit_iced_container(buf, node, depth, leaf_idx, palette, parent)
     }
-    Ok(())
 }
 
-fn format_float(v: f32) -> String {
-    if (v - v.round()).abs() < 0.005 {
-        format!("{}", v as i32)
+fn emit_iced_leaf(
+    buf: &mut String,
+    node: &NodeConfig,
+    depth: usize,
+    leaf_idx: &mut usize,
+    palette: ColorPalette,
+    parent: Parent,
+) -> Result<()> {
+    let pad = "    ".repeat(depth);
+    let (r, g, b) = take_leaf_color(palette, leaf_idx);
+
+    writeln!(
+        buf,
+        "{pad}container(text({}).size(26).color(Color::from_rgba(0.05, 0.05, 0.1, 0.85)))",
+        rust_string_literal(node.display_text())
+    )?;
+
+    // Determine effective width: flex-grow or stretch may override Auto
+    let width_auto = matches!(node.width, ValueConfig::Auto);
+    let height_auto = matches!(node.height, ValueConfig::Auto);
+    let grow_overrides_width = node.flex_grow > 0.0 && parent.is_row && width_auto;
+    let stretch_overrides_width = parent.stretch && !parent.is_row && width_auto;
+    let grow_overrides_height = node.flex_grow > 0.0 && !parent.is_row && height_auto;
+    let stretch_overrides_height = parent.stretch && parent.is_row && height_auto;
+
+    // Width
+    if grow_overrides_width {
+        writeln!(buf, "{pad}    .width({})", iced_grow_length(node.flex_grow))?;
+    } else if stretch_overrides_width {
+        writeln!(buf, "{pad}    .width(Length::Fill)")?;
     } else {
-        format!("{v:.1}")
+        writeln!(buf, "{pad}    .width({})", iced_length(&node.width))?;
     }
+
+    // Height
+    if grow_overrides_height {
+        writeln!(
+            buf,
+            "{pad}    .height({})",
+            iced_grow_length(node.flex_grow)
+        )?;
+    } else if stretch_overrides_height {
+        writeln!(buf, "{pad}    .height(Length::Fill)")?;
+    } else {
+        writeln!(buf, "{pad}    .height({})", iced_length(&node.height))?;
+    }
+
+    // Min/max constraints
+    if !matches!(node.min_width, ValueConfig::Auto) && !node.min_width.is_zero_px() {
+        writeln!(
+            buf,
+            "{pad}    // NOTE: min-width: {} — no Iced equivalent",
+            node.min_width.display_short()
+        )?;
+    }
+    if !matches!(node.min_height, ValueConfig::Auto) && !node.min_height.is_zero_px() {
+        writeln!(
+            buf,
+            "{pad}    // NOTE: min-height: {} — no Iced equivalent",
+            node.min_height.display_short()
+        )?;
+    }
+    if !matches!(node.max_width, ValueConfig::Auto) {
+        writeln!(
+            buf,
+            "{pad}    .max_width({})",
+            match &node.max_width {
+                ValueConfig::Px(n) => format!("{n:.1}"),
+                other => format!(
+                    "{} /* {} — approximated */",
+                    other.num().unwrap_or(0.0),
+                    other.display_short()
+                ),
+            }
+        )?;
+    }
+    if !matches!(node.max_height, ValueConfig::Auto) {
+        writeln!(
+            buf,
+            "{pad}    // NOTE: max-height: {} — use Container wrapper for max_height",
+            node.max_height.display_short()
+        )?;
+    }
+
+    // Padding
+    if let Some(p) = iced_padding(&node.padding) {
+        writeln!(buf, "{pad}    .padding({p})")?;
+    }
+
+    // Center the text content. `Container::center(len)` would also reset
+    // width/height to `len`, clobbering the explicit sizes above, so set the
+    // alignments directly.
+    writeln!(buf, "{pad}    .align_x(Horizontal::Center)")?;
+    writeln!(buf, "{pad}    .align_y(Vertical::Center)")?;
+
+    // Background color
+    writeln!(buf, "{pad}    .style(|_| container::Style {{")?;
+    writeln!(
+        buf,
+        "{pad}        background: Some(Color::from_rgb({r:.2}, {g:.2}, {b:.2}).into()),"
+    )?;
+    writeln!(buf, "{pad}        ..Default::default()")?;
+    write!(buf, "{pad}    }})")?;
+
+    emit_iced_unsupported_notes(buf, node, &format!("{pad}    "), true)
+}
+
+fn emit_iced_container(
+    buf: &mut String,
+    node: &NodeConfig,
+    depth: usize,
+    leaf_idx: &mut usize,
+    palette: ColorPalette,
+    parent: Parent,
+) -> Result<()> {
+    let pad = "    ".repeat(depth);
+    let is_grid = node.display_mode == DisplayMode::Grid;
+    let grid_col_count = if is_grid && !node.grid_template_columns.is_empty() {
+        node.grid_template_columns.len()
+    } else if is_grid {
+        1
+    } else {
+        0
+    };
+
+    let is_row = if is_grid {
+        true // Grid approximation uses row-based layout
+    } else {
+        matches!(
+            node.flex_direction,
+            FlexDirection::Row | FlexDirection::RowReverse
+        )
+    };
+    let is_reversed = matches!(
+        node.flex_direction,
+        FlexDirection::RowReverse | FlexDirection::ColumnReverse
+    );
+
+    let macro_name = if is_row { "row!" } else { "column!" };
+    let jc = node.justify_content;
+
+    let uses_space_justification = matches!(
+        jc,
+        JustifyContent::SpaceBetween
+            | JustifyContent::SpaceEvenly
+            | JustifyContent::SpaceAround
+            | JustifyContent::Center
+            | JustifyContent::FlexEnd
+            | JustifyContent::End
+    );
+
+    // Gap: main-axis gap
+    let gap = if is_row {
+        &node.column_gap
+    } else {
+        &node.row_gap
+    };
+
+    // CSS Grid comment
+    if is_grid {
+        writeln!(
+            buf,
+            "{pad}// CSS Grid: {grid_col_count} column{plural}",
+            plural = if grid_col_count == 1 { "" } else { "s" }
+        )?;
+        if !node.grid_template_columns.is_empty() {
+            writeln!(
+                buf,
+                "{pad}// grid-template-columns: {}",
+                grid_tracks(&node.grid_template_columns)
+            )?;
+        }
+        if !node.grid_template_rows.is_empty() {
+            writeln!(
+                buf,
+                "{pad}// grid-template-rows: {}",
+                grid_tracks(&node.grid_template_rows)
+            )?;
+        }
+        writeln!(
+            buf,
+            "{pad}// Approximated with Row/Column — Iced has no CSS Grid support"
+        )?;
+    }
+
+    writeln!(buf, "{pad}{macro_name}[")?;
+
+    // Flex-wrap note
+    if node.flex_wrap != FlexWrap::NoWrap && !is_row {
+        writeln!(
+            buf,
+            "{pad}    // NOTE: flex-wrap: {:?} — Iced Column does not support wrapping",
+            node.flex_wrap
+        )?;
+    }
+
+    // Align-content note (no Iced equivalent)
+    if !matches!(
+        node.align_content,
+        AlignContent::Default | AlignContent::FlexStart | AlignContent::Start
+    ) {
+        writeln!(
+            buf,
+            "{pad}    // NOTE: align-content: {:?} — no Iced equivalent",
+            node.align_content
+        )?;
+    }
+
+    let (mut children, mut starts) = sorted_children_with_leaf_starts(node, leaf_idx);
+
+    if is_reversed {
+        let dir_label = match node.flex_direction {
+            FlexDirection::RowReverse => "RowReverse",
+            FlexDirection::ColumnReverse => "ColumnReverse",
+            _ => unreachable!(),
+        };
+        writeln!(
+            buf,
+            "{pad}    // NOTE: flex-direction: {dir_label} — children reversed in source; Iced has no reverse direction"
+        )?;
+        children.reverse();
+        starts.reverse();
+    }
+
+    let stretch = node.align_items == AlignItems::Stretch;
+    let space = space_widget(is_row);
+
+    // Space widgets before/between/after children approximate justify-content.
+    let (space_before, space_between, space_after) = match jc {
+        JustifyContent::SpaceBetween => (false, true, false),
+        JustifyContent::Center => (true, false, true),
+        JustifyContent::SpaceEvenly | JustifyContent::SpaceAround => (true, true, true),
+        JustifyContent::FlexEnd | JustifyContent::End => (true, false, false),
+        _ => (false, false, false), // FlexStart / Start / Default / Stretch
+    };
+    for (i, (child, start)) in children.iter().zip(starts.iter()).enumerate() {
+        if (i == 0 && space_before) || (i > 0 && space_between) {
+            writeln!(buf, "{pad}    {space},")?;
+        }
+        let mut idx = *start;
+        emit_iced_node(buf, child, depth + 1, &mut idx, palette, is_row, stretch)?;
+        writeln!(buf, ",")?;
+    }
+    if space_after {
+        writeln!(buf, "{pad}    {space},")?;
+    }
+
+    write!(buf, "{pad}]")?;
+
+    // Wrapping — emit .wrap() on Row
+    if (is_grid || node.flex_wrap != FlexWrap::NoWrap) && is_row {
+        writeln!(buf)?;
+        write!(buf, "{pad}.wrap()")?;
+    }
+
+    // Spacing
+    if uses_space_justification {
+        // When using Space widgets for justification, suppress gap
+        // but note the original gap value if nonzero.
+        if let Some(g) = iced_spacing(gap) {
+            writeln!(buf)?;
+            write!(
+                buf,
+                "{pad}.spacing(0) // original gap: {g}; suppressed for Space-based justification"
+            )?;
+        }
+    } else if let Some(g) = iced_spacing(gap) {
+        writeln!(buf)?;
+        write!(buf, "{pad}.spacing({g})")?;
+    }
+
+    // Cross-axis alignment
+    let align = if is_row {
+        iced_cross_align_row(node.align_items)
+    } else {
+        iced_cross_align_col(node.align_items)
+    };
+    let default_align = if is_row {
+        "Vertical::Center"
+    } else {
+        "Horizontal::Center"
+    };
+    if align != default_align {
+        writeln!(buf)?;
+        if is_row {
+            write!(buf, "{pad}.align_y({align})")?;
+        } else {
+            write!(buf, "{pad}.align_x({align})")?;
+        }
+    }
+
+    if node.align_items == AlignItems::Baseline {
+        writeln!(buf)?;
+        write!(
+            buf,
+            "{pad}// NOTE: align-items: Baseline — approximated as Top/Left; Iced has no baseline alignment"
+        )?;
+    }
+
+    // Width
+    let full_w = is_full_percent(&node.width);
+    if full_w {
+        writeln!(buf)?;
+        write!(buf, "{pad}.width(Length::Fill)")?;
+    } else if !matches!(node.width, ValueConfig::Auto) {
+        writeln!(buf)?;
+        write!(buf, "{pad}.width({})", iced_length(&node.width))?;
+    }
+
+    // Height
+    let full_h = is_full_percent(&node.height);
+    if full_h {
+        writeln!(buf)?;
+        write!(buf, "{pad}.height(Length::Fill)")?;
+    } else if !matches!(node.height, ValueConfig::Auto) {
+        writeln!(buf)?;
+        write!(buf, "{pad}.height({})", iced_length(&node.height))?;
+    }
+
+    // Min/max constraints
+    if !matches!(node.min_width, ValueConfig::Auto) && !node.min_width.is_zero_px() {
+        writeln!(buf)?;
+        write!(
+            buf,
+            "{pad}// NOTE: min-width: {} — no Iced equivalent on Row/Column",
+            node.min_width.display_short()
+        )?;
+    }
+    if !matches!(node.min_height, ValueConfig::Auto) && !node.min_height.is_zero_px() {
+        writeln!(buf)?;
+        write!(
+            buf,
+            "{pad}// NOTE: min-height: {} — no Iced equivalent on Row/Column",
+            node.min_height.display_short()
+        )?;
+    }
+    if !matches!(node.max_width, ValueConfig::Auto) {
+        writeln!(buf)?;
+        write!(
+            buf,
+            "{pad}// NOTE: max-width: {} — wrap in Container for .max_width()",
+            node.max_width.display_short()
+        )?;
+    }
+    if !matches!(node.max_height, ValueConfig::Auto) {
+        writeln!(buf)?;
+        write!(
+            buf,
+            "{pad}// NOTE: max-height: {} — wrap in Container for .max_height()",
+            node.max_height.display_short()
+        )?;
+    }
+
+    // Flex-grow: expand along parent's main axis
+    let width_auto = matches!(node.width, ValueConfig::Auto);
+    let height_auto = matches!(node.height, ValueConfig::Auto);
+    if node.flex_grow > 0.0 {
+        if parent.is_row && !full_w && width_auto {
+            writeln!(buf)?;
+            write!(buf, "{pad}.width({})", iced_grow_length(node.flex_grow))?;
+        } else if !parent.is_row && !full_h && height_auto {
+            writeln!(buf)?;
+            write!(buf, "{pad}.height({})", iced_grow_length(node.flex_grow))?;
+        }
+    }
+
+    // align-items: Stretch from parent — expand along cross axis
+    if parent.stretch {
+        if parent.is_row && !full_h && height_auto {
+            writeln!(buf)?;
+            write!(buf, "{pad}.height(Length::Fill)")?;
+        } else if !parent.is_row && !full_w && width_auto {
+            writeln!(buf)?;
+            write!(buf, "{pad}.width(Length::Fill)")?;
+        }
+    }
+
+    // Padding
+    if let Some(p) = iced_padding(&node.padding) {
+        writeln!(buf)?;
+        write!(buf, "{pad}.padding({p})")?;
+    }
+
+    emit_iced_unsupported_notes(buf, node, &pad, false)
 }
 
 #[cfg(test)]
@@ -796,9 +654,40 @@ mod tests {
     }
 
     #[test]
+    fn escapes_leaf_text() {
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![NodeConfig::new_leaf("a\"b\\c", 80.0, 80.0)];
+        let code = emit_iced(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains(r#"text("a\"b\\c")"#), "{code}");
+    }
+
+    #[test]
     fn emits_spacing() {
         let code = emit_iced(&test_container(), ColorPalette::Pastel1).unwrap();
         assert!(code.contains(".spacing("));
+    }
+
+    #[test]
+    fn leaf_centers_without_clobbering_size() {
+        // `.center(Length::Fill)` resets width/height in iced 0.14; the leaf
+        // must keep its explicit size and set the alignments directly.
+        let code = emit_iced(&test_container(), ColorPalette::Pastel1).unwrap();
+        assert!(!code.contains(".center("), "{code}");
+        assert!(code.contains(".align_x(Horizontal::Center)"), "{code}");
+        assert!(code.contains(".align_y(Vertical::Center)"), "{code}");
+        assert!(code.contains(".width(Length::Fixed(80.0))"), "{code}");
+    }
+
+    #[test]
+    fn fill_portion_never_zero() {
+        assert_eq!(
+            iced_length(&ValueConfig::Percent(0.5)),
+            "Length::FillPortion(1) /* 0% */"
+        );
+        assert_eq!(
+            iced_length(&ValueConfig::Percent(25.0)),
+            "Length::FillPortion(25) /* 25% */"
+        );
     }
 
     #[test]

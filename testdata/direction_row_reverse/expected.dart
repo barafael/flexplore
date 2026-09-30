@@ -19,8 +19,7 @@ Widget build(BuildContext context) {
           child: Text('A',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Container(
           width: 120.0,
           height: 80.0,
@@ -30,8 +29,7 @@ Widget build(BuildContext context) {
           child: Text('B',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Container(
           width: 60.0,
           height: 40.0,
@@ -41,8 +39,7 @@ Widget build(BuildContext context) {
           child: Text('C',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
       ],
     )
   )

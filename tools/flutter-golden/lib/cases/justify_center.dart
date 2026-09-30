@@ -1,4 +1,4 @@
-// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview` to regenerate.
+// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview -- --generate-only` to regenerate.
 import 'package:flutter/material.dart';
 
 class JustifyCenter extends StatelessWidget {

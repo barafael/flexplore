@@ -1,4 +1,4 @@
-// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview` to regenerate.
+// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview -- --generate-only` to regenerate.
 import 'package:flutter/material.dart';
 
 class HiddenChild extends StatelessWidget {
@@ -24,8 +24,7 @@ class HiddenChild extends StatelessWidget {
           child: Text('visible',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Visibility(
           visible: false,
           maintainSize: true,
@@ -41,8 +40,7 @@ class HiddenChild extends StatelessWidget {
               style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
             ),
           )
-        )
-        ,
+        ),
       ],
     )
   )

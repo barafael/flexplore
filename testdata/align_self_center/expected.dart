@@ -15,7 +15,7 @@ Widget build(BuildContext context) {
             padding: EdgeInsets.all(8.0),
             color: Color.fromRGBO(251, 180, 174, 1.0),
             alignment: Alignment.center,
-            child: Text('top',
+            child: Text('top-1',
               style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
             ),
           )
@@ -44,7 +44,7 @@ Widget build(BuildContext context) {
             padding: EdgeInsets.all(8.0),
             color: Color.fromRGBO(204, 235, 197, 1.0),
             alignment: Alignment.center,
-            child: Text('top',
+            child: Text('top-2',
               style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
             ),
           )

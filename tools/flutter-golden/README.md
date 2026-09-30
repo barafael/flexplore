@@ -1,39 +1,11 @@
-<!--
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# flutter_golden
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages).
-
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages).
--->
-
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
-
-## Features
-
-TODO: List what your package can do. Maybe include images, gifs, or videos.
-
-## Getting started
-
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
-
-## Usage
-
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder.
-
-```dart
-const like = 'sample';
-```
-
-## Additional information
-
-TODO: Tell users more about the package: where to find more information, how to
-contribute to the package, how to file issues, what response they can expect
-from the package authors, and more.
+Golden-screenshot harness for flexplore's Flutter code generator. Every
+`lib/cases/*.dart` widget is generated from `testdata/<case>/expected.dart`
+(run `cargo run -p build-overview -- --generate-only` from the repository root
+to refresh them; do not edit by hand), and `test/golden_test.dart` renders each
+one at 400x300 with `flutter test --update-goldens`, writing
+`test/goldens/<case>.png`. `cargo run -p build-overview -- --backend flutter`
+drives the whole thing and copies the PNGs to `testdata/<case>/rendered_flutter.png`
+for the cross-backend comparison in `testdata/overview.html`. The package is
+not published; it only exists to be run from this repository.

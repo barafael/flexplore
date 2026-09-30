@@ -1,40 +1,48 @@
 //! Wire protocol for flexplore multiplayer.
 //!
-//! This crate is deliberately dependency-light (no bevy, no matchbox, no
-//! tokio): it defines the *contract* — the message types peers exchange and
-//! their postcard encoding — so the transport and any future non-bevy consumer
-//! (relay server, headless peer, fuzzer) share one wire format.
+//! This crate defines the *contract* — the message types peers exchange and
+//! their postcard encoding — so the transport (`flexplore-net`) and any future
+//! non-bevy consumer (relay server, headless peer, fuzzer) share one wire
+//! format. It depends on `flexplore-core` for the document types only; there
+//! is no bevy, matchbox or tokio here.
 //!
-//! The networking stack lives in `flexplore-net`, which re-exports everything
-//! here.
+//! # Model
+//!
+//! *Host-sequenced, whole-document edits with client-side prediction.*
+//!
+//! Every peer holds the full layout. One peer is the **host** for the current
+//! **epoch**; it assigns a sequence number to every edit and rebroadcasts it as
+//! [`NetMsg::Sequenced`]. Edits carry the originating `client` tag and a
+//! per-client `local_id`, so the originator recognises its own echo (it has
+//! already applied the edit locally) and every other peer applies the edit in
+//! host order. Because the only edits are whole-document replacements, a peer
+//! re-applies its own unacknowledged edits on top of foreign ones, which makes
+//! the result last-writer-wins in host order on every peer.
+//!
+//! The host changes when the previous host leaves. A promotion starts a new
+//! epoch; higher epochs always win, and ties (two peers claiming the same
+//! epoch) are broken by the earlier claim time, then the lower peer id.
 
-use flexplore_core::config::{
-    ArtStyle, BackgroundMode, ColorPalette, NodeConfig, Theme,
-};
+use flexplore_core::config::{ArtStyle, BackgroundMode, ColorPalette, NodeConfig, Theme};
 use serde::{Deserialize, Serialize};
 use tracing::{error, warn};
 
+/// Bump whenever the encoding of any message changes. Peers announce it in
+/// [`Control::Hello`]; a mismatch is logged and the peer's messages ignored.
+pub const PROTOCOL_VERSION: u32 = 2;
+
+/// A transport peer id (matchbox's `PeerId` is a UUID) as raw bytes, so this
+/// crate stays independent of the transport.
+pub type PeerBytes = [u8; 16];
+
 // ── Layout edits (the only things that mutate the document) ──────────────────
 
-/// A single document mutation. Submitted guest→host as [`NetMsg::Game`],
-/// sequenced by the host into [`NetMsg::Sequenced`], then applied on echo.
-/// `seq` doubles as the revision counter.
+/// A single document mutation. Both variants replace whole state, which is
+/// what makes prediction + rebase trivial: re-applying an edit is idempotent.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum LayoutEdit {
-    /// Replace the entire layout tree (template load, import, snapshot install).
-    ReplaceRoot(NodeConfig),
-    /// Replace a single node at the given path.
-    UpdateNode { path: Vec<usize>, node: NodeConfig },
-    /// Add a child node at the given parent path.
-    AddChild { parent_path: Vec<usize>, child: NodeConfig },
-    /// Remove the node at the given path (empty path = no-op, can't remove root).
-    RemoveNode { path: Vec<usize> },
-    /// Move a node from `src_path` into `dst_parent` at `dst_index`.
-    MoveNode {
-        src_path: Vec<usize>,
-        dst_parent: Vec<usize>,
-        dst_index: usize,
-    },
+    /// Replace the entire layout tree. Boxed so the wire enums stay small.
+    ReplaceRoot(Box<NodeConfig>),
     /// Update visual settings (theme, palette, art, background).
     UpdateSettings {
         bg_mode: BackgroundMode,
@@ -46,9 +54,8 @@ pub enum LayoutEdit {
     },
 }
 
-/// Full document snapshot, used to catch up late joiners. `last_seq` is the
-/// highest sequence number already baked into the tree so the joiner can set
-/// its `last_applied_seq` watermark and ignore re-delivered live events.
+/// Full document snapshot, used to catch up joiners and to reset everyone
+/// when a new host takes over.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct FlexSnapshot {
     pub root: NodeConfig,
@@ -58,14 +65,20 @@ pub struct FlexSnapshot {
     pub art_depth: u32,
     pub theme: Theme,
     pub palette: ColorPalette,
-    pub last_seq: u32,
+    /// The sending host's epoch and when it claimed hosting (UNIX ms). Together
+    /// with the sender's peer id this is the host key receivers compare.
+    pub epoch: u32,
+    pub claimed_at_ms: u64,
+    /// Highest `Sequenced` seq of this epoch folded into the snapshot; `None`
+    /// when the host has not sequenced anything yet in this epoch.
+    pub last_seq: Option<u32>,
 }
 
 /// Display-only state shared between peers but never recorded. Sent on the
 /// unreliable channel (except `PlayerInfo`, one-shot reliable on connect).
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum Ephemeral {
-    /// Normalized screen-space cursor position `[nx, ny]` in `[0,1]`.
+    /// Cursor position normalised to the layout viewport, `[0,1]` on each axis.
     CursorPos { nx: f32, ny: f32 },
     /// The node path this peer has selected (empty = root).
     Selection { path: Vec<usize> },
@@ -73,30 +86,52 @@ pub enum Ephemeral {
     PlayerInfo { name: String, color: [u8; 3] },
 }
 
-/// Snapshot-handshake messages. Always reliable. `Snapshot` is boxed so the
-/// `NetMsg`/`Control` enums stay pointer-sized even though a snapshot carries a
-/// whole node tree.
+/// Membership and snapshot handshake. Always reliable.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum Control {
-    /// Late joiner → host: ask for the current document.
+    /// Sent to every peer on connect, and again whenever `has_document` or
+    /// the host view changes. Lets peers agree on the host and know who is
+    /// eligible to take over.
+    Hello {
+        protocol: u32,
+        /// Random tag identifying this peer's edits (see [`NetMsg::Game`]).
+        client: u64,
+        /// The sender's view of the current host key, if it has one.
+        epoch: u32,
+        claimed_at_ms: u64,
+        epoch_host: Option<PeerBytes>,
+        /// True once the sender holds the room's document (it installed a
+        /// snapshot, or it is/was the host).
+        has_document: bool,
+    },
+    /// Joiner → host: ask for the current document.
     RequestSnapshot,
-    /// Joiner → host: ack the snapshot so the host can stop tracking it.
-    SnapshotReceived,
-    /// Host → joiner: the full document + watermark.
+    /// Host → peer: the full document + host key + watermark.
     Snapshot(Box<FlexSnapshot>),
 }
 
 // ── Wire protocol ────────────────────────────────────────────────────────────
 
-/// Top-level wire envelope. The sub-enums encode the *intent* of a message —
-/// document-mutating vs ephemeral vs control — so receivers can route each
-/// category without an exhaustive top-level match.
+/// Top-level wire envelope.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum NetMsg {
-    /// Unsequenced edit submission, sent guest→host. Never applied directly.
-    Game(LayoutEdit),
-    /// Canonical, host-sequenced edit, sent host→all. The only form applied.
-    Sequenced { seq: u32, edit: LayoutEdit },
+    /// Unsequenced edit submission, sent guest→host. The guest has already
+    /// applied it locally (prediction); it is never applied directly by the
+    /// host, only sequenced.
+    Game {
+        client: u64,
+        local_id: u32,
+        edit: LayoutEdit,
+    },
+    /// Canonical, host-sequenced edit, sent host→all. `client`/`local_id`
+    /// identify the originator so it can skip its own echo.
+    Sequenced {
+        epoch: u32,
+        seq: u32,
+        client: u64,
+        local_id: u32,
+        edit: LayoutEdit,
+    },
     Ephemeral(Ephemeral),
     Control(Control),
 }
@@ -119,7 +154,8 @@ pub fn enc_msg(msg: &NetMsg) -> Option<Box<[u8]>> {
 }
 
 /// Decode a `NetMsg` from the wire. Returns `None` on a corrupt or truncated
-/// payload.
+/// payload. The caller decides how loudly to complain, so one misbehaving
+/// peer cannot flood the log through this function.
 pub fn decode(raw: &[u8]) -> Option<NetMsg> {
     postcard::from_bytes(raw)
         .inspect_err(|e| warn!("matchbox decode error: {e}"))
@@ -135,21 +171,7 @@ mod tests {
     fn sample_edits() -> Vec<LayoutEdit> {
         let leaf = NodeConfig::new_leaf("child", 100.0, 50.0);
         vec![
-            LayoutEdit::ReplaceRoot(leaf.clone()),
-            LayoutEdit::UpdateNode {
-                path: vec![1, 0],
-                node: leaf.clone(),
-            },
-            LayoutEdit::AddChild {
-                parent_path: vec![0],
-                child: leaf.clone(),
-            },
-            LayoutEdit::RemoveNode { path: vec![2] },
-            LayoutEdit::MoveNode {
-                src_path: vec![1],
-                dst_parent: vec![0],
-                dst_index: 3,
-            },
+            LayoutEdit::ReplaceRoot(Box::new(leaf)),
             LayoutEdit::UpdateSettings {
                 bg_mode: BackgroundMode::RandomArt,
                 art_style: ArtStyle::Voronoi,
@@ -161,11 +183,33 @@ mod tests {
         ]
     }
 
+    fn sample_snapshot() -> FlexSnapshot {
+        FlexSnapshot {
+            root: NodeConfig::new_leaf("root", 800.0, 600.0),
+            bg_mode: BackgroundMode::Pastel,
+            art_style: ArtStyle::ExprTree,
+            art_seed: 1,
+            art_depth: 2,
+            theme: Theme::Latte,
+            palette: ColorPalette::Pastel1,
+            epoch: 3,
+            claimed_at_ms: 1_700_000_000_000,
+            last_seq: Some(42),
+        }
+    }
+
     fn sample_messages() -> Vec<NetMsg> {
-        let mut msgs = vec![
-            NetMsg::Game(sample_edits()[0].clone()),
+        vec![
+            NetMsg::Game {
+                client: 0xDEAD_BEEF,
+                local_id: 5,
+                edit: sample_edits()[0].clone(),
+            },
             NetMsg::Sequenced {
+                epoch: 2,
                 seq: 7,
+                client: 0xDEAD_BEEF,
+                local_id: 5,
                 edit: sample_edits()[1].clone(),
             },
             NetMsg::Ephemeral(Ephemeral::CursorPos { nx: 0.25, ny: 0.75 }),
@@ -174,21 +218,25 @@ mod tests {
                 name: "Brave Otter".into(),
                 color: [200, 100, 50],
             }),
-        ];
-        let snapshot = FlexSnapshot {
-            root: NodeConfig::new_leaf("root", 800.0, 600.0),
-            bg_mode: BackgroundMode::Pastel,
-            art_style: ArtStyle::ExprTree,
-            art_seed: 1,
-            art_depth: 2,
-            theme: Theme::Latte,
-            palette: ColorPalette::Pastel1,
-            last_seq: 42,
-        };
-        msgs.push(NetMsg::Control(Control::RequestSnapshot));
-        msgs.push(NetMsg::Control(Control::SnapshotReceived));
-        msgs.push(NetMsg::Control(Control::Snapshot(Box::new(snapshot))));
-        msgs
+            NetMsg::Control(Control::Hello {
+                protocol: PROTOCOL_VERSION,
+                client: 1,
+                epoch: 2,
+                claimed_at_ms: 12345,
+                epoch_host: Some([7; 16]),
+                has_document: true,
+            }),
+            NetMsg::Control(Control::Hello {
+                protocol: PROTOCOL_VERSION,
+                client: 1,
+                epoch: 0,
+                claimed_at_ms: 0,
+                epoch_host: None,
+                has_document: false,
+            }),
+            NetMsg::Control(Control::RequestSnapshot),
+            NetMsg::Control(Control::Snapshot(Box::new(sample_snapshot()))),
+        ]
     }
 
     #[test]
@@ -202,26 +250,8 @@ mod tests {
     }
 
     #[test]
-    fn edits_round_trip() {
-        for edit in sample_edits() {
-            let msg = NetMsg::Game(edit.clone());
-            let raw = enc_msg(&msg).unwrap();
-            assert_eq!(decode(&raw).unwrap(), msg);
-        }
-    }
-
-    #[test]
     fn snapshot_survives_boxing() {
-        let snapshot = FlexSnapshot {
-            root: NodeConfig::new_leaf("root", 800.0, 600.0),
-            bg_mode: BackgroundMode::Pastel,
-            art_style: ArtStyle::ExprTree,
-            art_seed: 1,
-            art_depth: 2,
-            theme: Theme::Latte,
-            palette: ColorPalette::Pastel1,
-            last_seq: 42,
-        };
+        let snapshot = sample_snapshot();
         let msg = NetMsg::Control(Control::Snapshot(Box::new(snapshot.clone())));
         let raw = enc_msg(&msg).unwrap();
         match decode(&raw).unwrap() {

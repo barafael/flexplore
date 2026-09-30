@@ -1,5 +1,5 @@
 name: flutter_golden
-description: "A new Flutter package project."
+description: "Golden-screenshot harness for flexplore's Flutter code generator: renders the generated widgets at 400x300 and records PNGs for testdata/overview.html. Internal, not published."
 version: 0.0.1
 homepage:
 

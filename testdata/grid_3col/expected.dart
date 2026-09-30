@@ -17,8 +17,7 @@ Widget build(BuildContext context) {
           child: Text('cell-1',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Container(
           padding: EdgeInsets.all(8.0),
           color: Color.fromRGBO(179, 205, 227, 1.0),
@@ -26,8 +25,7 @@ Widget build(BuildContext context) {
           child: Text('cell-2',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Container(
           padding: EdgeInsets.all(8.0),
           color: Color.fromRGBO(204, 235, 197, 1.0),
@@ -35,8 +33,7 @@ Widget build(BuildContext context) {
           child: Text('cell-3',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Container(
           padding: EdgeInsets.all(8.0),
           color: Color.fromRGBO(222, 203, 228, 1.0),
@@ -44,8 +41,7 @@ Widget build(BuildContext context) {
           child: Text('cell-4',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Container(
           padding: EdgeInsets.all(8.0),
           color: Color.fromRGBO(254, 217, 166, 1.0),
@@ -53,8 +49,7 @@ Widget build(BuildContext context) {
           child: Text('cell-5',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Container(
           padding: EdgeInsets.all(8.0),
           color: Color.fromRGBO(255, 255, 204, 1.0),
@@ -62,8 +57,7 @@ Widget build(BuildContext context) {
           child: Text('cell-6',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
       ],
     )
   )

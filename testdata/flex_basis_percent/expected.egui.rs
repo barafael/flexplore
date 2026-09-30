@@ -23,7 +23,7 @@ fn build_ui(ui: &mut egui::Ui) {
                     .show(ui, |ui| {
                         ui.set_min_size(egui::vec2(40.0, 80.0));
                         ui.centered_and_justified(|ui| {
-                            ui.label(egui::RichText::new("25%").size(26.0).color(egui::Color32::from_rgba_premultiplied(13, 13, 26, 217)));
+                            ui.label(egui::RichText::new("25%-b").size(26.0).color(egui::Color32::from_rgba_premultiplied(13, 13, 26, 217)));
                         });
                     })
                     // NOTE: flex-basis: 25% — no egui equivalent;
@@ -33,7 +33,7 @@ fn build_ui(ui: &mut egui::Ui) {
                     .show(ui, |ui| {
                         ui.set_min_size(egui::vec2(40.0, 80.0));
                         ui.centered_and_justified(|ui| {
-                            ui.label(egui::RichText::new("25%").size(26.0).color(egui::Color32::from_rgba_premultiplied(13, 13, 26, 217)));
+                            ui.label(egui::RichText::new("25%-c").size(26.0).color(egui::Color32::from_rgba_premultiplied(13, 13, 26, 217)));
                         });
                     })
                     // NOTE: flex-basis: 25% — no egui equivalent;

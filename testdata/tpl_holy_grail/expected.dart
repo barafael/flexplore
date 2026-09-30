@@ -14,8 +14,7 @@ Widget build(BuildContext context) {
           child: Text('header',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Expanded(
           flex: 1,
           child:           Row(
@@ -30,8 +29,7 @@ Widget build(BuildContext context) {
                 child: Text('sidebar-left',
                   style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
                 ),
-              )
-              ,
+              ),
               Expanded(
                 flex: 1,
                 child:                 Container(
@@ -51,8 +49,7 @@ Widget build(BuildContext context) {
                 child: Text('sidebar-right',
                   style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
                 ),
-              )
-              ,
+              ),
             ],
           )
         ),
@@ -64,8 +61,7 @@ Widget build(BuildContext context) {
           child: Text('footer',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
       ],
     )
   )

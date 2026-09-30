@@ -4,7 +4,7 @@
 
 | Project                                                                               | Type                      | Interactive Explorer | Multi-Framework Codegen | Targets                                                                                                                                        | Open Source                                                  | Platform           |
 | ------------------------------------------------------------------------------------- | ------------------------- | -------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------ |
-| **Flexplore**                                                                         | Layout explorer + codegen | Yes (tree-based)     | Yes (7 targets)         | Bevy, HTML/CSS, Tailwind, React, SwiftUI, Flutter, Iced                                                                                        | Yes                                                          | Desktop + WASM     |
+| **Flexplore**                                                                         | Layout explorer + codegen | Yes (tree-based)     | Yes (10 targets)        | Bevy, HTML/CSS, Tailwind, React, SwiftUI, Flutter, Iced, egui, React Native, Dioxus                                                            | Yes                                                          | Desktop + WASM     |
 | [Flexy Boxes](https://the-echoplex.net/flexyboxes/)                                   | Flexbox playground        | Yes (flat items)     | CSS only                | HTML/CSS                                                                                                                                       | Yes ([source](https://github.com/nicholascloud/flexyboxes))  | Web                |
 | [Flexbox.tech](https://flexbox.tech/)                                                 | Flexbox playground        | Yes (flat items)     | CSS only                | HTML/CSS                                                                                                                                       | —                                                            | Web                |
 | [CSS Portal Flexbox Generator](https://www.cssportal.com/css-flexbox-generator/)      | Flexbox playground        | Yes (flat items)     | CSS only                | HTML/CSS                                                                                                                                       | No                                                           | Web                |
@@ -22,15 +22,16 @@
 | --------------------------- | --------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Real-time visual preview    | Yes                                     | Yes                    | Preview in Figma                                                                                                                                  |
 | Nested tree building        | Yes                                     | No (flat items only)   | Design-based (not flexbox-specific)                                                                                                               |
-| Multi-framework code export | 7 targets                               | CSS only               | 7+ targets                                                                                                                                        |
+| Multi-framework code export | 10 targets                              | CSS only               | 7+ targets                                                                                                                                        |
 | Undo / redo                 | Yes (100 snapshots)                     | Limited or none        | Figma history                                                                                                                                     |
 | Preset templates            | Yes (Holy Grail, Card Grid, Nav Bar, …) | Few or none            | N/A                                                                                                                                               |
-| Theming (dark/light)        | Yes (Catppuccin)                        | Rare                   | N/A                                                                                                                                               |
+| Theming                     | Yes (4 Catppuccin flavours)             | Rare                   | N/A                                                                                                                                               |
 | Procedural art backgrounds  | Yes                                     | No                     | No                                                                                                                                                |
 | Golden test infrastructure  | Yes (cross-framework visual regression) | No                     | No                                                                                                                                                |
 | Works offline               | Yes (desktop binary)                    | No (requires internet) | No (requires Figma)                                                                                                                               |
 | WASM deployment             | Yes                                     | N/A                    | N/A                                                                                                                                               |
 | Hover preview before commit | Yes                                     | Rare                   | No                                                                                                                                                |
+| Real-time collaboration     | Yes (P2P over WebRTC, shareable room)   | No                     | Figma multiplayer                                                                                                                                 |
 | Free                        | Yes                                     | Yes (most)             | Free tier or paid ([DhiWise pricing](https://www.dhiwise.com/post/dhiwise-figma-to-code), [Builder.io pricing](https://www.builder.io/m/pricing)) |
 
 ## Layout Engine Comparison
@@ -44,16 +45,16 @@
 
 ## Flexplore Limitations
 
-- **Flexbox only** — no CSS Grid support, even though the underlying engine (Taffy) supports it
+- **Grid support is basic** — templates, auto-flow and placement only; no named areas, `minmax()`, or subgrid
 - **Missing mainstream web framework targets** — no Vue, Angular, Svelte, or Next.js output; framework coverage skews toward niche (Bevy, Iced)
 - **No design tool import** — can't import from Figma, Sketch, or Adobe XD; layouts must be built from scratch
-- **Simplified value model** — only Auto/Px/Percent/Vw/Vh; no `calc()`, `clamp()`, `min()`, `max()`, `fr`, or other modern CSS functions
-- **Framework output is approximate** — SwiftUI, Flutter, and Iced codegen includes comments/TODOs for percentage and viewport units that don't translate cleanly; generated code often needs manual adjustment
+- **Simplified value model** — Auto/Px/Percent/Vw/Vh (plus `fr` in grid tracks); no `calc()`, `clamp()`, `min()`, `max()`, or other CSS functions
+- **Framework output is approximate** — SwiftUI, Flutter, Iced, egui and React Native codegen includes comments/TODOs for percentage and viewport units that don't translate cleanly; generated code often needs manual adjustment
 - **No real content preview** — only colored boxes with text labels; can't preview with images, text blocks, or interactive elements
 - **Single layout tree per session** — no component composition, reusable fragments, or multi-page layouts
 - **No plugin or extension system** — no community templates or third-party integrations
 - **Heavy runtime dependency** — Bevy (a full game engine) as a dependency impacts build times and binary size
-- **No collaboration features** — single-user tool with no sharing or real-time collaboration
+- **Collaboration is best-effort** — peer-to-peer over a public signalling server with no authentication; whole-document edits are last-writer-wins
 
 ## Sources
 

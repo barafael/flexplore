@@ -43,7 +43,7 @@ export default function FlexLayout() {
         padding: 8,
         backgroundColor: 'rgb(179, 205, 227)',
       }}>
-        <Text style={{ color: 'rgba(13, 13, 26, 0.85)', fontSize: 26 }}>25%</Text>
+        <Text style={{ color: 'rgba(13, 13, 26, 0.85)', fontSize: 26 }}>25%-b</Text>
       </View>
       <View style={{
         flexDirection: 'row',
@@ -58,7 +58,7 @@ export default function FlexLayout() {
         padding: 8,
         backgroundColor: 'rgb(204, 235, 197)',
       }}>
-        <Text style={{ color: 'rgba(13, 13, 26, 0.85)', fontSize: 26 }}>25%</Text>
+        <Text style={{ color: 'rgba(13, 13, 26, 0.85)', fontSize: 26 }}>25%-c</Text>
       </View>
     </View>
   );

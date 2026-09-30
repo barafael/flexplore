@@ -1,4 +1,4 @@
-// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview` to regenerate.
+// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview -- --generate-only` to regenerate.
 import 'package:flutter/material.dart';
 
 class DeepChain3 extends StatelessWidget {
@@ -40,16 +40,13 @@ class DeepChain3 extends StatelessWidget {
                       child: Text('leaf',
                         style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
                       ),
-                    )
-                    ,
+                    ),
                   ],
                 )
-              )
-              ,
+              ),
             ],
           )
-        )
-        ,
+        ),
       ],
     )
   )

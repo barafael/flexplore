@@ -13,7 +13,7 @@ fn build_ui(ui: &mut egui::Ui) {
                     .show(ui, |ui| {
                         ui.set_min_size(egui::vec2(100.0, 60.0));
                         ui.centered_and_justified(|ui| {
-                            ui.label(egui::RichText::new("top").size(26.0).color(egui::Color32::from_rgba_premultiplied(13, 13, 26, 217)));
+                            ui.label(egui::RichText::new("top-1").size(26.0).color(egui::Color32::from_rgba_premultiplied(13, 13, 26, 217)));
                         });
                     });
                 ui.with_layout(egui::Layout::top_down(egui::Align::Min).with_main_align(egui::Align::Center), |ui| {
@@ -34,7 +34,7 @@ fn build_ui(ui: &mut egui::Ui) {
                     .show(ui, |ui| {
                         ui.set_min_size(egui::vec2(100.0, 60.0));
                         ui.centered_and_justified(|ui| {
-                            ui.label(egui::RichText::new("top").size(26.0).color(egui::Color32::from_rgba_premultiplied(13, 13, 26, 217)));
+                            ui.label(egui::RichText::new("top-2").size(26.0).color(egui::Color32::from_rgba_premultiplied(13, 13, 26, 217)));
                         });
                     });
             });

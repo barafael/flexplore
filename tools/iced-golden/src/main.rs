@@ -4,38 +4,47 @@
 //! captures a screenshot, and saves `rendered_iced.png`.
 
 use std::{
-    path::{Path, PathBuf},
+    path::PathBuf,
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{Result, anyhow, bail};
 use clap::Parser;
+use golden_common::{
+    RenderJob, VIEWPORT_H, VIEWPORT_W,
+    config::{
+        AlignItems, AlignSelf, ColorPalette, FlexDirection, FlexWrap, JustifyContent, NodeConfig,
+        ValueConfig,
+    },
+    effective_justify, palette_color,
+    png::save_rgba_png,
+    resolve_to_px,
+};
 use iced::{
     Color, Element, Length, Padding, Size, Subscription, Task, Theme,
     widget::{Space, column, container, row, text},
     window,
 };
 
-mod config;
-use config::{
-    AlignItems, AlignSelf, ColorPalette, FlexDirection, FlexWrap, JustifyContent, LayoutInput,
-    NodeConfig, ValueConfig,
-};
-
 /// Render flexplore golden screenshots with Iced.
 #[derive(Parser)]
 #[command(name = "iced-golden")]
 struct Arguments {
-    /// Path to the testdata directory.
-    #[arg(default_value = "testdata")]
+    /// Testdata directory (default: the repository's testdata/).
+    #[arg(long, default_value_os_t = golden_common::default_testdata_dir())]
     testdata: PathBuf,
 
     /// Only render these test cases (default: all).
     cases: Vec<String>,
 }
 
-const VIEWPORT_W: f32 = 400.0;
-const VIEWPORT_H: f32 = 300.0;
+/// Interval between layout ticks.
+const TICK: Duration = Duration::from_millis(50);
+/// Ticks to let the layout settle before requesting a screenshot.
+const SETTLE_TICKS: usize = 4;
+/// Ticks to wait for the screenshot before giving up (15 s at 50 ms).
+const TIMEOUT_TICKS: usize = 300;
 
 // --- Application state ---
 
@@ -43,13 +52,8 @@ struct App {
     jobs: Vec<RenderJob>,
     current: usize,
     frames: usize,
-}
-
-struct RenderJob {
-    name: String,
-    node: NodeConfig,
-    palette: ColorPalette,
-    output_dir: PathBuf,
+    /// First fatal error; reported by `main` as a non-zero exit.
+    failure: Arc<Mutex<Option<String>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -58,14 +62,12 @@ enum Message {
     Screenshot(window::Screenshot),
 }
 
-fn main() -> iced::Result {
+fn main() -> Result<()> {
     let cli = Arguments::parse();
 
-    let filter: Vec<&str> = cli.cases.iter().map(|s| s.as_str()).collect();
-
-    let jobs = load_jobs(&cli.testdata, &filter).expect("failed to load test jobs");
+    let jobs = golden_common::load_jobs(&cli.testdata, &cli.cases)?;
     if jobs.is_empty() {
-        eprintln!("No render jobs found.");
+        eprintln!("No render jobs found in {}.", cli.testdata.display());
         return Ok(());
     }
     eprintln!(
@@ -73,40 +75,76 @@ fn main() -> iced::Result {
         jobs.len(),
         cli.testdata.display()
     );
+    eprintln!("Rendering: {}", jobs[0].name);
 
-    iced::application("iced-golden", App::update, App::view)
+    let failure = Arc::new(Mutex::new(None));
+
+    // iced 0.14 takes the boot closure as `Fn`, so hand the jobs over through a
+    // slot that the (single) boot call takes from.
+    let jobs = Mutex::new(Some(jobs));
+    let app_failure = Arc::clone(&failure);
+    let boot = move || {
+        let jobs = jobs.lock().unwrap().take().unwrap_or_default();
+        (
+            App {
+                jobs,
+                current: 0,
+                frames: 0,
+                failure: Arc::clone(&app_failure),
+            },
+            Task::none(),
+        )
+    };
+
+    iced::application(boot, App::update, App::view)
+        .title("iced-golden")
         .subscription(App::subscription)
-        .theme(|_| Theme::Dark)
+        .theme(Theme::Dark)
         .scale_factor(|_| 1.0)
         .window_size(Size::new(VIEWPORT_W, VIEWPORT_H))
-        .run_with(move || {
-            (
-                App {
-                    jobs,
-                    current: 0,
-                    frames: 0,
-                },
-                Task::none(),
-            )
-        })
+        .run()
+        .map_err(|e| anyhow!("iced failed: {e}"))?;
+
+    if let Some(msg) = failure.lock().unwrap().take() {
+        bail!("{msg}");
+    }
+    Ok(())
 }
 
 impl App {
+    fn fail(&mut self, msg: String) -> Task<Message> {
+        eprintln!("  ERROR: {msg}");
+        self.failure.lock().unwrap().get_or_insert(msg);
+        // Stop ticking and close.
+        self.current = self.jobs.len();
+        window::latest().and_then(window::close)
+    }
+
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Tick => {
                 self.frames += 1;
-                if self.frames == 4 {
-                    return window::get_latest()
+                if self.frames == SETTLE_TICKS {
+                    return window::latest()
                         .and_then(window::screenshot)
                         .map(Message::Screenshot);
+                }
+                if self.frames > TIMEOUT_TICKS {
+                    let name = self.jobs[self.current].name.clone();
+                    return self.fail(format!(
+                        "timed out after {:?} waiting for screenshot of {name}",
+                        TICK * TIMEOUT_TICKS as u32
+                    ));
                 }
                 Task::none()
             }
             Message::Screenshot(screenshot) => {
                 if let Some(job) = self.jobs.get(self.current) {
-                    let path = job.output_dir.join(&job.name).join("rendered_iced.png");
-                    save_screenshot(&path, &screenshot);
+                    let path = job.output_path("rendered_iced.png");
+                    if let Err(e) = save_screenshot(&path, &screenshot) {
+                        return self.fail(format!("{}: {e:#}", job.name));
+                    }
+                    eprintln!("  Saved: {}", path.display());
                 }
 
                 self.current += 1;
@@ -114,7 +152,7 @@ impl App {
 
                 if self.current >= self.jobs.len() {
                     eprintln!("All done!");
-                    return window::get_latest().and_then(window::close);
+                    return window::latest().and_then(window::close);
                 }
 
                 eprintln!("Rendering: {}", self.jobs[self.current].name);
@@ -126,15 +164,15 @@ impl App {
     fn view(&self) -> Element<'_, Message> {
         if let Some(job) = self.jobs.get(self.current) {
             let mut leaf_idx = 0;
-            build_widget(&job.node, &mut leaf_idx, job.palette, true, false, true)
+            build_widget(&job.node, &mut leaf_idx, job.palette, Ctx::root())
         } else {
-            Space::new(Length::Fill, Length::Fill).into()
+            Space::new().width(Length::Fill).height(Length::Fill).into()
         }
     }
 
     fn subscription(&self) -> Subscription<Message> {
         if self.current < self.jobs.len() {
-            iced::time::every(Duration::from_millis(50)).map(|_| Message::Tick)
+            iced::time::every(TICK).map(|_| Message::Tick)
         } else {
             Subscription::none()
         }
@@ -143,86 +181,67 @@ impl App {
 
 // --- Screenshot saving ---
 
-fn save_screenshot(path: &Path, screenshot: &window::Screenshot) {
+fn save_screenshot(path: &std::path::Path, screenshot: &window::Screenshot) -> Result<()> {
     let size = screenshot.size;
-    let bytes = screenshot.bytes.clone();
-
-    if let Some(img) = image::RgbaImage::from_raw(size.width, size.height, bytes.to_vec()) {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).ok();
-        }
-        match img.save(path) {
-            Ok(()) => eprintln!("  Saved: {}", path.display()),
-            Err(e) => eprintln!("  ERROR saving {}: {e}", path.display()),
-        }
-    } else {
-        eprintln!("  ERROR: could not create image from screenshot bytes");
-    }
-}
-
-// --- Job loading ---
-
-fn load_jobs(testdata_dir: &Path, filter: &[&str]) -> Result<Vec<RenderJob>> {
-    let mut jobs = Vec::new();
-
-    let mut entries: Vec<_> = std::fs::read_dir(testdata_dir)
-        .context("cannot read testdata directory")?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
-        .collect();
-    entries.sort_by_key(|e| e.file_name());
-
-    for entry in entries {
-        let name = entry.file_name().to_string_lossy().into_owned();
-
-        if !filter.is_empty() && !filter.iter().any(|f| *f == name) {
-            continue;
-        }
-
-        let input_path = entry.path().join("input.json");
-        if !input_path.exists() {
-            continue;
-        }
-
-        let json = std::fs::read_to_string(&input_path)
-            .with_context(|| format!("failed to read {}", input_path.display()))?;
-        let input: LayoutInput = serde_json::from_str(&json)
-            .with_context(|| format!("failed to parse {}", input_path.display()))?;
-
-        jobs.push(RenderJob {
-            name,
-            node: input.node,
-            palette: input.palette,
-            output_dir: testdata_dir.to_path_buf(),
-        });
-    }
-
-    Ok(jobs)
+    // Resize to the viewport size to normalize across DPI settings.
+    save_rgba_png(
+        path,
+        size.width,
+        size.height,
+        screenshot.rgba.to_vec(),
+        Some((VIEWPORT_W as u32, VIEWPORT_H as u32)),
+    )
 }
 
 // --- Widget building ---
+
+/// Layout context a node inherits from its parent.
+#[derive(Clone, Copy)]
+struct Ctx {
+    /// Parent's main axis is horizontal.
+    parent_is_row: bool,
+    /// Parent has `align-items: stretch`.
+    parent_stretch: bool,
+    is_root: bool,
+    /// This node or an ancestor is `visible: false`: keep its space, paint nothing.
+    hidden: bool,
+}
+
+impl Ctx {
+    fn root() -> Self {
+        Self {
+            parent_is_row: true,
+            parent_stretch: false,
+            is_root: true,
+            hidden: false,
+        }
+    }
+
+    fn child(self, parent_is_row: bool, parent_stretch: bool) -> Self {
+        Self {
+            parent_is_row,
+            parent_stretch,
+            is_root: false,
+            hidden: self.hidden,
+        }
+    }
+}
 
 fn build_widget<'a>(
     node: &NodeConfig,
     leaf_idx: &mut usize,
     palette: ColorPalette,
-    parent_is_row: bool,
-    parent_stretch: bool,
-    is_root: bool,
+    ctx: Ctx,
 ) -> Element<'a, Message> {
-    let is_leaf = node.children.is_empty();
+    let ctx = Ctx {
+        hidden: ctx.hidden || !node.visible,
+        ..ctx
+    };
 
-    let inner = if is_leaf {
-        build_leaf(node, leaf_idx, palette, parent_is_row, parent_stretch)
+    let inner = if node.children.is_empty() {
+        build_leaf(node, leaf_idx, palette, ctx)
     } else {
-        build_container(
-            node,
-            leaf_idx,
-            palette,
-            parent_is_row,
-            parent_stretch,
-            is_root,
-        )
+        build_container(node, leaf_idx, palette, ctx)
     };
 
     // Apply margin as an outer container with padding
@@ -233,24 +252,29 @@ fn build_leaf<'a>(
     node: &NodeConfig,
     leaf_idx: &mut usize,
     palette: ColorPalette,
-    parent_is_row: bool,
-    parent_stretch: bool,
+    ctx: Ctx,
 ) -> Element<'a, Message> {
     let (r, g, b) = palette_color(palette, *leaf_idx);
     *leaf_idx += 1;
-    let bg = Color::from_rgb(r, g, b);
+    // Hidden nodes keep their layout box but paint nothing.
+    let (bg, fg) = if ctx.hidden {
+        (Color::TRANSPARENT, Color::TRANSPARENT)
+    } else {
+        (
+            Color::from_rgb(r, g, b),
+            Color::from_rgba(0.05, 0.05, 0.1, 0.85),
+        )
+    };
 
-    let label = text(node.label.clone())
-        .size(26)
-        .color(Color::from_rgba(0.05, 0.05, 0.1, 0.85));
+    let label = text(node.display_text().to_owned()).size(26).color(fg);
 
     // Determine effective width
     let basis_overrides_width =
-        parent_is_row && matches!(node.flex_basis, ValueConfig::Percent(n) if n > 0.0);
+        ctx.parent_is_row && matches!(node.flex_basis, ValueConfig::Percent(n) if n > 0.0);
     let grow_overrides_width =
-        node.flex_grow > 0.0 && parent_is_row && matches!(node.width, ValueConfig::Auto);
+        node.flex_grow > 0.0 && ctx.parent_is_row && matches!(node.width, ValueConfig::Auto);
     let stretch_overrides_width =
-        parent_stretch && !parent_is_row && matches!(node.width, ValueConfig::Auto);
+        ctx.parent_stretch && !ctx.parent_is_row && matches!(node.width, ValueConfig::Auto);
 
     let width = if basis_overrides_width {
         flex_basis_length(&node.flex_basis)
@@ -264,11 +288,11 @@ fn build_leaf<'a>(
 
     // Determine effective height
     let basis_overrides_height =
-        !parent_is_row && matches!(node.flex_basis, ValueConfig::Percent(n) if n > 0.0);
+        !ctx.parent_is_row && matches!(node.flex_basis, ValueConfig::Percent(n) if n > 0.0);
     let grow_overrides_height =
-        node.flex_grow > 0.0 && !parent_is_row && matches!(node.height, ValueConfig::Auto);
+        node.flex_grow > 0.0 && !ctx.parent_is_row && matches!(node.height, ValueConfig::Auto);
     let stretch_overrides_height =
-        parent_stretch && parent_is_row && matches!(node.height, ValueConfig::Auto);
+        ctx.parent_stretch && ctx.parent_is_row && matches!(node.height, ValueConfig::Auto);
 
     let height = if basis_overrides_height {
         flex_basis_length(&node.flex_basis)
@@ -298,17 +322,6 @@ fn build_leaf<'a>(
     c.into()
 }
 
-/// Resolve a ValueConfig to pixels given the parent's resolved size.
-fn resolve_to_px(v: &ValueConfig, parent_px: f32) -> f32 {
-    match v {
-        ValueConfig::Auto => 0.0,
-        ValueConfig::Px(n) => *n,
-        ValueConfig::Percent(n) => n / 100.0 * parent_px,
-        ValueConfig::Vw(n) => n / 100.0 * VIEWPORT_W,
-        ValueConfig::Vh(n) => n / 100.0 * VIEWPORT_H,
-    }
-}
-
 /// Get the main-axis pixel size of a child for wrap line-breaking.
 fn child_main_axis_px(child: &NodeConfig, parent_is_row: bool, parent_main: f32) -> f32 {
     let dim = if parent_is_row {
@@ -323,9 +336,7 @@ fn build_container<'a>(
     node: &NodeConfig,
     leaf_idx: &mut usize,
     palette: ColorPalette,
-    parent_is_row: bool,
-    parent_stretch: bool,
-    is_root: bool,
+    ctx: Ctx,
 ) -> Element<'a, Message> {
     let is_row = matches!(
         node.flex_direction,
@@ -337,6 +348,7 @@ fn build_container<'a>(
     );
     let stretch = node.align_items == AlignItems::Stretch;
     let wraps = matches!(node.flex_wrap, FlexWrap::Wrap | FlexWrap::WrapReverse);
+    let child_ctx = ctx.child(is_row, stretch);
 
     // Sort children by order and pre-compute leaf_idx starts so palette
     // colours track with original nodes even when reversed.
@@ -346,7 +358,7 @@ fn build_container<'a>(
     let mut acc = *leaf_idx;
     for child in &children {
         starts.push(acc);
-        acc += leaf_count(child);
+        acc += child.count_leaves();
     }
     *leaf_idx = acc;
 
@@ -359,9 +371,9 @@ fn build_container<'a>(
     let jc = if wraps {
         // Wrapping + reversed: direction handled by reversing items within
         // each line, so no justify swap needed.
-        node.justify_content.clone()
+        node.justify_content
     } else {
-        effective_justify(&node.justify_content, is_reversed)
+        effective_justify(node.justify_content, is_reversed)
     };
     let uses_space_justification = matches!(
         jc,
@@ -393,6 +405,8 @@ fn build_container<'a>(
         _ => 0.0,
     };
 
+    // Hidden children keep their space (`visibility: hidden`), so every
+    // child takes part in line breaking, shrinking and justification.
     let layout: Element<'a, Message> = if wraps {
         // --- Wrapping layout ---
         // Compute available main-axis space for line breaking
@@ -408,54 +422,40 @@ fn build_container<'a>(
         let padding_px = resolve_to_px(&node.padding.first(), 0.0);
         let inner_main = (container_main - padding_px * 2.0).max(0.0);
 
-        // First pass: compute line assignments for visible children
-        let mut line_breaks: Vec<usize> = Vec::new(); // line index per visible child
+        // First pass: compute line assignments
+        let mut line_breaks: Vec<usize> = Vec::with_capacity(children.len());
         let mut current_line = 0usize;
         let mut line_used = 0.0f32;
-        let mut visible_count_on_line = 0usize;
+        let mut count_on_line = 0usize;
 
         for child in &children {
-            if !child.visible {
-                continue;
-            }
             let size = child_main_axis_px(child, is_row, inner_main);
             let margin_extra = resolve_to_px(&child.margin.first(), 0.0) * 2.0;
             let total = size + margin_extra;
 
-            if visible_count_on_line > 0 && line_used + main_gap_px + total > inner_main {
+            if count_on_line > 0 && line_used + main_gap_px + total > inner_main {
                 current_line += 1;
                 line_used = 0.0;
-                visible_count_on_line = 0;
+                count_on_line = 0;
             }
-            if visible_count_on_line > 0 {
+            if count_on_line > 0 {
                 line_used += main_gap_px;
             }
             line_used += total;
-            visible_count_on_line += 1;
+            count_on_line += 1;
             line_breaks.push(current_line);
         }
-        let num_lines = if line_breaks.is_empty() {
-            0
-        } else {
-            line_breaks.iter().copied().max().unwrap_or(0) + 1
-        };
+        let num_lines = line_breaks.iter().copied().max().map_or(0, |m| m + 1);
 
         // Second pass: build widgets and distribute to lines
         let mut lines: Vec<Vec<Element<'a, Message>>> =
             (0..num_lines).map(|_| Vec::new()).collect();
-        let mut visible_idx = 0usize;
 
-        for (child, start) in children.iter().zip(starts.iter()) {
-            if !child.visible {
-                continue;
-            }
+        for ((child, start), line_idx) in children.iter().zip(&starts).zip(&line_breaks) {
             let mut idx = *start;
-            let widget = build_widget(child, &mut idx, palette, is_row, stretch, false);
+            let widget = build_widget(child, &mut idx, palette, child_ctx);
             let widget = apply_align_self(widget, child, is_row);
-            if let Some(&line_idx) = line_breaks.get(visible_idx) {
-                lines[line_idx].push(widget);
-            }
-            visible_idx += 1;
+            lines[*line_idx].push(widget);
         }
 
         if matches!(node.flex_wrap, FlexWrap::WrapReverse) {
@@ -474,7 +474,12 @@ fn build_container<'a>(
                 if is_row {
                     let mut elements: Vec<Element<'a, Message>> = Vec::new();
                     if is_reversed {
-                        elements.push(Space::new(Length::Fill, Length::Shrink).into());
+                        elements.push(
+                            Space::new()
+                                .width(Length::Fill)
+                                .height(Length::Shrink)
+                                .into(),
+                        );
                     }
                     elements.extend(line_elements);
                     let mut r = row(elements).spacing(main_gap_px).height(Length::Fill);
@@ -483,7 +488,12 @@ fn build_container<'a>(
                 } else {
                     let mut elements: Vec<Element<'a, Message>> = Vec::new();
                     if is_reversed {
-                        elements.push(Space::new(Length::Shrink, Length::Fill).into());
+                        elements.push(
+                            Space::new()
+                                .width(Length::Shrink)
+                                .height(Length::Fill)
+                                .into(),
+                        );
                     }
                     elements.extend(line_elements);
                     let mut c = column(elements).spacing(main_gap_px).width(Length::Fill);
@@ -506,13 +516,12 @@ fn build_container<'a>(
         let parent_main = if is_row { VIEWPORT_W } else { VIEWPORT_H };
         let padding_px = resolve_to_px(&node.padding.first(), 0.0);
         let available = (parent_main - padding_px * 2.0).max(0.0);
-        let visible: Vec<&&NodeConfig> = children.iter().filter(|c| c.visible).collect();
-        let num_gaps = if visible.len() > 1 && !uses_space_justification {
-            (visible.len() - 1) as f32
+        let num_gaps = if children.len() > 1 && !uses_space_justification {
+            (children.len() - 1) as f32
         } else {
             0.0
         };
-        let total_main: f32 = visible
+        let total_main: f32 = children
             .iter()
             .map(|c| {
                 let dim = if is_row { &c.width } else { &c.height };
@@ -527,44 +536,42 @@ fn build_container<'a>(
             1.0
         };
 
-        // Build child widgets, skipping invisible ones
         let child_widgets: Vec<Element<'a, Message>> = children
             .iter()
-            .zip(starts.iter())
-            .filter_map(|(child, start)| {
-                if !child.visible {
-                    return None;
-                }
+            .zip(&starts)
+            .map(|(child, start)| {
                 let mut idx = *start;
-                let widget = build_widget(child, &mut idx, palette, is_row, stretch, false);
+                let widget = build_widget(child, &mut idx, palette, child_ctx);
                 let widget = apply_align_self(widget, child, is_row);
                 // Apply flex-shrink by wrapping in a fixed-size container
-                let widget = if shrink_ratio < 1.0 && child.flex_shrink > 0.0 {
+                if shrink_ratio < 1.0 && child.flex_shrink > 0.0 {
                     let dim = if is_row { &child.width } else { &child.height };
                     let orig = resolve_to_px(dim, parent_main);
                     if orig > 0.0 {
                         let shrunk = orig * shrink_ratio;
-                        if is_row {
+                        return if is_row {
                             container(widget).width(Length::Fixed(shrunk)).into()
                         } else {
                             container(widget).height(Length::Fixed(shrunk)).into()
-                        }
-                    } else {
-                        widget
+                        };
                     }
-                } else {
-                    widget
-                };
-                Some(widget)
+                }
+                widget
             })
             .collect();
 
         // Build elements list with Space widgets for justify-content
         let space_widget = || -> Element<'a, Message> {
             if is_row {
-                Space::new(Length::Fill, Length::Shrink).into()
+                Space::new()
+                    .width(Length::Fill)
+                    .height(Length::Shrink)
+                    .into()
             } else {
-                Space::new(Length::Shrink, Length::Fill).into()
+                Space::new()
+                    .width(Length::Shrink)
+                    .height(Length::Fill)
+                    .into()
             }
         };
 
@@ -626,16 +633,21 @@ fn build_container<'a>(
     let full_w = matches!(node.width, ValueConfig::Percent(n) if n >= 100.0);
     let full_h = matches!(node.height, ValueConfig::Percent(n) if n >= 100.0);
 
-    let basis_w = parent_is_row && matches!(node.flex_basis, ValueConfig::Percent(n) if n > 0.0);
-    let basis_h = !parent_is_row && matches!(node.flex_basis, ValueConfig::Percent(n) if n > 0.0);
+    let basis_w =
+        ctx.parent_is_row && matches!(node.flex_basis, ValueConfig::Percent(n) if n > 0.0);
+    let basis_h =
+        !ctx.parent_is_row && matches!(node.flex_basis, ValueConfig::Percent(n) if n > 0.0);
 
     let width = if basis_w {
         flex_basis_length(&node.flex_basis)
     } else if full_w {
         Length::Fill
-    } else if grow_overrides(node.flex_grow, parent_is_row, &node.width) {
+    } else if grow_overrides(node.flex_grow, ctx.parent_is_row, &node.width) {
         fill_portion(node.flex_grow)
-    } else if !parent_is_row && parent_stretch && matches!(node.width, ValueConfig::Auto) && !full_w
+    } else if !ctx.parent_is_row
+        && ctx.parent_stretch
+        && matches!(node.width, ValueConfig::Auto)
+        && !full_w
     {
         Length::Fill
     } else {
@@ -643,22 +655,29 @@ fn build_container<'a>(
     };
 
     // Root always fills viewport height, matching HTML body { height: 100% }
-    let height = if is_root {
+    let height = if ctx.is_root {
         Length::Fill
     } else if basis_h {
         flex_basis_length(&node.flex_basis)
     } else if full_h {
         Length::Fill
-    } else if grow_overrides(node.flex_grow, !parent_is_row, &node.height) {
+    } else if grow_overrides(node.flex_grow, !ctx.parent_is_row, &node.height) {
         fill_portion(node.flex_grow)
-    } else if parent_is_row && parent_stretch && matches!(node.height, ValueConfig::Auto) && !full_h
+    } else if ctx.parent_is_row
+        && ctx.parent_stretch
+        && matches!(node.height, ValueConfig::Auto)
+        && !full_h
     {
         Length::Fill
     } else {
         to_length(&node.height)
     };
 
-    let bg = Color::from_rgba(0.11, 0.11, 0.17, 1.0);
+    let bg = if ctx.hidden {
+        Color::TRANSPARENT
+    } else {
+        Color::from_rgba(0.11, 0.11, 0.17, 1.0)
+    };
 
     let mut c = container(layout)
         .width(width)
@@ -675,21 +694,6 @@ fn build_container<'a>(
     c = apply_min_max(c, node);
 
     c.into()
-}
-
-/// When direction is reversed, flex-start/end swap so items anchor to the
-/// correct end of the main axis (CSS reverses the axis, not just child order).
-fn effective_justify(jc: &JustifyContent, is_reversed: bool) -> JustifyContent {
-    if !is_reversed {
-        return *jc;
-    }
-    match jc {
-        JustifyContent::FlexStart => JustifyContent::FlexEnd,
-        JustifyContent::FlexEnd => JustifyContent::FlexStart,
-        JustifyContent::Start => JustifyContent::End,
-        JustifyContent::End => JustifyContent::Start,
-        other => *other,
-    }
 }
 
 fn apply_row_align<'a>(
@@ -724,9 +728,14 @@ fn grow_overrides(flex_grow: f32, axis_matches: bool, dim: &ValueConfig) -> bool
     flex_grow > 0.0 && axis_matches && matches!(dim, ValueConfig::Auto)
 }
 
+/// `FillPortion(0)` is invalid in iced, so portions are clamped to at least 1.
+fn portion(n: f32) -> Length {
+    Length::FillPortion((n as u16).max(1))
+}
+
 fn fill_portion(grow: f32) -> Length {
     if grow > 1.0 {
-        Length::FillPortion(grow as u16)
+        portion(grow)
     } else {
         Length::Fill
     }
@@ -739,10 +748,8 @@ fn to_length(v: &ValueConfig) -> Length {
         ValueConfig::Auto => Length::Shrink,
         ValueConfig::Px(n) => Length::Fixed(*n),
         ValueConfig::Percent(n) if *n >= 100.0 => Length::Fill,
-        ValueConfig::Percent(n) => Length::FillPortion(*n as u16),
-        // Viewport units: approximate as fixed pixels for 400x300 viewport
-        ValueConfig::Vw(n) => Length::Fixed(n / 100.0 * 400.0),
-        ValueConfig::Vh(n) => Length::Fixed(n / 100.0 * 300.0),
+        ValueConfig::Percent(n) => portion(*n),
+        ValueConfig::Vw(_) | ValueConfig::Vh(_) => Length::Fixed(resolve_to_px(v, 0.0)),
     }
 }
 
@@ -752,8 +759,7 @@ fn to_padding(v: &ValueConfig) -> Option<Padding> {
         ValueConfig::Px(n) if *n == 0.0 => None,
         ValueConfig::Px(n) => Some(Padding::from(*n)),
         ValueConfig::Percent(n) => Some(Padding::from(*n)),
-        ValueConfig::Vw(n) => Some(Padding::from(n / 100.0 * 400.0)),
-        ValueConfig::Vh(n) => Some(Padding::from(n / 100.0 * 300.0)),
+        ValueConfig::Vw(_) | ValueConfig::Vh(_) => Some(Padding::from(resolve_to_px(v, 0.0))),
     }
 }
 
@@ -844,37 +850,10 @@ fn apply_align_self<'a>(
     }
 }
 
-/// Return the number of leaves under a node.
-fn leaf_count(node: &NodeConfig) -> usize {
-    if node.children.is_empty() {
-        1
-    } else {
-        node.children.iter().map(leaf_count).sum()
-    }
-}
-
 /// Convert a flex_basis percentage to a Length::FillPortion.
 fn flex_basis_length(basis: &ValueConfig) -> Length {
     match basis {
-        ValueConfig::Percent(n) => Length::FillPortion(n.round() as u16),
+        ValueConfig::Percent(n) => portion(n.round()),
         _ => Length::Shrink,
     }
-}
-
-// --- Palette colors (mirrors flexplore's art::palette_color) ---
-
-fn palette_color(palette: ColorPalette, idx: usize) -> (f32, f32, f32) {
-    let c = match palette {
-        ColorPalette::Pastel1 => colorous::PASTEL1[idx % colorous::PASTEL1.len()],
-        ColorPalette::Pastel2 => colorous::PASTEL2[idx % colorous::PASTEL2.len()],
-        ColorPalette::Set1 => colorous::SET1[idx % colorous::SET1.len()],
-        ColorPalette::Set2 => colorous::SET2[idx % colorous::SET2.len()],
-        ColorPalette::Set3 => colorous::SET3[idx % colorous::SET3.len()],
-        ColorPalette::Tableau10 => colorous::TABLEAU10[idx % colorous::TABLEAU10.len()],
-        ColorPalette::Category10 => colorous::CATEGORY10[idx % colorous::CATEGORY10.len()],
-        ColorPalette::Accent => colorous::ACCENT[idx % colorous::ACCENT.len()],
-        ColorPalette::Dark2 => colorous::DARK2[idx % colorous::DARK2.len()],
-        ColorPalette::Paired => colorous::PAIRED[idx % colorous::PAIRED.len()],
-    };
-    (c.r as f32 / 255.0, c.g as f32 / 255.0, c.b as f32 / 255.0)
 }

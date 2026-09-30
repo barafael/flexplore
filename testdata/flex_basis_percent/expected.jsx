@@ -44,7 +44,7 @@ export default function FlexLayout() {
         boxSizing: 'border-box',
         color: 'rgba(13, 13, 26, 0.85)',
         fontSize: 26,
-      }}>25%</div>
+      }}>25%-b</div>
       <div style={{
         display: 'flex',
         flexWrap: 'wrap',
@@ -60,7 +60,7 @@ export default function FlexLayout() {
         boxSizing: 'border-box',
         color: 'rgba(13, 13, 26, 0.85)',
         fontSize: 26,
-      }}>25%</div>
+      }}>25%-c</div>
     </div>
   );
 }

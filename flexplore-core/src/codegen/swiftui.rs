@@ -3,27 +3,19 @@ use std::fmt::Write;
 use crate::config::*;
 use anyhow::Result;
 
-use crate::art::palette_color;
+use super::common::{
+    is_full_percent, sorted_children_with_leaf_starts, swift_string_literal, take_leaf_color,
+};
 use crate::config::{ColorPalette, Corners, NodeConfig, Sides, ValueConfig};
 
-fn count_leaves(node: &NodeConfig) -> usize {
-    if node.children.is_empty() {
-        1
-    } else {
-        node.children.iter().map(count_leaves).sum()
-    }
-}
-
-fn is_zero_px(v: &ValueConfig) -> bool {
-    matches!(v, ValueConfig::Px(n) if *n == 0.0)
-}
-
-fn is_full_percent(v: &ValueConfig) -> bool {
-    matches!(v, ValueConfig::Percent(n) if *n >= 100.0)
-}
-
+/// Whether any flex container in the tree wraps, and therefore needs the
+/// `FlowLayout` helper struct. Grid containers become `LazyVGrid`/`LazyHGrid`
+/// and never use it, whatever their `flex_wrap` says.
 fn needs_wrap(node: &NodeConfig) -> bool {
-    if !node.children.is_empty() && node.flex_wrap != FlexWrap::NoWrap {
+    if !node.children.is_empty()
+        && node.display_mode != DisplayMode::Grid
+        && node.flex_wrap != FlexWrap::NoWrap
+    {
         return true;
     }
     node.children.iter().any(needs_wrap)
@@ -235,6 +227,13 @@ pub fn emit_swiftui(root: &NodeConfig, palette: ColorPalette) -> Result<String> 
     Ok(buf)
 }
 
+/// Layout context a node inherits from its parent.
+#[derive(Clone, Copy)]
+struct Parent {
+    is_row: bool,
+    stretch: bool,
+}
+
 #[allow(clippy::too_many_arguments)] // recursive tree-walker; leaf_idx varies per call site
 fn emit_swiftui_node(
     buf: &mut String,
@@ -246,475 +245,424 @@ fn emit_swiftui_node(
     parent_stretch: bool,
     is_root: bool,
 ) -> Result<()> {
+    let parent = Parent {
+        is_row: parent_is_row,
+        stretch: parent_stretch,
+    };
+    if node.children.is_empty() {
+        emit_swiftui_leaf(buf, node, depth, leaf_idx, palette, parent)
+    } else {
+        emit_swiftui_container(buf, node, depth, leaf_idx, palette, parent, is_root)
+    }
+}
+
+fn emit_swiftui_leaf(
+    buf: &mut String,
+    node: &NodeConfig,
+    depth: usize,
+    leaf_idx: &mut usize,
+    palette: ColorPalette,
+    parent: Parent,
+) -> Result<()> {
     let pad = "    ".repeat(depth);
-    let is_leaf = node.children.is_empty();
+    let (r, g, b) = take_leaf_color(palette, leaf_idx);
 
-    if is_leaf {
-        let (r, g, b) = palette_color(palette, *leaf_idx);
-        *leaf_idx += 1;
+    writeln!(
+        buf,
+        "{pad}Text({})",
+        swift_string_literal(node.display_text())
+    )?;
+    writeln!(buf, "{pad}    .font(.system(size: 26))")?;
+    writeln!(
+        buf,
+        "{pad}    .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))"
+    )?;
 
-        writeln!(buf, "{pad}Text({:?})", node.label)?;
-        writeln!(buf, "{pad}    .font(.system(size: 26))")?;
+    // Apply flex-basis percentage as width/height when no explicit size is set
+    let basis_w = if parent.is_row && matches!(node.width, ValueConfig::Auto) {
+        swift_flex_basis_value(&node.flex_basis, true)
+    } else {
+        None
+    };
+    let basis_h = if !parent.is_row && matches!(node.height, ValueConfig::Auto) {
+        swift_flex_basis_value(&node.flex_basis, false)
+    } else {
+        None
+    };
+
+    let w = basis_w.or_else(|| swift_optional_value(&node.width));
+    let h = basis_h.or_else(|| swift_optional_value(&node.height));
+    if w.is_some() || h.is_some() {
+        let w_str = w.as_deref().unwrap_or("nil");
+        let h_str = h.as_deref().unwrap_or("nil");
+        writeln!(buf, "{pad}    .frame(width: {w_str}, height: {h_str})")?;
+    }
+    let min_w = swift_optional_value(&node.min_width);
+    let min_h = swift_optional_value(&node.min_height);
+    let mut max_w = swift_optional_value(&node.max_width);
+    let mut max_h = swift_optional_value(&node.max_height);
+    // Flex-grow: merge into max constraints
+    if node.flex_grow > 0.0 {
+        if parent.is_row && max_w.is_none() {
+            max_w = Some(".infinity".to_string());
+        } else if !parent.is_row && max_h.is_none() {
+            max_h = Some(".infinity".to_string());
+        }
+    }
+    // align-items: Stretch from parent: merge into max constraints
+    if parent.stretch {
+        if parent.is_row && matches!(node.height, ValueConfig::Auto) && max_h.is_none() {
+            max_h = Some(".infinity".to_string());
+        } else if !parent.is_row && matches!(node.width, ValueConfig::Auto) && max_w.is_none() {
+            max_w = Some(".infinity".to_string());
+        }
+    }
+    if min_w.is_some() || min_h.is_some() || max_w.is_some() || max_h.is_some() {
         writeln!(
             buf,
-            "{pad}    .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))"
+            "{pad}    .frame(minWidth: {}, maxWidth: {}, minHeight: {}, maxHeight: {})",
+            min_w.as_deref().unwrap_or("nil"),
+            max_w.as_deref().unwrap_or("nil"),
+            min_h.as_deref().unwrap_or("nil"),
+            max_h.as_deref().unwrap_or("nil"),
         )?;
-
-        // Apply flex-basis percentage as width/height when no explicit size is set
-        let basis_w = if parent_is_row && matches!(node.width, ValueConfig::Auto) {
-            swift_flex_basis_value(&node.flex_basis, true)
-        } else {
-            None
-        };
-        let basis_h = if !parent_is_row && matches!(node.height, ValueConfig::Auto) {
-            swift_flex_basis_value(&node.flex_basis, false)
-        } else {
-            None
-        };
-
-        let w = basis_w.or_else(|| swift_optional_value(&node.width));
-        let h = basis_h.or_else(|| swift_optional_value(&node.height));
-        if w.is_some() || h.is_some() {
-            let w_str = w.as_deref().unwrap_or("nil");
-            let h_str = h.as_deref().unwrap_or("nil");
-            writeln!(buf, "{pad}    .frame(width: {w_str}, height: {h_str})")?;
-        }
-        let min_w = swift_optional_value(&node.min_width);
-        let min_h = swift_optional_value(&node.min_height);
-        let mut max_w = swift_optional_value(&node.max_width);
-        let mut max_h = swift_optional_value(&node.max_height);
-        // Flex-grow: merge into max constraints
-        if node.flex_grow > 0.0 {
-            if parent_is_row && max_w.is_none() {
-                max_w = Some(".infinity".to_string());
-            } else if !parent_is_row && max_h.is_none() {
-                max_h = Some(".infinity".to_string());
-            }
-        }
-        // align-items: Stretch from parent: merge into max constraints
-        if parent_stretch {
-            if parent_is_row && matches!(node.height, ValueConfig::Auto) && max_h.is_none() {
-                max_h = Some(".infinity".to_string());
-            } else if !parent_is_row && matches!(node.width, ValueConfig::Auto) && max_w.is_none() {
-                max_w = Some(".infinity".to_string());
-            }
-        }
-        if min_w.is_some() || min_h.is_some() || max_w.is_some() || max_h.is_some() {
+    }
+    let leaf_prefix = format!("{pad}    ");
+    emit_swift_padding(buf, &leaf_prefix, &node.padding, "")?;
+    writeln!(
+        buf,
+        "{pad}    .background(Color(red: {r:.2}, green: {g:.2}, blue: {b:.2}))"
+    )?;
+    emit_swift_border(buf, &leaf_prefix, &node.border_width, &node.border_radius)?;
+    emit_swift_padding(buf, &leaf_prefix, &node.margin, " /* margin */")?;
+    if let Some(alignment) = swift_align_self(node.align_self, parent.is_row) {
+        if parent.is_row {
             writeln!(
                 buf,
-                "{pad}    .frame(minWidth: {}, maxWidth: {}, minHeight: {}, maxHeight: {})",
-                min_w.as_deref().unwrap_or("nil"),
-                max_w.as_deref().unwrap_or("nil"),
-                min_h.as_deref().unwrap_or("nil"),
-                max_h.as_deref().unwrap_or("nil"),
+                "{pad}    .frame(maxHeight: .infinity, alignment: {alignment})"
+            )?;
+        } else {
+            writeln!(
+                buf,
+                "{pad}    .frame(maxWidth: .infinity, alignment: {alignment})"
             )?;
         }
-        let leaf_prefix = format!("{pad}    ");
-        emit_swift_padding(buf, &leaf_prefix, &node.padding, "")?;
+    } else if node.align_self != AlignSelf::Auto {
         writeln!(
             buf,
-            "{pad}    .background(Color(red: {r:.2}, green: {g:.2}, blue: {b:.2}))"
+            "{pad}    /* align-self: {:?} — override manually with .alignmentGuide() */",
+            node.align_self
         )?;
-        emit_swift_border(buf, &leaf_prefix, &node.border_width, &node.border_radius)?;
-        emit_swift_padding(buf, &leaf_prefix, &node.margin, " /* margin */")?;
-        if let Some(alignment) = swift_align_self(node.align_self, parent_is_row) {
-            if parent_is_row {
-                writeln!(
-                    buf,
-                    "{pad}    .frame(maxHeight: .infinity, alignment: {alignment})"
-                )?;
-            } else {
-                writeln!(
-                    buf,
-                    "{pad}    .frame(maxWidth: .infinity, alignment: {alignment})"
-                )?;
-            }
-        } else if node.align_self != AlignSelf::Auto {
-            writeln!(
-                buf,
-                "{pad}    /* align-self: {:?} — override manually with .alignmentGuide() */",
-                node.align_self
-            )?;
+    }
+    if !node.visible {
+        writeln!(buf, "{pad}    .hidden()")?;
+    }
+    if node.order != 0 {
+        writeln!(
+            buf,
+            "{pad}    // order: {} (no SwiftUI equivalent)",
+            node.order
+        )?;
+    }
+    Ok(())
+}
+
+fn emit_swiftui_container(
+    buf: &mut String,
+    node: &NodeConfig,
+    depth: usize,
+    leaf_idx: &mut usize,
+    palette: ColorPalette,
+    parent: Parent,
+    is_root: bool,
+) -> Result<()> {
+    let pad = "    ".repeat(depth);
+    let is_grid = node.display_mode == DisplayMode::Grid;
+    let is_row = matches!(
+        node.flex_direction,
+        FlexDirection::Row | FlexDirection::RowReverse
+    );
+    let is_reversed = matches!(
+        node.flex_direction,
+        FlexDirection::RowReverse | FlexDirection::ColumnReverse
+    );
+    let is_wrapping = node.flex_wrap != FlexWrap::NoWrap;
+    let child_stretch = node.align_items == AlignItems::Stretch;
+
+    // Sort children by order and pre-compute leaf_idx starts for palette colours.
+    let (mut children, mut starts) = sorted_children_with_leaf_starts(node, leaf_idx);
+
+    // Only reverse children for HStack/VStack (non-wrapping).
+    // FlowLayout handles reversal natively via mainReversed.
+    if is_reversed && !is_wrapping && !is_grid {
+        children.reverse();
+        starts.reverse();
+    }
+
+    // Emit one child, colouring from its pre-computed leaf start.
+    let emit_child = |buf: &mut String, child: &NodeConfig, start: usize, child_is_row: bool| {
+        let mut idx = start;
+        emit_swiftui_node(
+            buf,
+            child,
+            depth + 1,
+            &mut idx,
+            palette,
+            child_is_row,
+            child_stretch,
+            false,
+        )
+    };
+
+    if is_grid {
+        // --- LazyVGrid / LazyHGrid (CSS Grid) ---
+        let is_column_flow = matches!(
+            node.grid_auto_flow,
+            GridAutoFlow::Column | GridAutoFlow::ColumnDense
+        );
+        let tracks = if is_column_flow {
+            &node.grid_template_rows
+        } else {
+            &node.grid_template_columns
+        };
+        let items: Vec<String> = if tracks.is_empty() {
+            vec!["GridItem(.flexible())".into()]
+        } else {
+            tracks.iter().map(swift_grid_item).collect()
+        };
+        let spacing_arg = swift_spacing_value(if is_column_flow {
+            &node.column_gap
+        } else {
+            &node.row_gap
+        })
+        .map(|s| format!(", spacing: {s}"))
+        .unwrap_or_default();
+        // LazyHGrid uses `rows:`, LazyVGrid uses `columns:`. The track array
+        // is inlined so sibling grids in one ViewBuilder never redeclare a
+        // shared `let`.
+        let (grid_type, param_name) = if is_column_flow {
+            ("LazyHGrid", "rows")
+        } else {
+            ("LazyVGrid", "columns")
+        };
+        writeln!(
+            buf,
+            "{pad}{grid_type}({param_name}: [{}]{spacing_arg}) {{",
+            items.join(", ")
+        )?;
+
+        for (child, start) in children.iter().zip(starts.iter()) {
+            // grid children flow like rows
+            emit_child(buf, child, *start, true)?;
         }
-        if !node.visible {
-            writeln!(buf, "{pad}    .hidden()")?;
+    } else if is_wrapping {
+        // --- FlowLayout (custom wrapping layout) ---
+        let axis = if is_row { ".horizontal" } else { ".vertical" };
+        let item_gap = if is_row {
+            &node.column_gap
+        } else {
+            &node.row_gap
+        };
+        let line_gap = if is_row {
+            &node.row_gap
+        } else {
+            &node.column_gap
+        };
+        let line_align = swift_line_alignment(node.align_content);
+        let wrap_reversed = node.flex_wrap == FlexWrap::WrapReverse;
+
+        let mut args = vec![format!("axis: {axis}")];
+        if let Some(s) = swift_spacing_value(item_gap) {
+            args.push(format!("spacing: {s}"));
         }
-        if node.order != 0 {
-            writeln!(
-                buf,
-                "{pad}    // order: {} (no SwiftUI equivalent)",
-                node.order
-            )?;
+        if let Some(s) = swift_spacing_value(line_gap) {
+            args.push(format!("lineSpacing: {s}"));
+        }
+        if line_align != ".start" {
+            args.push(format!("lineAlignment: {line_align}"));
+        }
+        if is_reversed {
+            args.push("mainReversed: true".to_string());
+        }
+        if wrap_reversed {
+            args.push("reversed: true".to_string());
+        }
+        writeln!(buf, "{pad}FlowLayout({}) {{", args.join(", "))?;
+
+        for (child, start) in children.iter().zip(starts.iter()) {
+            emit_child(buf, child, *start, is_row)?;
         }
     } else {
-        let is_grid = node.display_mode == DisplayMode::Grid;
-        let is_row = matches!(
-            node.flex_direction,
-            FlexDirection::Row | FlexDirection::RowReverse
+        // --- HStack / VStack (non-wrapping) ---
+        let gap = if is_row {
+            &node.column_gap
+        } else {
+            &node.row_gap
+        };
+        let jc = effective_justify(node.justify_content, is_reversed);
+        let uses_zero_spacing = matches!(
+            jc,
+            JustifyContent::SpaceBetween
+                | JustifyContent::SpaceEvenly
+                | JustifyContent::SpaceAround
         );
-        let is_reversed = matches!(
-            node.flex_direction,
-            FlexDirection::RowReverse | FlexDirection::ColumnReverse
-        );
-        let is_wrapping = node.flex_wrap != FlexWrap::NoWrap;
-
-        // Sort children by order and pre-compute leaf_idx starts for palette colours.
-        let mut children: Vec<&NodeConfig> = node.children.iter().collect();
-        children.sort_by_key(|c| c.order);
-        let mut starts = Vec::with_capacity(children.len());
-        let mut acc = *leaf_idx;
-        for child in &children {
-            starts.push(acc);
-            acc += count_leaves(child);
-        }
-        *leaf_idx = acc;
-
-        // Only reverse children for HStack/VStack (non-wrapping).
-        // FlowLayout handles reversal natively via mainReversed.
-        if is_reversed && !is_wrapping && !is_grid {
-            children.reverse();
-            starts.reverse();
-        }
-
-        if is_grid {
-            // --- LazyVGrid / LazyHGrid (CSS Grid) ---
-            let is_column_flow = matches!(
-                node.grid_auto_flow,
-                GridAutoFlow::Column | GridAutoFlow::ColumnDense
-            );
-            let tracks = if is_column_flow {
-                &node.grid_template_rows
-            } else {
-                &node.grid_template_columns
-            };
-            let items: Vec<String> = if tracks.is_empty() {
-                vec!["GridItem(.flexible())".into()]
-            } else {
-                tracks.iter().map(swift_grid_item).collect()
-            };
-            writeln!(buf, "{pad}let columns = [{}]", items.join(", "))?;
-            let spacing_arg = swift_spacing_value(if is_column_flow {
-                &node.column_gap
-            } else {
-                &node.row_gap
-            })
-            .map(|s| format!(", spacing: {s}"))
-            .unwrap_or_default();
-            let grid_type = if is_column_flow {
-                "LazyHGrid"
-            } else {
-                "LazyVGrid"
-            };
-            // LazyHGrid uses `rows:`, LazyVGrid uses `columns:`
-            let param_name = if is_column_flow { "rows" } else { "columns" };
-            writeln!(
-                buf,
-                "{pad}{grid_type}({param_name}: columns{spacing_arg}) {{"
-            )?;
-
-            for (child, start) in children.iter().zip(starts.iter()) {
-                let mut idx = *start;
-                emit_swiftui_node(
-                    buf,
-                    child,
-                    depth + 1,
-                    &mut idx,
-                    palette,
-                    true, // grid children flow like rows
-                    node.align_items == AlignItems::Stretch,
-                    false,
-                )?;
-            }
-        } else if is_wrapping {
-            // --- FlowLayout (custom wrapping layout) ---
-            let axis = if is_row { ".horizontal" } else { ".vertical" };
-            let item_gap = if is_row {
-                &node.column_gap
-            } else {
-                &node.row_gap
-            };
-            let line_gap = if is_row {
-                &node.row_gap
-            } else {
-                &node.column_gap
-            };
-            let line_align = swift_line_alignment(node.align_content);
-            let wrap_reversed = node.flex_wrap == FlexWrap::WrapReverse;
-
-            let mut args = vec![format!("axis: {axis}")];
-            if let Some(s) = swift_spacing_value(item_gap) {
-                args.push(format!("spacing: {s}"));
-            }
-            if let Some(s) = swift_spacing_value(line_gap) {
-                args.push(format!("lineSpacing: {s}"));
-            }
-            if line_align != ".start" {
-                args.push(format!("lineAlignment: {line_align}"));
-            }
-            if is_reversed {
-                args.push("mainReversed: true".to_string());
-            }
-            if wrap_reversed {
-                args.push("reversed: true".to_string());
-            }
-            writeln!(buf, "{pad}FlowLayout({}) {{", args.join(", "))?;
-
-            for (child, start) in children.iter().zip(starts.iter()) {
-                let mut idx = *start;
-                emit_swiftui_node(
-                    buf,
-                    child,
-                    depth + 1,
-                    &mut idx,
-                    palette,
-                    is_row,
-                    node.align_items == AlignItems::Stretch,
-                    false,
-                )?;
-            }
+        let spacing = if uses_zero_spacing {
+            ", spacing: 0".to_string()
         } else {
-            // --- HStack / VStack (non-wrapping) ---
-            let gap = if is_row {
-                &node.column_gap
-            } else {
-                &node.row_gap
-            };
-            let jc = effective_justify(node.justify_content, is_reversed);
-            let uses_zero_spacing = matches!(
-                jc,
-                JustifyContent::SpaceBetween
-                    | JustifyContent::SpaceEvenly
-                    | JustifyContent::SpaceAround
-            );
-            let spacing = if uses_zero_spacing {
-                ", spacing: 0".to_string()
-            } else {
-                swift_spacing_value(gap)
-                    .map(|s| format!(", spacing: {s}"))
-                    .unwrap_or_default()
-            };
-            let alignment = if is_row {
-                swift_alignment(node.align_items)
-            } else {
-                swift_h_alignment(node.align_items)
-            };
-            let stack = if is_row { "HStack" } else { "VStack" };
-            writeln!(buf, "{pad}{stack}(alignment: {alignment}{spacing}) {{")?;
-
-            if is_reversed {
-                let dir_label = match node.flex_direction {
-                    FlexDirection::RowReverse => "RowReverse",
-                    FlexDirection::ColumnReverse => "ColumnReverse",
-                    _ => unreachable!(),
-                };
-                writeln!(
-                    buf,
-                    "{pad}    // NOTE: flex-direction: {dir_label} — children reversed in source to approximate visual order"
-                )?;
-            }
-
-            match jc {
-                JustifyContent::SpaceBetween => {
-                    for (i, (child, start)) in children.iter().zip(starts.iter()).enumerate() {
-                        if i > 0 {
-                            writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
-                        }
-                        let mut idx = *start;
-                        emit_swiftui_node(
-                            buf,
-                            child,
-                            depth + 1,
-                            &mut idx,
-                            palette,
-                            is_row,
-                            node.align_items == AlignItems::Stretch,
-                            false,
-                        )?;
-                    }
-                }
-                JustifyContent::Center => {
-                    writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
-                    for (child, start) in children.iter().zip(starts.iter()) {
-                        let mut idx = *start;
-                        emit_swiftui_node(
-                            buf,
-                            child,
-                            depth + 1,
-                            &mut idx,
-                            palette,
-                            is_row,
-                            node.align_items == AlignItems::Stretch,
-                            false,
-                        )?;
-                    }
-                    writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
-                }
-                JustifyContent::SpaceEvenly | JustifyContent::SpaceAround => {
-                    for (child, start) in children.iter().zip(starts.iter()) {
-                        writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
-                        let mut idx = *start;
-                        emit_swiftui_node(
-                            buf,
-                            child,
-                            depth + 1,
-                            &mut idx,
-                            palette,
-                            is_row,
-                            node.align_items == AlignItems::Stretch,
-                            false,
-                        )?;
-                    }
-                    writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
-                }
-                JustifyContent::FlexEnd | JustifyContent::End => {
-                    writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
-                    for (child, start) in children.iter().zip(starts.iter()) {
-                        let mut idx = *start;
-                        emit_swiftui_node(
-                            buf,
-                            child,
-                            depth + 1,
-                            &mut idx,
-                            palette,
-                            is_row,
-                            node.align_items == AlignItems::Stretch,
-                            false,
-                        )?;
-                    }
-                }
-                _ => {
-                    for (child, start) in children.iter().zip(starts.iter()) {
-                        let mut idx = *start;
-                        emit_swiftui_node(
-                            buf,
-                            child,
-                            depth + 1,
-                            &mut idx,
-                            palette,
-                            is_row,
-                            node.align_items == AlignItems::Stretch,
-                            false,
-                        )?;
-                    }
-                }
-            }
-        }
-
-        writeln!(buf, "{pad}}}")?;
-
-        // Container frame: map Percent(100%) to maxWidth/maxHeight: .infinity
-        let full_w = is_full_percent(&node.width);
-        let full_h = is_full_percent(&node.height);
-        let w = if full_w {
-            None
-        } else {
-            swift_optional_value(&node.width)
+            swift_spacing_value(gap)
+                .map(|s| format!(", spacing: {s}"))
+                .unwrap_or_default()
         };
-        // Root with flex_grow fills the viewport height (matching CSS body { height: 100% }),
-        // and Percent(100%) maps to .infinity in the min/max frame below — skip both.
-        let h = if full_h || (is_root && node.flex_grow > 0.0) {
-            None
+        let alignment = if is_row {
+            swift_alignment(node.align_items)
         } else {
-            swift_optional_value(&node.height)
+            swift_h_alignment(node.align_items)
         };
+        let stack = if is_row { "HStack" } else { "VStack" };
+        writeln!(buf, "{pad}{stack}(alignment: {alignment}{spacing}) {{")?;
 
-        if w.is_some() || h.is_some() {
-            let w_str = w.as_deref().unwrap_or("nil");
-            let h_str = h.as_deref().unwrap_or("nil");
-            writeln!(
-                buf,
-                "{pad}.frame(width: {w_str}, height: {h_str}, alignment: .topLeading)"
-            )?;
-        }
-
-        // Collect all min/max constraints into a single .frame() call.
-        // This merges explicit min/max, 100% → .infinity, flex-grow, and
-        // parent stretch so later modifiers don't override earlier ones.
-        let min_w = if is_zero_px(&node.min_width) {
-            None
-        } else {
-            swift_optional_value(&node.min_width)
-        };
-        let min_h = if is_zero_px(&node.min_height) {
-            None
-        } else {
-            swift_optional_value(&node.min_height)
-        };
-
-        let mut max_w = if full_w {
-            Some(".infinity".to_string())
-        } else {
-            swift_optional_value(&node.max_width)
-        };
-        let mut max_h = if full_h || (is_root && node.flex_grow > 0.0) {
-            Some(".infinity".to_string())
-        } else {
-            swift_optional_value(&node.max_height)
-        };
-
-        // Flex-grow expansion: merge into max constraints
-        if node.flex_grow > 0.0 {
-            if parent_is_row && !full_w && max_w.is_none() {
-                max_w = Some(".infinity".to_string());
-            } else if !parent_is_row && !full_h && max_h.is_none() {
-                max_h = Some(".infinity".to_string());
-            }
-        }
-        // align-items: Stretch from parent: merge into max constraints
-        if parent_stretch {
-            if parent_is_row
-                && !full_h
-                && matches!(node.height, ValueConfig::Auto)
-                && max_h.is_none()
-            {
-                max_h = Some(".infinity".to_string());
-            } else if !parent_is_row
-                && !full_w
-                && matches!(node.width, ValueConfig::Auto)
-                && max_w.is_none()
-            {
-                max_w = Some(".infinity".to_string());
-            }
-        }
-
-        if min_w.is_some() || min_h.is_some() || max_w.is_some() || max_h.is_some() {
-            // Derive frame alignment from the container's cross-axis alignment
-            let frame_align = if is_row {
-                match node.align_items {
-                    AlignItems::Center => ".leading",
-                    AlignItems::FlexEnd | AlignItems::End => ".bottomLeading",
-                    _ => ".topLeading",
-                }
-            } else {
-                match node.align_items {
-                    AlignItems::Center => ".top",
-                    AlignItems::FlexEnd | AlignItems::End => ".topTrailing",
-                    _ => ".topLeading",
-                }
+        if is_reversed {
+            let dir_label = match node.flex_direction {
+                FlexDirection::RowReverse => "RowReverse",
+                FlexDirection::ColumnReverse => "ColumnReverse",
+                _ => unreachable!(),
             };
             writeln!(
                 buf,
-                "{pad}.frame(minWidth: {}, maxWidth: {}, minHeight: {}, maxHeight: {}, alignment: {frame_align})",
-                min_w.as_deref().unwrap_or("nil"),
-                max_w.as_deref().unwrap_or("nil"),
-                min_h.as_deref().unwrap_or("nil"),
-                max_h.as_deref().unwrap_or("nil"),
+                "{pad}    // NOTE: flex-direction: {dir_label} — children reversed in source to approximate visual order"
             )?;
         }
 
-        emit_swift_padding(buf, &pad, &node.padding, "")?;
+        // Spacers before/between/after children approximate justify-content.
+        let (spacer_before, spacer_between, spacer_after) = match jc {
+            JustifyContent::SpaceBetween => (false, true, false),
+            JustifyContent::Center => (true, false, true),
+            JustifyContent::SpaceEvenly | JustifyContent::SpaceAround => (true, true, true),
+            JustifyContent::FlexEnd | JustifyContent::End => (true, false, false),
+            _ => (false, false, false),
+        };
+        for (i, (child, start)) in children.iter().zip(starts.iter()).enumerate() {
+            if (i == 0 && spacer_before) || (i > 0 && spacer_between) {
+                writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
+            }
+            emit_child(buf, child, *start, is_row)?;
+        }
+        if spacer_after {
+            writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
+        }
+    }
+
+    writeln!(buf, "{pad}}}")?;
+
+    // Container frame: map Percent(100%) to maxWidth/maxHeight: .infinity
+    let full_w = is_full_percent(&node.width);
+    let full_h = is_full_percent(&node.height);
+    let w = if full_w {
+        None
+    } else {
+        swift_optional_value(&node.width)
+    };
+    // Root with flex_grow fills the viewport height (matching CSS body { height: 100% }),
+    // and Percent(100%) maps to .infinity in the min/max frame below — skip both.
+    let root_fills_height = is_root && node.flex_grow > 0.0;
+    let h = if full_h || root_fills_height {
+        None
+    } else {
+        swift_optional_value(&node.height)
+    };
+
+    if w.is_some() || h.is_some() {
+        let w_str = w.as_deref().unwrap_or("nil");
+        let h_str = h.as_deref().unwrap_or("nil");
         writeln!(
             buf,
-            "{pad}.background(Color(red: 0.11, green: 0.11, blue: 0.17))"
+            "{pad}.frame(width: {w_str}, height: {h_str}, alignment: .topLeading)"
         )?;
-        emit_swift_border(buf, &pad, &node.border_width, &node.border_radius)?;
-        emit_swift_padding(buf, &pad, &node.margin, " /* margin */")?;
-        if !node.visible {
-            writeln!(buf, "{pad}.hidden()")?;
+    }
+
+    // Collect all min/max constraints into a single .frame() call.
+    // This merges explicit min/max, 100% → .infinity, flex-grow, and
+    // parent stretch so later modifiers don't override earlier ones.
+    let min_w = if node.min_width.is_zero_px() {
+        None
+    } else {
+        swift_optional_value(&node.min_width)
+    };
+    let min_h = if node.min_height.is_zero_px() {
+        None
+    } else {
+        swift_optional_value(&node.min_height)
+    };
+
+    let mut max_w = if full_w {
+        Some(".infinity".to_string())
+    } else {
+        swift_optional_value(&node.max_width)
+    };
+    let mut max_h = if full_h || root_fills_height {
+        Some(".infinity".to_string())
+    } else {
+        swift_optional_value(&node.max_height)
+    };
+
+    // Flex-grow expansion: merge into max constraints
+    if node.flex_grow > 0.0 {
+        if parent.is_row && !full_w && max_w.is_none() {
+            max_w = Some(".infinity".to_string());
+        } else if !parent.is_row && !full_h && max_h.is_none() {
+            max_h = Some(".infinity".to_string());
         }
-        if node.order != 0 {
-            writeln!(buf, "{pad}// order: {} (no SwiftUI equivalent)", node.order)?;
+    }
+    // align-items: Stretch from parent: merge into max constraints
+    if parent.stretch {
+        if parent.is_row && !full_h && matches!(node.height, ValueConfig::Auto) && max_h.is_none() {
+            max_h = Some(".infinity".to_string());
+        } else if !parent.is_row
+            && !full_w
+            && matches!(node.width, ValueConfig::Auto)
+            && max_w.is_none()
+        {
+            max_w = Some(".infinity".to_string());
         }
+    }
+
+    if min_w.is_some() || min_h.is_some() || max_w.is_some() || max_h.is_some() {
+        // Derive frame alignment from the container's cross-axis alignment
+        let frame_align = if is_row {
+            match node.align_items {
+                AlignItems::Center => ".leading",
+                AlignItems::FlexEnd | AlignItems::End => ".bottomLeading",
+                _ => ".topLeading",
+            }
+        } else {
+            match node.align_items {
+                AlignItems::Center => ".top",
+                AlignItems::FlexEnd | AlignItems::End => ".topTrailing",
+                _ => ".topLeading",
+            }
+        };
+        writeln!(
+            buf,
+            "{pad}.frame(minWidth: {}, maxWidth: {}, minHeight: {}, maxHeight: {}, alignment: {frame_align})",
+            min_w.as_deref().unwrap_or("nil"),
+            max_w.as_deref().unwrap_or("nil"),
+            min_h.as_deref().unwrap_or("nil"),
+            max_h.as_deref().unwrap_or("nil"),
+        )?;
+    }
+
+    emit_swift_padding(buf, &pad, &node.padding, "")?;
+    writeln!(
+        buf,
+        "{pad}.background(Color(red: 0.11, green: 0.11, blue: 0.17))"
+    )?;
+    emit_swift_border(buf, &pad, &node.border_width, &node.border_radius)?;
+    emit_swift_padding(buf, &pad, &node.margin, " /* margin */")?;
+    if !node.visible {
+        writeln!(buf, "{pad}.hidden()")?;
+    }
+    if node.order != 0 {
+        writeln!(buf, "{pad}// order: {} (no SwiftUI equivalent)", node.order)?;
     }
     Ok(())
 }
@@ -868,6 +816,14 @@ mod tests {
     }
 
     #[test]
+    fn escapes_leaf_text() {
+        let mut root = test_container();
+        root.children = vec![NodeConfig::new_leaf("say \"\\(hi)\"", 80.0, 80.0)];
+        let code = emit_swiftui(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains(r#"Text("say \"\\(hi)\"")"#), "{code}");
+    }
+
+    #[test]
     fn emits_hidden_modifier() {
         let mut node = NodeConfig::new_leaf("A", 80.0, 80.0);
         node.visible = false;
@@ -957,6 +913,39 @@ mod tests {
         assert!(
             !code.contains("FlowLayout"),
             "Non-wrapping should not include FlowLayout"
+        );
+    }
+
+    #[test]
+    fn grid_does_not_pull_in_flow_layout() {
+        // new_grid inherits flex_wrap: Wrap from new_container, but grids
+        // never use FlowLayout.
+        let mut root = NodeConfig::new_grid("g", vec![GridTrackSize::Fr(1.0)]);
+        root.children = vec![NodeConfig::new_leaf("A", 80.0, 80.0)];
+        let code = emit_swiftui(&root, ColorPalette::Pastel1).unwrap();
+        assert!(!code.contains("FlowLayout"), "{code}");
+    }
+
+    #[test]
+    fn sibling_grids_do_not_redeclare_columns() {
+        let mut root = NodeConfig::new_container("root");
+        root.flex_wrap = FlexWrap::NoWrap;
+        let mut g1 = NodeConfig::new_grid("g1", vec![GridTrackSize::Fr(1.0)]);
+        g1.children = vec![NodeConfig::new_leaf("A", 80.0, 80.0)];
+        let mut g2 = NodeConfig::new_grid("g2", vec![GridTrackSize::Px(50.0)]);
+        g2.grid_auto_flow = GridAutoFlow::Column;
+        g2.grid_template_rows = vec![GridTrackSize::Fr(1.0)];
+        g2.children = vec![NodeConfig::new_leaf("B", 80.0, 80.0)];
+        root.children = vec![g1, g2];
+        let code = emit_swiftui(&root, ColorPalette::Pastel1).unwrap();
+        assert!(!code.contains("let columns"), "{code}");
+        assert!(
+            code.contains("LazyVGrid(columns: [GridItem(.flexible())]"),
+            "{code}"
+        );
+        assert!(
+            code.contains("LazyHGrid(rows: [GridItem(.flexible())]"),
+            "{code}"
         );
     }
 }

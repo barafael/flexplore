@@ -29,7 +29,7 @@ export default function FlexLayout() {
         boxSizing: 'border-box',
         color: 'rgba(13, 13, 26, 0.85)',
         fontSize: 26,
-      }}>top</div>
+      }}>top-1</div>
       <div style={{
         display: 'flex',
         flexWrap: 'wrap',
@@ -62,7 +62,7 @@ export default function FlexLayout() {
         boxSizing: 'border-box',
         color: 'rgba(13, 13, 26, 0.85)',
         fontSize: 26,
-      }}>top</div>
+      }}>top-2</div>
     </div>
   );
 }

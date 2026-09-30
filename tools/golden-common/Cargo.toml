@@ -1,0 +1,20 @@
+[package]
+name = "golden-common"
+version = "1.0.0"
+edition = "2024"
+publish = false
+description = "Shared helpers for the golden-screenshot tools: fixture loading, palette, layout math, headless Chrome and PNG saving."
+
+[features]
+# headless Chromium helpers (`golden_common::chrome`).
+chrome = ["dep:headless_chrome", "dep:url"]
+# PNG saving helpers (`golden_common::png`).
+png = ["dep:image"]
+
+[dependencies]
+anyhow = "1"
+flexplore-core = { path = "../../flexplore-core" }
+serde_json = "1"
+headless_chrome = { version = "1", optional = true }
+url = { version = "2", optional = true }
+image = { version = "0.25", default-features = false, features = ["png"], optional = true }

@@ -16,7 +16,7 @@ fn spawn_ui(commands: &mut Commands) {
         },
         BackgroundColor(Color::srgba(0.11, 0.11, 0.17, 1.0)),
     )).with_children(|parent| {
-        // top
+        // top-1
         parent.spawn((
             Node {
                 flex_wrap: FlexWrap::Wrap,
@@ -42,7 +42,7 @@ fn spawn_ui(commands: &mut Commands) {
                 align_items: AlignItems::Center,
                 ..default()
             }).with_child((
-                Text::new("top"),
+                Text::new("top-1"),
                 TextFont { font_size: 26.0, ..default() },
                 TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
             ));
@@ -79,7 +79,7 @@ fn spawn_ui(commands: &mut Commands) {
                 TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
             ));
         });
-        // top
+        // top-2
         parent.spawn((
             Node {
                 flex_wrap: FlexWrap::Wrap,
@@ -105,7 +105,7 @@ fn spawn_ui(commands: &mut Commands) {
                 align_items: AlignItems::Center,
                 ..default()
             }).with_child((
-                Text::new("top"),
+                Text::new("top-2"),
                 TextFont { font_size: 26.0, ..default() },
                 TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
             ));

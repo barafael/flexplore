@@ -3,7 +3,9 @@ use std::fmt::Write;
 use crate::config::*;
 use anyhow::Result;
 
-use crate::art::palette_color;
+use super::common::{
+    is_auto_or_zero, rust_string_literal, single_line, sorted_children, take_leaf_color,
+};
 use crate::config::{ColorPalette, Corners, NodeConfig, Sides, ValueConfig};
 
 fn emit_bevy_value(v: &ValueConfig) -> String {
@@ -63,6 +65,12 @@ fn emit_bevy_repeated_grid_track(t: &GridTrackSize) -> String {
     }
 }
 
+/// `vec![...]` of grid tracks rendered with `track`.
+fn bevy_track_vec(tracks: &[GridTrackSize], track: fn(&GridTrackSize) -> String) -> String {
+    let items: Vec<String> = tracks.iter().map(track).collect();
+    format!("vec![{}]", items.join(", "))
+}
+
 fn emit_bevy_grid_placement(p: &GridPlacement) -> String {
     match p {
         GridPlacement::Auto => "GridPlacement::default()".into(),
@@ -91,15 +99,14 @@ fn emit_node(
     let is_leaf = node.children.is_empty();
 
     let bg = if is_leaf {
-        let (r, g, b) = palette_color(palette, *leaf_idx);
-        *leaf_idx += 1;
+        let (r, g, b) = take_leaf_color(palette, leaf_idx);
         format!("Color::srgb({r:.2}, {g:.2}, {b:.2})")
     } else {
         "Color::srgba(0.11, 0.11, 0.17, 1.0)".into()
     };
 
     let spawner = if is_root { "commands" } else { "parent" };
-    writeln!(buf, "{pad}// {}", node.label)?;
+    writeln!(buf, "{pad}// {}", single_line(&node.label))?;
     writeln!(buf, "{pad}{spawner}.spawn((")?;
 
     writeln!(buf, "{pad}    Node {{")?;
@@ -108,55 +115,35 @@ fn emit_node(
         emit_field(buf, &pad, "display", "Display::Grid")?;
         // Grid template tracks
         if !node.grid_template_columns.is_empty() {
-            let tracks: Vec<_> = node
-                .grid_template_columns
-                .iter()
-                .map(emit_bevy_repeated_grid_track)
-                .collect();
             emit_field(
                 buf,
                 &pad,
                 "grid_template_columns",
-                &format!("vec![{}]", tracks.join(", ")),
+                &bevy_track_vec(&node.grid_template_columns, emit_bevy_repeated_grid_track),
             )?;
         }
         if !node.grid_template_rows.is_empty() {
-            let tracks: Vec<_> = node
-                .grid_template_rows
-                .iter()
-                .map(emit_bevy_repeated_grid_track)
-                .collect();
             emit_field(
                 buf,
                 &pad,
                 "grid_template_rows",
-                &format!("vec![{}]", tracks.join(", ")),
+                &bevy_track_vec(&node.grid_template_rows, emit_bevy_repeated_grid_track),
             )?;
         }
         if !node.grid_auto_columns.is_empty() {
-            let tracks: Vec<_> = node
-                .grid_auto_columns
-                .iter()
-                .map(emit_bevy_grid_track)
-                .collect();
             emit_field(
                 buf,
                 &pad,
                 "grid_auto_columns",
-                &format!("vec![{}]", tracks.join(", ")),
+                &bevy_track_vec(&node.grid_auto_columns, emit_bevy_grid_track),
             )?;
         }
         if !node.grid_auto_rows.is_empty() {
-            let tracks: Vec<_> = node
-                .grid_auto_rows
-                .iter()
-                .map(emit_bevy_grid_track)
-                .collect();
             emit_field(
                 buf,
                 &pad,
                 "grid_auto_rows",
-                &format!("vec![{}]", tracks.join(", ")),
+                &bevy_track_vec(&node.grid_auto_rows, emit_bevy_grid_track),
             )?;
         }
         if node.grid_auto_flow != GridAutoFlow::Row {
@@ -210,14 +197,10 @@ fn emit_node(
             &format!("AlignContent::{:?}", node.align_content),
         )?;
     }
-    if !matches!(node.row_gap, ValueConfig::Auto)
-        && !matches!(node.row_gap, ValueConfig::Px(v) if v == 0.0)
-    {
+    if !is_auto_or_zero(&node.row_gap) {
         emit_field(buf, &pad, "row_gap", &emit_bevy_value(&node.row_gap))?;
     }
-    if !matches!(node.column_gap, ValueConfig::Auto)
-        && !matches!(node.column_gap, ValueConfig::Px(v) if v == 0.0)
-    {
+    if !is_auto_or_zero(&node.column_gap) {
         emit_field(buf, &pad, "column_gap", &emit_bevy_value(&node.column_gap))?;
     }
     if node.flex_grow != 0.0 {
@@ -322,7 +305,11 @@ fn emit_node(
         writeln!(buf, "{pad}        align_items: AlignItems::Center,")?;
         writeln!(buf, "{pad}        ..default()")?;
         writeln!(buf, "{pad}    }}).with_child((")?;
-        writeln!(buf, "{pad}        Text::new({:?}),", node.label)?;
+        writeln!(
+            buf,
+            "{pad}        Text::new({}),",
+            rust_string_literal(node.display_text())
+        )?;
         writeln!(
             buf,
             "{pad}        TextFont {{ font_size: 26.0, ..default() }},"
@@ -335,9 +322,7 @@ fn emit_node(
         writeln!(buf, "{pad}}});")?;
     } else {
         buf.push_str(".with_children(|parent| {\n");
-        let mut sorted: Vec<&NodeConfig> = node.children.iter().collect();
-        sorted.sort_by_key(|c| c.order);
-        for child in sorted {
+        for child in sorted_children(node) {
             emit_node(buf, child, depth + 1, leaf_idx, false, palette)?;
         }
         writeln!(buf, "{pad}}});")?;
@@ -383,6 +368,15 @@ mod tests {
         let code = emit_bevy_code(&test_container(), ColorPalette::Pastel1).unwrap();
         assert!(code.contains("Text::new(\"A\")"));
         assert!(code.contains("Text::new(\"B\")"));
+    }
+
+    #[test]
+    fn escapes_label_in_text_and_comment() {
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![NodeConfig::new_leaf("say \"hi\"\nbye", 80.0, 80.0)];
+        let code = emit_bevy_code(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains(r#"Text::new("say \"hi\"\nbye")"#), "{code}");
+        assert!(code.contains("// say \"hi\" bye\n"), "{code}");
     }
 
     #[test]

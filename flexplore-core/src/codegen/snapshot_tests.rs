@@ -3,10 +3,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result, bail};
 use test_case::test_case;
 
-use crate::codegen::{
-    emit_bevy_code, emit_dioxus, emit_egui, emit_flutter, emit_html_css, emit_iced, emit_react,
-    emit_react_native, emit_swiftui, emit_tailwind,
-};
+use crate::codegen::{TARGETS, emit_all};
 use crate::config::LayoutInput;
 use crate::fixtures::all_fixtures;
 
@@ -28,18 +25,7 @@ fn run_snapshot(name: &str) -> Result<()> {
     let dir = testdata_dir().join(name);
     let input_path = dir.join("input.json");
 
-    let targets: Vec<(&str, String)> = vec![
-        ("expected.html", emit_html_css(&f.node, f.palette)?),
-        ("expected.rs", emit_bevy_code(&f.node, f.palette)?),
-        ("expected.jsx", emit_react(&f.node, f.palette)?),
-        ("expected.tailwind.html", emit_tailwind(&f.node, f.palette)?),
-        ("expected.swift", emit_swiftui(&f.node, f.palette)?),
-        ("expected.dart", emit_flutter(&f.node, f.palette)?),
-        ("expected.iced.rs", emit_iced(&f.node, f.palette)?),
-        ("expected.rn.jsx", emit_react_native(&f.node, f.palette)?),
-        ("expected.dioxus.rs", emit_dioxus(&f.node, f.palette)?),
-        ("expected.egui.rs", emit_egui(&f.node, f.palette)?),
-    ];
+    let targets = emit_all(&f.node, f.palette)?;
 
     // Read input JSON back and re-generate to verify round-trip
     let json_src = std::fs::read_to_string(&input_path).with_context(|| {
@@ -49,49 +35,7 @@ fn run_snapshot(name: &str) -> Result<()> {
         )
     })?;
     let from_json: LayoutInput = serde_json::from_str(&json_src)?;
-
-    let roundtrip_targets: Vec<(&str, String)> = vec![
-        (
-            "expected.html",
-            emit_html_css(&from_json.node, from_json.palette)?,
-        ),
-        (
-            "expected.rs",
-            emit_bevy_code(&from_json.node, from_json.palette)?,
-        ),
-        (
-            "expected.jsx",
-            emit_react(&from_json.node, from_json.palette)?,
-        ),
-        (
-            "expected.tailwind.html",
-            emit_tailwind(&from_json.node, from_json.palette)?,
-        ),
-        (
-            "expected.swift",
-            emit_swiftui(&from_json.node, from_json.palette)?,
-        ),
-        (
-            "expected.dart",
-            emit_flutter(&from_json.node, from_json.palette)?,
-        ),
-        (
-            "expected.iced.rs",
-            emit_iced(&from_json.node, from_json.palette)?,
-        ),
-        (
-            "expected.rn.jsx",
-            emit_react_native(&from_json.node, from_json.palette)?,
-        ),
-        (
-            "expected.dioxus.rs",
-            emit_dioxus(&from_json.node, from_json.palette)?,
-        ),
-        (
-            "expected.egui.rs",
-            emit_egui(&from_json.node, from_json.palette)?,
-        ),
-    ];
+    let roundtrip_targets = emit_all(&from_json.node, from_json.palette)?;
 
     // Verify JSON round-trip produces identical codegen
     for ((filename, actual), (_, from_json_out)) in targets.iter().zip(roundtrip_targets.iter()) {
@@ -160,4 +104,32 @@ fn run_snapshot(name: &str) -> Result<()> {
 #[test_case("grid_auto_flow_column" ; "grid_auto_flow_column")]
 fn snapshot(name: &str) -> Result<()> {
     run_snapshot(name)
+}
+
+// ─── Every fixture, every target ─────────────────────────────────────────────
+
+/// Safety net for the hand-written list above: a fixture added to
+/// `all_fixtures()` without a `test_case` is still checked here, and every
+/// target in `TARGETS` must have a stored snapshot for it.
+#[test]
+fn every_fixture_has_a_snapshot_for_every_target() {
+    let dir = testdata_dir();
+    let mut failures = Vec::new();
+    for f in all_fixtures() {
+        for (filename, _) in TARGETS {
+            let path = dir.join(&f.name).join(filename);
+            if !path.is_file() {
+                failures.push(format!("missing snapshot {}", path.display()));
+            }
+        }
+        if let Err(e) = run_snapshot(&f.name) {
+            failures.push(format!("{}: {e:#}", f.name));
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "{} fixture(s) failed (run `cargo run -p update-snapshots` after intentional changes):\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
 }

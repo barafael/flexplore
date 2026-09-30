@@ -17,8 +17,7 @@ Widget build(BuildContext context) {
           child: Text('only',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
       ],
     )
   )

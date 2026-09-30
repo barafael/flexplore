@@ -1,4 +1,4 @@
-// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview` to regenerate.
+// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview -- --generate-only` to regenerate.
 import 'package:flutter/material.dart';
 
 class TplHolyGrail extends StatelessWidget {
@@ -21,8 +21,7 @@ class TplHolyGrail extends StatelessWidget {
           child: Text('header',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Expanded(
           flex: 1,
           child:           Row(
@@ -37,8 +36,7 @@ class TplHolyGrail extends StatelessWidget {
                 child: Text('sidebar-left',
                   style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
                 ),
-              )
-              ,
+              ),
               Expanded(
                 flex: 1,
                 child:                 Container(
@@ -58,8 +56,7 @@ class TplHolyGrail extends StatelessWidget {
                 child: Text('sidebar-right',
                   style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
                 ),
-              )
-              ,
+              ),
             ],
           )
         ),
@@ -71,8 +68,7 @@ class TplHolyGrail extends StatelessWidget {
           child: Text('footer',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
       ],
     )
   )

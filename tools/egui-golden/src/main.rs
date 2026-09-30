@@ -5,35 +5,42 @@
 //! `rendered_egui.png`.
 
 use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
 };
 
-use anyhow::{Context, Result};
+use anyhow::{Result, anyhow, bail};
 use clap::Parser;
 use eframe::egui;
 use egui::{Align, Color32, Layout, Vec2};
-
-mod config;
-use config::{
-    AlignItems, AlignSelf, ColorPalette, FlexDirection, FlexWrap, JustifyContent, LayoutInput,
-    NodeConfig, ValueConfig,
+use golden_common::{
+    RenderJob, VIEWPORT_H, VIEWPORT_W,
+    config::{
+        AlignItems, AlignSelf, ColorPalette, FlexDirection, FlexWrap, JustifyContent, NodeConfig,
+        ValueConfig,
+    },
+    effective_justify, palette_rgb8,
+    png::save_rgba_png,
+    resolve_to_px,
 };
 
 /// Render flexplore golden screenshots with egui.
 #[derive(Parser)]
 #[command(name = "egui-golden")]
 struct Arguments {
-    /// Path to the testdata directory.
-    #[arg(default_value = "testdata")]
+    /// Testdata directory (default: the repository's testdata/).
+    #[arg(long, default_value_os_t = golden_common::default_testdata_dir())]
     testdata: PathBuf,
 
     /// Only render these test cases (default: all).
     cases: Vec<String>,
 }
 
-const VIEWPORT_W: f32 = 400.0;
-const VIEWPORT_H: f32 = 300.0;
+/// Frames to let the layout settle before requesting a screenshot.
+const SETTLE_FRAMES: usize = 4;
+/// How long to wait for the compositor to hand back a requested screenshot.
+const SCREENSHOT_TIMEOUT: Duration = Duration::from_secs(15);
 
 // ─── Application state ──────────────────────────────────────────────────────
 
@@ -41,23 +48,18 @@ struct App {
     jobs: Vec<RenderJob>,
     current: usize,
     frames: usize,
-    screenshot_requested: bool,
+    /// When the screenshot for the current job was requested.
+    screenshot_requested: Option<Instant>,
+    /// First fatal error; reported by `main` as a non-zero exit.
+    failure: Arc<Mutex<Option<String>>>,
 }
 
-struct RenderJob {
-    name: String,
-    node: NodeConfig,
-    palette: ColorPalette,
-    output_dir: PathBuf,
-}
-
-fn main() -> eframe::Result {
+fn main() -> Result<()> {
     let cli = Arguments::parse();
-    let filter: Vec<&str> = cli.cases.iter().map(|s| s.as_str()).collect();
 
-    let jobs = load_jobs(&cli.testdata, &filter).expect("failed to load test jobs");
+    let jobs = golden_common::load_jobs(&cli.testdata, &cli.cases)?;
     if jobs.is_empty() {
-        eprintln!("No render jobs found.");
+        eprintln!("No render jobs found in {}.", cli.testdata.display());
         return Ok(());
     }
     eprintln!(
@@ -65,6 +67,7 @@ fn main() -> eframe::Result {
         jobs.len(),
         cli.testdata.display()
     );
+    eprintln!("Rendering: {}", jobs[0].name);
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -74,6 +77,8 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
 
+    let failure = Arc::new(Mutex::new(None));
+    let app_failure = Arc::clone(&failure);
     eframe::run_native(
         "egui-golden",
         options,
@@ -82,46 +87,76 @@ fn main() -> eframe::Result {
                 jobs,
                 current: 0,
                 frames: 0,
-                screenshot_requested: false,
+                screenshot_requested: None,
+                failure: app_failure,
             }))
         }),
     )
+    .map_err(|e| anyhow!("eframe failed: {e}"))?;
+
+    if let Some(msg) = failure.lock().unwrap().take() {
+        bail!("{msg}");
+    }
+    Ok(())
+}
+
+impl App {
+    fn fail(&mut self, ctx: &egui::Context, msg: String) {
+        eprintln!("  ERROR: {msg}");
+        self.failure.lock().unwrap().get_or_insert(msg);
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+    }
+
+    fn take_screenshot_event(ctx: &egui::Context) -> Option<Arc<egui::ColorImage>> {
+        ctx.input(|i| {
+            i.raw.events.iter().find_map(|e| match e {
+                egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                _ => None,
+            })
+        })
+    }
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, root: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = root.ctx().clone();
+        if self.failure.lock().unwrap().is_some() {
+            return;
+        }
         if self.current >= self.jobs.len() {
             eprintln!("All done!");
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             return;
         }
 
-        // Check for screenshot result from previous request
-        if self.screenshot_requested {
-            let screenshot: Option<Arc<egui::ColorImage>> = ctx.input(|i| {
-                i.raw.events.iter().find_map(|e| {
-                    if let egui::Event::Screenshot { image, .. } = e {
-                        Some(image.clone())
-                    } else {
-                        None
-                    }
-                })
-            });
-
-            if let Some(image) = screenshot {
+        if let Some(requested_at) = self.screenshot_requested {
+            if let Some(image) = Self::take_screenshot_event(&ctx) {
                 let job = &self.jobs[self.current];
-                let path = job.output_dir.join(&job.name).join("rendered_egui.png");
-                save_color_image(&image, &path);
+                let path = job.output_path("rendered_egui.png");
+                if let Err(e) = save_color_image(&image, &path) {
+                    self.fail(&ctx, format!("{}: {e:#}", job.name));
+                    return;
+                }
+                eprintln!("  Saved: {}", path.display());
 
                 self.current += 1;
                 self.frames = 0;
-                self.screenshot_requested = false;
+                self.screenshot_requested = None;
 
                 if self.current < self.jobs.len() {
                     eprintln!("Rendering: {}", self.jobs[self.current].name);
                 }
-
                 ctx.request_repaint();
+                return;
+            }
+            if requested_at.elapsed() > SCREENSHOT_TIMEOUT {
+                let name = self.jobs[self.current].name.clone();
+                self.fail(
+                    &ctx,
+                    format!(
+                        "timed out after {SCREENSHOT_TIMEOUT:?} waiting for screenshot of {name}"
+                    ),
+                );
                 return;
             }
         }
@@ -130,22 +165,21 @@ impl eframe::App for App {
 
         egui::CentralPanel::default()
             .frame(
-                egui::Frame::none()
+                egui::Frame::NONE
                     .fill(Color32::from_rgb(28, 28, 43))
                     .inner_margin(0.0),
             )
-            .show(ctx, |ui| {
+            .show(root, |ui| {
                 ui.set_min_size(Vec2::new(VIEWPORT_W, VIEWPORT_H));
                 let mut leaf_idx = 0;
-                build_widget(ui, &job.node, &mut leaf_idx, job.palette, true, false, true);
+                build_widget(ui, &job.node, &mut leaf_idx, job.palette, Ctx::root());
             });
 
         self.frames += 1;
 
-        // After settling, request screenshot
-        if self.frames == 4 && !self.screenshot_requested {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot);
-            self.screenshot_requested = true;
+        if self.frames == SETTLE_FRAMES && self.screenshot_requested.is_none() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+            self.screenshot_requested = Some(Instant::now());
         }
 
         ctx.request_repaint();
@@ -154,7 +188,7 @@ impl eframe::App for App {
 
 // ─── Screenshot saving ──────────────────────────────────────────────────────
 
-fn save_color_image(image: &egui::ColorImage, path: &Path) {
+fn save_color_image(image: &egui::ColorImage, path: &std::path::Path) -> Result<()> {
     let w = image.size[0] as u32;
     let h = image.size[1] as u32;
     let pixels: Vec<u8> = image
@@ -162,76 +196,43 @@ fn save_color_image(image: &egui::ColorImage, path: &Path) {
         .iter()
         .flat_map(|c| [c.r(), c.g(), c.b(), c.a()])
         .collect();
-
-    let Some(img) = image::RgbaImage::from_raw(w, h, pixels) else {
-        eprintln!("  ERROR: could not create image from screenshot");
-        return;
-    };
-
-    // Resize to target viewport size to normalize across DPI settings
-    let target_w = VIEWPORT_W as u32;
-    let target_h = VIEWPORT_H as u32;
-    let final_img = if w != target_w || h != target_h {
-        image::imageops::resize(
-            &img,
-            target_w,
-            target_h,
-            image::imageops::FilterType::Lanczos3,
-        )
-    } else {
-        img
-    };
-
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).ok();
-    }
-    match final_img.save(path) {
-        Ok(()) => eprintln!("  Saved: {}", path.display()),
-        Err(e) => eprintln!("  ERROR saving {}: {e}", path.display()),
-    }
-}
-
-// ─── Job loading ────────────────────────────────────────────────────────────
-
-fn load_jobs(testdata_dir: &Path, filter: &[&str]) -> Result<Vec<RenderJob>> {
-    let mut jobs = Vec::new();
-
-    let mut entries: Vec<_> = std::fs::read_dir(testdata_dir)
-        .context("cannot read testdata directory")?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
-        .collect();
-    entries.sort_by_key(|e| e.file_name());
-
-    for entry in entries {
-        let name = entry.file_name().to_string_lossy().into_owned();
-
-        if !filter.is_empty() && !filter.iter().any(|f| *f == name) {
-            continue;
-        }
-
-        let input_path = entry.path().join("input.json");
-        if !input_path.exists() {
-            continue;
-        }
-
-        let json = std::fs::read_to_string(&input_path)
-            .with_context(|| format!("failed to read {}", input_path.display()))?;
-        let input: LayoutInput = serde_json::from_str(&json)
-            .with_context(|| format!("failed to parse {}", input_path.display()))?;
-
-        jobs.push(RenderJob {
-            name,
-            node: input.node,
-            palette: input.palette,
-            output_dir: testdata_dir.to_path_buf(),
-        });
-    }
-
-    Ok(jobs)
+    // Resize to the viewport size to normalize across DPI settings.
+    save_rgba_png(
+        path,
+        w,
+        h,
+        pixels,
+        Some((VIEWPORT_W as u32, VIEWPORT_H as u32)),
+    )
 }
 
 // ─── Widget building ────────────────────────────────────────────────────────
+
+/// Layout context a node inherits from its parent.
+#[derive(Clone, Copy)]
+struct Ctx {
+    /// Parent's main axis is horizontal.
+    parent_is_row: bool,
+    /// Parent has `align-items: stretch`.
+    parent_stretch: bool,
+    is_root: bool,
+    /// Main-axis size assigned by the parent's flex-grow distribution.
+    main_override: Option<f32>,
+    /// This node or an ancestor is `visible: false`: keep its space, paint nothing.
+    hidden: bool,
+}
+
+impl Ctx {
+    fn root() -> Self {
+        Self {
+            parent_is_row: true,
+            parent_stretch: false,
+            is_root: true,
+            main_override: None,
+            hidden: false,
+        }
+    }
+}
 
 /// Allocate space for a widget, applying align-self positioning if needed.
 ///
@@ -280,10 +281,8 @@ fn allocate_with_align_self(
 }
 
 /// Get the fixed main-axis size of a child (0.0 if the child uses flex-grow).
+/// Hidden children still take up space (`visibility: hidden` semantics).
 fn child_fixed_main(child: &NodeConfig, is_row: bool) -> f32 {
-    if !child.visible {
-        return 0.0;
-    }
     let dim = if is_row { &child.width } else { &child.height };
     let size = resolve_to_px(dim, if is_row { VIEWPORT_W } else { VIEWPORT_H });
     let margin = resolve_to_px(&child.margin.first(), 0.0) * 2.0;
@@ -305,59 +304,16 @@ fn build_widget(
     node: &NodeConfig,
     leaf_idx: &mut usize,
     palette: ColorPalette,
-    parent_is_row: bool,
-    parent_stretch: bool,
-    is_root: bool,
+    ctx: Ctx,
 ) {
-    build_widget_sized(
-        ui,
-        node,
-        leaf_idx,
-        palette,
-        parent_is_row,
-        parent_stretch,
-        is_root,
-        None,
-    );
-}
-
-/// Build a widget with an optional override for its main-axis size (used for flex-grow distribution).
-fn build_widget_sized(
-    ui: &mut egui::Ui,
-    node: &NodeConfig,
-    leaf_idx: &mut usize,
-    palette: ColorPalette,
-    parent_is_row: bool,
-    parent_stretch: bool,
-    is_root: bool,
-    main_override: Option<f32>,
-) {
-    if !node.visible {
-        *leaf_idx += leaf_count(node);
-        return;
-    }
-
+    let ctx = Ctx {
+        hidden: ctx.hidden || !node.visible,
+        ..ctx
+    };
     if node.children.is_empty() {
-        build_leaf(
-            ui,
-            node,
-            leaf_idx,
-            palette,
-            parent_is_row,
-            parent_stretch,
-            main_override,
-        );
+        build_leaf(ui, node, leaf_idx, palette, ctx);
     } else {
-        build_container(
-            ui,
-            node,
-            leaf_idx,
-            palette,
-            parent_is_row,
-            parent_stretch,
-            is_root,
-            main_override,
-        );
+        build_container(ui, node, leaf_idx, palette, ctx);
     }
 }
 
@@ -366,13 +322,11 @@ fn build_leaf(
     node: &NodeConfig,
     leaf_idx: &mut usize,
     palette: ColorPalette,
-    parent_is_row: bool,
-    parent_stretch: bool,
-    main_override: Option<f32>,
+    ctx: Ctx,
 ) {
-    let (r, g, b) = palette_color(palette, *leaf_idx);
+    let (r, g, b) = palette_rgb8(palette, *leaf_idx);
     *leaf_idx += 1;
-    let bg = Color32::from_rgb((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8);
+    let bg = Color32::from_rgb(r, g, b);
 
     let w = resolve_to_px(&node.width, VIEWPORT_W);
     let h = resolve_to_px(&node.height, VIEWPORT_H);
@@ -380,26 +334,22 @@ fn build_leaf(
     let margin = resolve_to_px(&node.margin.first(), 0.0);
 
     // Apply max constraints
-    let max_w = if let ValueConfig::Px(n) = node.max_width {
-        if n > 0.0 { Some(n) } else { None }
-    } else {
-        None
+    let max_w = match node.max_width {
+        ValueConfig::Px(n) if n > 0.0 => Some(n),
+        _ => None,
     };
-    let max_h = if let ValueConfig::Px(n) = node.max_height {
-        if n > 0.0 { Some(n) } else { None }
-    } else {
-        None
+    let max_h = match node.max_height {
+        ValueConfig::Px(n) if n > 0.0 => Some(n),
+        _ => None,
     };
 
     // Determine effective size, applying main_override for flex-grow
     let mut eff_w;
     let mut eff_h;
 
-    if parent_is_row {
-        eff_w = main_override.unwrap_or_else(|| {
+    if ctx.parent_is_row {
+        eff_w = ctx.main_override.unwrap_or_else(|| {
             if node.flex_grow > 0.0 && w == 0.0 {
-                (ui.available_width() - margin * 2.0).max(0.0)
-            } else if parent_stretch && !parent_is_row && w == 0.0 {
                 (ui.available_width() - margin * 2.0).max(0.0)
             } else if w > 0.0 {
                 w
@@ -407,9 +357,7 @@ fn build_leaf(
                 60.0
             }
         });
-        eff_h = if node.flex_grow > 0.0 && !parent_is_row && h == 0.0 {
-            (ui.available_height() - margin * 2.0).max(0.0)
-        } else if parent_stretch && h == 0.0 {
+        eff_h = if ctx.parent_stretch && h == 0.0 {
             (ui.available_height() - margin * 2.0).max(0.0)
         } else if h > 0.0 {
             h
@@ -417,19 +365,15 @@ fn build_leaf(
             40.0
         };
     } else {
-        eff_w = if node.flex_grow > 0.0 && parent_is_row && w == 0.0 {
-            (ui.available_width() - margin * 2.0).max(0.0)
-        } else if parent_stretch && w == 0.0 {
+        eff_w = if ctx.parent_stretch && w == 0.0 {
             (ui.available_width() - margin * 2.0).max(0.0)
         } else if w > 0.0 {
             w
         } else {
             60.0
         };
-        eff_h = main_override.unwrap_or_else(|| {
+        eff_h = ctx.main_override.unwrap_or_else(|| {
             if node.flex_grow > 0.0 && h == 0.0 {
-                (ui.available_height() - margin * 2.0).max(0.0)
-            } else if parent_stretch && parent_is_row && h == 0.0 {
                 (ui.available_height() - margin * 2.0).max(0.0)
             } else if h > 0.0 {
                 h
@@ -447,7 +391,10 @@ fn build_leaf(
     }
 
     let outer_size = Vec2::new(eff_w + margin * 2.0, eff_h + margin * 2.0);
-    let outer_rect = allocate_with_align_self(ui, outer_size, node.align_self, parent_is_row);
+    let outer_rect = allocate_with_align_self(ui, outer_size, node.align_self, ctx.parent_is_row);
+    if ctx.hidden {
+        return;
+    }
     let inner_rect = outer_rect.shrink(margin);
 
     ui.painter().rect_filled(inner_rect, 0.0, bg);
@@ -456,7 +403,7 @@ fn build_leaf(
     ui.painter().text(
         text_rect.center(),
         egui::Align2::CENTER_CENTER,
-        &node.label,
+        node.display_text(),
         egui::FontId::proportional(26.0),
         Color32::from_rgba_premultiplied(13, 13, 26, 217),
     );
@@ -467,10 +414,7 @@ fn build_container(
     node: &NodeConfig,
     leaf_idx: &mut usize,
     palette: ColorPalette,
-    parent_is_row: bool,
-    parent_stretch: bool,
-    is_root: bool,
-    main_override: Option<f32>,
+    ctx: Ctx,
 ) {
     let is_row = matches!(
         node.flex_direction,
@@ -503,7 +447,7 @@ fn build_container(
     }
 
     let jc = effective_justify(
-        &node.justify_content,
+        node.justify_content,
         matches!(
             node.flex_direction,
             FlexDirection::RowReverse | FlexDirection::ColumnReverse
@@ -534,42 +478,24 @@ fn build_container(
     let avail_w = (ui.available_width() - margin * 2.0).max(0.0);
     let avail_h = (ui.available_height() - margin * 2.0).max(0.0);
 
-    let container_w = if is_root {
+    let container_w = if ctx.is_root {
         VIEWPORT_W
-    } else if parent_is_row {
-        main_override.unwrap_or({
-            if w > 0.0 {
-                w
-            } else if node.flex_grow > 0.0 {
-                avail_w
-            } else {
-                avail_w
-            }
-        })
+    } else if ctx.parent_is_row {
+        ctx.main_override
+            .unwrap_or(if w > 0.0 { w } else { avail_w })
     } else if w > 0.0 {
         w
-    } else if parent_stretch && !parent_is_row {
-        avail_w
     } else {
         avail_w
     };
 
-    let container_h = if is_root {
+    let container_h = if ctx.is_root {
         VIEWPORT_H
-    } else if !parent_is_row {
-        main_override.unwrap_or({
-            if h > 0.0 {
-                h
-            } else if node.flex_grow > 0.0 {
-                avail_h
-            } else {
-                avail_h
-            }
-        })
+    } else if !ctx.parent_is_row {
+        ctx.main_override
+            .unwrap_or(if h > 0.0 { h } else { avail_h })
     } else if h > 0.0 {
         h
-    } else if parent_stretch && parent_is_row {
-        avail_h
     } else {
         avail_h
     };
@@ -579,12 +505,14 @@ fn build_container(
 
     // Reserve space including margin
     let outer_size = Vec2::new(container_w + margin * 2.0, container_h + margin * 2.0);
-    let outer_rect = allocate_with_align_self(ui, outer_size, node.align_self, parent_is_row);
+    let outer_rect = allocate_with_align_self(ui, outer_size, node.align_self, ctx.parent_is_row);
     let inner_rect = outer_rect.shrink(margin + padding);
 
-    // Paint background
-    let bg_rect = outer_rect.shrink(margin);
-    ui.painter().rect_filled(bg_rect, 0.0, bg);
+    // Paint background (hidden subtrees keep their space but paint nothing)
+    if !ctx.hidden {
+        let bg_rect = outer_rect.shrink(margin);
+        ui.painter().rect_filled(bg_rect, 0.0, bg);
+    }
 
     // Create a child UI within the inner rect
     let mut child_ui = ui.new_child(
@@ -607,21 +535,17 @@ fn build_container(
 
     // Pre-compute flex-grow distribution: calculate how much main-axis space
     // each flex-grow child gets, so they don't greedily consume everything.
-    let visible: Vec<&&NodeConfig> = children.iter().filter(|c| c.visible).collect();
-    let num_gaps = if visible.len() > 1 {
-        visible.len() - 1
-    } else {
-        0
+    // Hidden children participate like visible ones (visibility: hidden).
+    let grows_on_main = |c: &NodeConfig| {
+        let dim = if is_row { &c.width } else { &c.height };
+        c.flex_grow > 0.0 && resolve_to_px(dim, if is_row { VIEWPORT_W } else { VIEWPORT_H }) == 0.0
     };
+    let num_gaps = children.len().saturating_sub(1);
     let total_gap = num_gaps as f32 * main_gap;
-    let total_fixed: f32 = visible.iter().map(|c| child_fixed_main(c, is_row)).sum();
-    let total_grow: f32 = visible
+    let total_fixed: f32 = children.iter().map(|c| child_fixed_main(c, is_row)).sum();
+    let total_grow: f32 = children
         .iter()
-        .filter(|c| {
-            let dim = if is_row { &c.width } else { &c.height };
-            c.flex_grow > 0.0
-                && resolve_to_px(dim, if is_row { VIEWPORT_W } else { VIEWPORT_H }) == 0.0
-        })
+        .filter(|c| grows_on_main(c))
         .map(|c| c.flex_grow)
         .sum();
     let main_axis_total = if is_row { inner_w } else { inner_h };
@@ -630,77 +554,25 @@ fn build_container(
     child_ui.with_layout(layout, |ui| {
         for child in &children {
             // Calculate main-axis override for flex-grow children
-            let main_override = if child.visible && child.flex_grow > 0.0 && total_grow > 0.0 {
-                let dim = if is_row { &child.width } else { &child.height };
-                if resolve_to_px(dim, if is_row { VIEWPORT_W } else { VIEWPORT_H }) == 0.0 {
-                    let margin = resolve_to_px(&child.margin.first(), 0.0) * 2.0;
-                    Some((remaining_for_grow * child.flex_grow / total_grow - margin).max(0.0))
-                } else {
-                    None
-                }
+            let main_override = if total_grow > 0.0 && grows_on_main(child) {
+                let margin = resolve_to_px(&child.margin.first(), 0.0) * 2.0;
+                Some((remaining_for_grow * child.flex_grow / total_grow - margin).max(0.0))
             } else {
                 None
             };
-            build_widget_sized(
+            build_widget(
                 ui,
                 child,
                 leaf_idx,
                 palette,
-                is_row,
-                stretch,
-                false,
-                main_override,
+                Ctx {
+                    parent_is_row: is_row,
+                    parent_stretch: stretch,
+                    is_root: false,
+                    main_override,
+                    hidden: ctx.hidden,
+                },
             );
         }
     });
-}
-
-/// When direction is reversed, flex-start/end swap.
-fn effective_justify(jc: &JustifyContent, is_reversed: bool) -> JustifyContent {
-    if !is_reversed {
-        return *jc;
-    }
-    match jc {
-        JustifyContent::FlexStart => JustifyContent::FlexEnd,
-        JustifyContent::FlexEnd => JustifyContent::FlexStart,
-        JustifyContent::Start => JustifyContent::End,
-        JustifyContent::End => JustifyContent::Start,
-        other => *other,
-    }
-}
-
-fn resolve_to_px(v: &ValueConfig, parent_px: f32) -> f32 {
-    match v {
-        ValueConfig::Auto => 0.0,
-        ValueConfig::Px(n) => *n,
-        ValueConfig::Percent(n) => n / 100.0 * parent_px,
-        ValueConfig::Vw(n) => n / 100.0 * VIEWPORT_W,
-        ValueConfig::Vh(n) => n / 100.0 * VIEWPORT_H,
-    }
-}
-
-fn leaf_count(node: &NodeConfig) -> usize {
-    if node.children.is_empty() {
-        1
-    } else {
-        node.children.iter().map(leaf_count).sum()
-    }
-}
-
-// ─── Palette colors (mirrors flexplore's art::palette_color) ────────────────
-
-fn palette_color(palette: ColorPalette, idx: usize) -> (f32, f32, f32) {
-    let c = match palette {
-        ColorPalette::Pastel1 => colorous::PASTEL1[idx % colorous::PASTEL1.len()],
-        ColorPalette::Pastel2 => colorous::PASTEL2[idx % colorous::PASTEL2.len()],
-        ColorPalette::Set1 => colorous::SET1[idx % colorous::SET1.len()],
-        ColorPalette::Set2 => colorous::SET2[idx % colorous::SET2.len()],
-        ColorPalette::Set3 => colorous::SET3[idx % colorous::SET3.len()],
-        ColorPalette::Tableau10 => colorous::TABLEAU10[idx % colorous::TABLEAU10.len()],
-        ColorPalette::Category10 => colorous::CATEGORY10[idx % colorous::CATEGORY10.len()],
-        ColorPalette::Accent => colorous::ACCENT[idx % colorous::ACCENT.len()],
-        ColorPalette::Dark2 => colorous::DARK2[idx % colorous::DARK2.len()],
-        ColorPalette::Paired => colorous::PAIRED[idx % colorous::PAIRED.len()],
-    };
-    (c.r as f32 / 255.0, c.g as f32 / 255.0, c.b as f32 / 255.0)
 }

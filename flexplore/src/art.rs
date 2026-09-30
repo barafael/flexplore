@@ -1,7 +1,7 @@
 pub use flexplore_core::art::palette_color;
 
 use bevy::prelude::*;
-use rand::{Rng, SeedableRng, rngs::StdRng};
+use rand::{RngExt, SeedableRng, rngs::StdRng};
 
 use crate::config::{ART_TEXTURE_SIZE, ArtStyle, ColorPalette};
 
@@ -53,7 +53,7 @@ impl Expr {
             acc += w;
             ends[i] = acc;
         }
-        let roll = rng.r#gen::<u32>() % total;
+        let roll = rng.random::<u32>() % total;
         let b = |r: &mut StdRng, d: u32| Box::new(Expr::build_expr(r, d));
         if depth == 0 || roll < ends[0] {
             return Self::terminal(rng);
@@ -65,7 +65,8 @@ impl Expr {
             return Expr::Mult(b(rng, depth - 1), b(rng, depth - 1));
         }
         if roll < ends[3] {
-            return Expr::Sqrt(Box::new(Expr::Abs(b(rng, depth - 1))));
+            // `Sqrt` already takes the absolute value of its operand.
+            return Expr::Sqrt(b(rng, depth - 1));
         }
         if roll < ends[4] {
             return Expr::Sin(b(rng, depth - 1));
@@ -76,8 +77,8 @@ impl Expr {
         Expr::Mix(b(rng, depth - 1), b(rng, depth - 1), b(rng, depth - 1))
     }
     fn terminal(rng: &mut StdRng) -> Self {
-        match rng.r#gen::<u32>() % 7 {
-            0 => Expr::Num(rng.gen_range(-1.0f32..=1.0)),
+        match rng.random::<u32>() % 7 {
+            0 => Expr::Num(rng.random_range(-1.0f32..=1.0)),
             1 => Expr::X,
             2 => Expr::Y,
             3 => Expr::Abs(Box::new(Expr::X)),
@@ -178,13 +179,7 @@ fn render_voronoi(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
 }
 
 fn render_flow_field(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
-    let mut pix = vec![225u8; (w * h * 4) as usize];
-    for ch in pix.chunks_mut(4) {
-        ch[0] = 225;
-        ch[1] = 235;
-        ch[2] = 250;
-        ch[3] = 255;
-    }
+    let mut pix: Vec<u8> = [225u8, 235, 250, 255].repeat((w * h) as usize);
     let freq = 3.5 + smooth_noise(0.1, 0.2, seed) * 2.0;
     let warp = 0.6 + t * 0.2;
     let lr = (hash_2d(seed as i32, 0, seed.wrapping_add(7)) * 100.0 + 30.0) as u8;
@@ -287,23 +282,140 @@ fn render_op_art(w: u32, h: u32, seed: u64, t: f32) -> Vec<u8> {
     pix
 }
 
-pub fn render_art(style: ArtStyle, exprs: &ArtExpressions, seed: u64, t: f32) -> Vec<u8> {
-    match style {
-        ArtStyle::ExprTree => exprs.render(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, t),
-        ArtStyle::Voronoi => render_voronoi(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, seed, t),
-        ArtStyle::FlowField => render_flow_field(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, seed, t),
-        ArtStyle::Crackle => render_crackle(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, seed, t),
-        ArtStyle::OpArt => render_op_art(ART_TEXTURE_SIZE, ART_TEXTURE_SIZE, seed, t),
+// ─── Art state resource ───────────────────────────────────────────────────────
+
+/// Identifies one art texture: everything its pixels depend on (besides the
+/// animation time `t`).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct ArtKey {
+    style: u8,
+    seed: u64,
+    /// Expression-tree depth; always 0 for styles that do not use it.
+    depth: u32,
+}
+
+impl ArtKey {
+    fn new(style: ArtStyle, seed: u64, depth: u32) -> Self {
+        let depth = if style == ArtStyle::ExprTree {
+            depth
+        } else {
+            0
+        };
+        Self {
+            style: style as u8,
+            seed,
+            depth,
+        }
     }
 }
 
-// ─── Art state resource ───────────────────────────────────────────────────────
+/// One rendered art texture plus what is needed to re-render it (animation).
+pub struct ArtTexture {
+    pub handle: Handle<Image>,
+    style: ArtStyle,
+    seed: u64,
+    /// Only generated for [`ArtStyle::ExprTree`]; the other styles are
+    /// procedural functions of the seed.
+    exprs: Option<ArtExpressions>,
+}
 
+impl ArtTexture {
+    fn new(style: ArtStyle, seed: u64, depth: u32, images: &mut Assets<Image>) -> Self {
+        let exprs = (style == ArtStyle::ExprTree).then(|| ArtExpressions::generate(seed, depth));
+        let mut tex = Self {
+            handle: Handle::default(),
+            style,
+            seed,
+            exprs,
+        };
+        tex.handle = images.add(make_image(tex.render(0.0)));
+        tex
+    }
+
+    /// Render this texture's pixels at animation time `t`.
+    pub fn render(&self, t: f32) -> Vec<u8> {
+        const S: u32 = ART_TEXTURE_SIZE;
+        match (self.style, &self.exprs) {
+            (ArtStyle::ExprTree, Some(exprs)) => exprs.render(S, S, t),
+            // Unreachable by construction; render a plain white tile.
+            (ArtStyle::ExprTree, None) => vec![255u8; (S * S * 4) as usize],
+            (ArtStyle::Voronoi, _) => render_voronoi(S, S, self.seed, t),
+            (ArtStyle::FlowField, _) => render_flow_field(S, S, self.seed, t),
+            (ArtStyle::Crackle, _) => render_crackle(S, S, self.seed, t),
+            (ArtStyle::OpArt, _) => render_op_art(S, S, self.seed, t),
+        }
+    }
+}
+
+fn make_image(pixels: Vec<u8>) -> Image {
+    use bevy::asset::RenderAssetUsages;
+    use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+    Image::new(
+        Extent3d {
+            width: ART_TEXTURE_SIZE,
+            height: ART_TEXTURE_SIZE,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        pixels,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+    )
+}
+
+/// Per-leaf seed derived from the document seed.
+pub fn leaf_seed(base: u64, leaf_idx: usize) -> u64 {
+    base.wrapping_add((leaf_idx as u64).wrapping_mul(0x9e3779b97f4a7c15))
+}
+
+/// Cache of generative-art textures, keyed by everything the pixels depend
+/// on, so a viz rebuild only re-renders textures whose inputs changed.
 #[derive(Resource, Default)]
 pub struct ArtState {
-    pub exprs: Vec<ArtExpressions>,
-    pub seeds: Vec<u64>,
-    pub handles: Vec<Handle<Image>>,
+    cache: std::collections::HashMap<ArtKey, ArtTexture>,
+    /// Key of each leaf's texture, in leaf order.
+    leaves: Vec<ArtKey>,
+}
+
+impl ArtState {
+    /// Drop every texture.
+    pub fn clear(&mut self) {
+        self.cache.clear();
+        self.leaves.clear();
+    }
+
+    /// Make one texture per leaf available, rendering only the missing ones
+    /// and evicting textures no leaf uses any more.
+    pub fn rebuild(
+        &mut self,
+        images: &mut Assets<Image>,
+        style: ArtStyle,
+        base_seed: u64,
+        depth: u32,
+        n_leaves: usize,
+    ) {
+        self.leaves = (0..n_leaves)
+            .map(|i| ArtKey::new(style, leaf_seed(base_seed, i), depth))
+            .collect();
+        let wanted: std::collections::HashSet<ArtKey> = self.leaves.iter().copied().collect();
+        self.cache.retain(|k, _| wanted.contains(k));
+        for key in &self.leaves {
+            self.cache
+                .entry(*key)
+                .or_insert_with(|| ArtTexture::new(style, key.seed, depth, images));
+        }
+    }
+
+    /// Texture handle of the `leaf_idx`-th leaf, if art is enabled.
+    pub fn handle(&self, leaf_idx: usize) -> Option<&Handle<Image>> {
+        let key = self.leaves.get(leaf_idx)?;
+        self.cache.get(key).map(|t| &t.handle)
+    }
+
+    /// Every cached texture.
+    pub fn textures(&self) -> impl Iterator<Item = &ArtTexture> {
+        self.cache.values()
+    }
 }
 
 // ─── Bevy color helper ───────────────────────────────────────────────────────

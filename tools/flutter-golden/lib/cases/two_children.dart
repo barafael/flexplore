@@ -1,4 +1,4 @@
-// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview` to regenerate.
+// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview -- --generate-only` to regenerate.
 import 'package:flutter/material.dart';
 
 class TwoChildren extends StatelessWidget {
@@ -24,8 +24,7 @@ class TwoChildren extends StatelessWidget {
           child: Text('A',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Container(
           width: 120.0,
           height: 100.0,
@@ -35,8 +34,7 @@ class TwoChildren extends StatelessWidget {
           child: Text('B',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
       ],
     )
   )

@@ -1,7 +1,7 @@
 use crate::config::*;
 use test_case::test_case;
 
-use crate::codegen::{emit_bevy_code, emit_html_css, emit_iced};
+use crate::codegen::{emit_all, emit_bevy_code, emit_html_css, emit_iced};
 use crate::config::{ColorPalette, NodeConfig, ValueConfig};
 use crate::templates;
 
@@ -295,22 +295,41 @@ fn assert_both_emit(node: &NodeConfig, palette: ColorPalette) {
     );
     assert!(iced.contains(".into()"), "Iced missing .into() call");
 
-    // Leaf count: each leaf produces a <div> with its label AND a Text::new in Bevy
-    let leaf_count = count_leaves(node);
-    for i in 0..leaf_count {
-        // Each leaf has a background color assignment in both targets
-        assert!(
-            html.contains("background:"),
-            "HTML missing background for leaf {i}"
-        );
+    // Every leaf gets exactly one palette background; containers use rgba().
+    let leaf_count = node.count_leaves();
+    assert_eq!(
+        html.matches("background: rgb(").count(),
+        leaf_count,
+        "HTML leaf background count"
+    );
+    assert_eq!(
+        bevy.matches("Text::new(").count(),
+        leaf_count,
+        "Bevy Text::new count"
+    );
+    assert_eq!(
+        iced.matches("text(\"").count(),
+        leaf_count,
+        "Iced text() count"
+    );
+
+    // Every target: non-empty output that mentions every leaf's label.
+    for (target, out) in emit_all(node, palette).unwrap() {
+        assert!(!out.trim().is_empty(), "{target}: empty output");
+        for label in leaf_labels(node) {
+            assert!(
+                out.contains(&label),
+                "{target}: missing leaf label {label:?}"
+            );
+        }
     }
 }
 
-fn count_leaves(node: &NodeConfig) -> usize {
+fn leaf_labels(node: &NodeConfig) -> Vec<String> {
     if node.children.is_empty() {
-        1
+        vec![node.label.clone()]
     } else {
-        node.children.iter().map(count_leaves).sum()
+        node.children.iter().flat_map(leaf_labels).collect()
     }
 }
 

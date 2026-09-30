@@ -3,20 +3,12 @@ use std::fmt::Write;
 use crate::config::*;
 use anyhow::Result;
 
-use crate::art::palette_color;
+use super::common::{
+    css_align_content, css_align_items, css_align_self, css_flex_direction, css_flex_wrap,
+    css_justify_content, grid_tracks, html_escape, is_auto_or_zero, rgb8, sorted_children,
+    take_leaf_color,
+};
 use crate::config::{ColorPalette, Corners, NodeConfig, Sides, ValueConfig};
-
-fn is_zero_or_auto(v: &ValueConfig) -> bool {
-    matches!(v, ValueConfig::Auto) || matches!(v, ValueConfig::Px(n) if *n == 0.0)
-}
-
-fn format_num(v: f32) -> String {
-    if (v - v.round()).abs() < 0.005 {
-        format!("{}", v as i32)
-    } else {
-        format!("{v:.1}")
-    }
-}
 
 fn emit_css_value(v: &ValueConfig) -> String {
     match v {
@@ -61,87 +53,6 @@ fn emit_css_corners(css: &mut String, prop: &str, corners: &Corners) -> std::fmt
     }
 }
 
-fn css_flex_direction(d: FlexDirection) -> &'static str {
-    match d {
-        FlexDirection::Row => "row",
-        FlexDirection::Column => "column",
-        FlexDirection::RowReverse => "row-reverse",
-        FlexDirection::ColumnReverse => "column-reverse",
-    }
-}
-
-fn css_flex_wrap(w: FlexWrap) -> &'static str {
-    match w {
-        FlexWrap::NoWrap => "nowrap",
-        FlexWrap::Wrap => "wrap",
-        FlexWrap::WrapReverse => "wrap-reverse",
-    }
-}
-
-fn css_justify_content(j: JustifyContent) -> &'static str {
-    match j {
-        JustifyContent::FlexStart => "flex-start",
-        JustifyContent::FlexEnd => "flex-end",
-        JustifyContent::Center => "center",
-        JustifyContent::SpaceBetween => "space-between",
-        JustifyContent::SpaceAround => "space-around",
-        JustifyContent::SpaceEvenly => "space-evenly",
-        JustifyContent::Stretch => "stretch",
-        JustifyContent::Start => "start",
-        JustifyContent::End => "end",
-        _ => "flex-start",
-    }
-}
-
-fn css_align_items(a: AlignItems) -> &'static str {
-    match a {
-        AlignItems::FlexStart => "flex-start",
-        AlignItems::FlexEnd => "flex-end",
-        AlignItems::Center => "center",
-        AlignItems::Baseline => "baseline",
-        AlignItems::Stretch => "stretch",
-        AlignItems::Start => "start",
-        AlignItems::End => "end",
-        _ => "stretch",
-    }
-}
-
-fn css_align_content(a: AlignContent) -> &'static str {
-    match a {
-        AlignContent::FlexStart => "flex-start",
-        AlignContent::FlexEnd => "flex-end",
-        AlignContent::Center => "center",
-        AlignContent::SpaceBetween => "space-between",
-        AlignContent::SpaceAround => "space-around",
-        AlignContent::SpaceEvenly => "space-evenly",
-        AlignContent::Stretch => "stretch",
-        AlignContent::Start => "start",
-        AlignContent::End => "end",
-        _ => "stretch",
-    }
-}
-
-fn css_align_self(a: AlignSelf) -> &'static str {
-    match a {
-        AlignSelf::Auto => "auto",
-        AlignSelf::FlexStart => "flex-start",
-        AlignSelf::FlexEnd => "flex-end",
-        AlignSelf::Center => "center",
-        AlignSelf::Baseline => "baseline",
-        AlignSelf::Stretch => "stretch",
-        AlignSelf::Start => "start",
-        AlignSelf::End => "end",
-    }
-}
-
-fn css_grid_template(tracks: &[GridTrackSize]) -> String {
-    tracks
-        .iter()
-        .map(|t| t.display_short())
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
 pub fn emit_html_css(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
     let mut css = String::new();
     let mut html = String::new();
@@ -174,14 +85,9 @@ fn emit_html_node(
     let class = format!("node-{id}");
 
     let bg = if is_leaf {
-        let (r, g, b) = palette_color(palette, *leaf_idx);
-        *leaf_idx += 1;
-        format!(
-            "rgb({}, {}, {})",
-            (r * 255.0) as u8,
-            (g * 255.0) as u8,
-            (b * 255.0) as u8,
-        )
+        let (r, g, b) = take_leaf_color(palette, leaf_idx);
+        let (r, g, b) = rgb8(r, g, b);
+        format!("rgb({r}, {g}, {b})")
     } else {
         "rgba(28, 28, 43, 1)".into()
     };
@@ -189,15 +95,14 @@ fn emit_html_node(
     writeln!(css, ".{class} {{")?;
 
     // Only emit properties that differ from CSS defaults.
-    // Leaves always get `display: flex` at the end for text centering,
-    // so skip the container-level display for them to avoid duplication.
-    let is_grid = !is_leaf && node.display_mode == DisplayMode::Grid;
-    if !is_leaf {
-        if is_grid {
-            css.push_str("  display: grid;\n");
-        } else {
-            css.push_str("  display: flex;\n");
-        }
+    // `display_mode` applies to leaves too: a grid leaf is still a grid
+    // container (it just has no children), and leaves need a flex/grid
+    // context anyway so their text can be centred.
+    let is_grid = node.display_mode == DisplayMode::Grid;
+    if is_grid {
+        css.push_str("  display: grid;\n");
+    } else {
+        css.push_str("  display: flex;\n");
     }
     if !node.visible {
         css.push_str("  visibility: hidden;\n");
@@ -209,28 +114,28 @@ fn emit_html_node(
             writeln!(
                 css,
                 "  grid-template-columns: {};",
-                css_grid_template(&node.grid_template_columns)
+                grid_tracks(&node.grid_template_columns)
             )?;
         }
         if !node.grid_template_rows.is_empty() {
             writeln!(
                 css,
                 "  grid-template-rows: {};",
-                css_grid_template(&node.grid_template_rows)
+                grid_tracks(&node.grid_template_rows)
             )?;
         }
         if !node.grid_auto_columns.is_empty() {
             writeln!(
                 css,
                 "  grid-auto-columns: {};",
-                css_grid_template(&node.grid_auto_columns)
+                grid_tracks(&node.grid_auto_columns)
             )?;
         }
         if !node.grid_auto_rows.is_empty() {
             writeln!(
                 css,
                 "  grid-auto-rows: {};",
-                css_grid_template(&node.grid_auto_rows)
+                grid_tracks(&node.grid_auto_rows)
             )?;
         }
         if node.grid_auto_flow != GridAutoFlow::Row {
@@ -253,17 +158,24 @@ fn emit_html_node(
             writeln!(css, "  flex-wrap: {};", css_flex_wrap(node.flex_wrap))?;
         }
     }
+    // Leaves always centre their text (emitted below); skip the node's own
+    // value when it is already `center` so the rule is not written twice.
+    let justify_centered = node.justify_content == JustifyContent::Center;
+    let items_centered = node.align_items == AlignItems::Center;
     if !matches!(
         node.justify_content,
         JustifyContent::Default | JustifyContent::FlexStart | JustifyContent::Start
-    ) {
+    ) && !(is_leaf && justify_centered)
+    {
         writeln!(
             css,
             "  justify-content: {};",
             css_justify_content(node.justify_content)
         )?;
     }
-    if !matches!(node.align_items, AlignItems::Default | AlignItems::Stretch) {
+    if !matches!(node.align_items, AlignItems::Default | AlignItems::Stretch)
+        && !(is_leaf && items_centered)
+    {
         writeln!(css, "  align-items: {};", css_align_items(node.align_items))?;
     }
     if !matches!(
@@ -276,18 +188,18 @@ fn emit_html_node(
             css_align_content(node.align_content)
         )?;
     }
-    if !is_zero_or_auto(&node.row_gap) {
+    if !is_auto_or_zero(&node.row_gap) {
         writeln!(css, "  row-gap: {};", emit_css_value(&node.row_gap))?;
     }
-    if !is_zero_or_auto(&node.column_gap) {
+    if !is_auto_or_zero(&node.column_gap) {
         writeln!(css, "  column-gap: {};", emit_css_value(&node.column_gap))?;
     }
     // Flex item properties
     if node.flex_grow != 0.0 {
-        writeln!(css, "  flex-grow: {};", format_num(node.flex_grow))?;
+        writeln!(css, "  flex-grow: {};", format_float(node.flex_grow))?;
     }
     if node.flex_shrink != 1.0 {
-        writeln!(css, "  flex-shrink: {};", format_num(node.flex_shrink))?;
+        writeln!(css, "  flex-shrink: {};", format_float(node.flex_shrink))?;
     }
     if !matches!(node.flex_basis, ValueConfig::Auto) {
         writeln!(css, "  flex-basis: {};", emit_css_value(&node.flex_basis))?;
@@ -333,7 +245,6 @@ fn emit_html_node(
     writeln!(css, "  background: {bg};")?;
     css.push_str("  box-sizing: border-box;\n");
     if is_leaf {
-        css.push_str("  display: flex;\n");
         css.push_str("  align-items: center;\n");
         css.push_str("  justify-content: center;\n");
         css.push_str("  color: rgba(13, 13, 26, 0.85);\n");
@@ -345,13 +256,11 @@ fn emit_html_node(
         writeln!(
             html,
             "{pad_html}<div class=\"{class}\">{}</div>",
-            node.label
+            html_escape(node.display_text())
         )?;
     } else {
         writeln!(html, "{pad_html}<div class=\"{class}\">")?;
-        let mut sorted: Vec<&NodeConfig> = node.children.iter().collect();
-        sorted.sort_by_key(|c| c.order);
-        for child in sorted {
+        for child in sorted_children(node) {
             emit_html_node(css, html, child, depth + 1, leaf_idx, id_counter, palette)?;
         }
         writeln!(html, "{pad_html}</div>")?;
@@ -370,6 +279,14 @@ mod tests {
             NodeConfig::new_leaf("B", 120.0, 100.0),
         ];
         root
+    }
+
+    /// The CSS block for `.node-{id}`.
+    fn css_block(code: &str, id: usize) -> &str {
+        code.split(&format!(".node-{id} {{"))
+            .nth(1)
+            .and_then(|s| s.split('}').next())
+            .unwrap_or("")
     }
 
     #[test]
@@ -425,6 +342,48 @@ mod tests {
     }
 
     #[test]
+    fn leaf_centering_rules_emitted_once() {
+        // new_leaf defaults to justify/align center; the leaf tail must not
+        // repeat them.
+        let code = emit_html_css(&test_container(), ColorPalette::Pastel1).unwrap();
+        let leaf = css_block(&code, 1);
+        assert_eq!(leaf.matches("display: flex;").count(), 1, "{leaf}");
+        assert_eq!(leaf.matches("align-items: center;").count(), 1, "{leaf}");
+        assert_eq!(
+            leaf.matches("justify-content: center;").count(),
+            1,
+            "{leaf}"
+        );
+    }
+
+    #[test]
+    fn grid_leaf_emits_display_grid() {
+        let mut leaf = NodeConfig::new_leaf("A", 80.0, 80.0);
+        leaf.display_mode = DisplayMode::Grid;
+        leaf.grid_template_columns = vec![GridTrackSize::Fr(1.0), GridTrackSize::Fr(1.0)];
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![leaf];
+        let code = emit_html_css(&root, ColorPalette::Pastel1).unwrap();
+        let leaf_css = css_block(&code, 1);
+        assert!(leaf_css.contains("display: grid;"), "{leaf_css}");
+        assert!(!leaf_css.contains("display: flex;"), "{leaf_css}");
+        assert!(
+            leaf_css.contains("grid-template-columns: 1.0fr 1.0fr;"),
+            "{leaf_css}"
+        );
+        assert!(!leaf_css.contains("flex-wrap"), "{leaf_css}");
+    }
+
+    #[test]
+    fn escapes_label_html() {
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![NodeConfig::new_leaf("<b>&\"x\"</b>", 80.0, 80.0)];
+        let code = emit_html_css(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains(">&lt;b&gt;&amp;&quot;x&quot;&lt;/b&gt;</div>"));
+        assert!(!code.contains("<b>"));
+    }
+
+    #[test]
     fn grid_emits_display_grid() {
         let mut root =
             NodeConfig::new_grid("grid", vec![GridTrackSize::Fr(1.0), GridTrackSize::Fr(2.0)]);
@@ -471,12 +430,7 @@ mod tests {
         let mut root = NodeConfig::new_grid("grid", vec![GridTrackSize::Fr(1.0)]);
         root.children = vec![NodeConfig::new_leaf("A", 80.0, 80.0)];
         let code = emit_html_css(&root, ColorPalette::Pastel1).unwrap();
-        // Extract the root node's CSS block (node-0)
-        let root_css = code
-            .split(".node-0 {")
-            .nth(1)
-            .and_then(|s| s.split('}').next())
-            .unwrap_or("");
+        let root_css = css_block(&code, 0);
         assert!(
             !root_css.contains("flex-direction"),
             "grid container should not emit flex-direction in its CSS block"

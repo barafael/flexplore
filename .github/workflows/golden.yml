@@ -1,0 +1,108 @@
+name: Golden Screenshots
+
+# Renders every fixture in testdata/ with every backend and commits the PNGs
+# plus testdata/overview.html. The Linux job covers Bevy, HTML, Tailwind,
+# Flutter, Iced, egui, Dioxus and React Native; SwiftUI needs macOS and runs
+# afterwards so the two commits do not race.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'flexplore-core/src/**'
+      - 'flexplore/src/render.rs'
+      - 'flexplore/src/viz.rs'
+      - 'testdata/*/input.json'
+      - 'testdata/*/expected.*'
+      - 'tools/**'
+      - '.github/workflows/golden.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: golden-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+
+      - name: Install system dependencies (Bevy, winit, software GPU, Xvfb)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libudev-dev libxkbcommon-dev libxkbcommon-x11-0 \
+            libvulkan1 mesa-vulkan-drivers libgl1-mesa-dri libegl1 \
+            xvfb fontconfig fonts-dejavu-core
+
+      - name: Install Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@48ad923757ca74d66703209fe939badbdf80f2f4 # v2
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: stable
+
+      - name: Render all Linux-capable backends
+        env:
+          CHROME: ${{ steps.chrome.outputs.chrome-path }}
+          WINIT_UNIX_BACKEND: x11
+        run: |
+          xvfb-run -a --server-args="-screen 0 1280x1024x24" \
+            cargo run --release -p build-overview -- --skip-codegen \
+              --backend bevy --backend html --backend tailwind --backend flutter \
+              --backend iced --backend egui --backend dioxus --backend react-native
+
+      - name: Commit rendered PNGs and overview
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}"
+          git add testdata/*/rendered_*.png testdata/overview.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Update golden screenshots (Linux backends)"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+  swift:
+    runs-on: macos-15
+    needs: linux
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          ref: main
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+
+      - name: Render SwiftUI golden screenshots and rebuild overview
+        run: cargo run --release -p build-overview -- --skip-codegen --backend swift
+
+      - name: Commit rendered PNGs and overview
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}"
+          git add testdata/*/rendered_swift.png testdata/overview.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Update golden screenshots (SwiftUI)"
+          git pull --rebase origin main
+          git push origin HEAD:main

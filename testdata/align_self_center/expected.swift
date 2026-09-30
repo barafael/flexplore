@@ -1,7 +1,7 @@
 struct ContentView: View {
     public var body: some View {
         HStack(alignment: .top, spacing: 8.0) {
-            Text("top")
+            Text("top-1")
                 .font(.system(size: 26))
                 .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
                 .frame(width: 100.0, height: 60.0)
@@ -14,7 +14,7 @@ struct ContentView: View {
                 .padding(8.0)
                 .background(Color(red: 0.70, green: 0.80, blue: 0.89))
                 .frame(maxHeight: .infinity, alignment: .center)
-            Text("top")
+            Text("top-2")
                 .font(.system(size: 26))
                 .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
                 .frame(width: 100.0, height: 60.0)

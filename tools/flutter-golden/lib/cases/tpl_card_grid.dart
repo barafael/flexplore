@@ -1,4 +1,4 @@
-// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview` to regenerate.
+// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview -- --generate-only` to regenerate.
 import 'package:flutter/material.dart';
 
 class TplCardGrid extends StatelessWidget {
@@ -24,8 +24,7 @@ class TplCardGrid extends StatelessWidget {
           child: Text('card-1',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Container(
           width: 170.0,
           height: 80.0,
@@ -35,8 +34,7 @@ class TplCardGrid extends StatelessWidget {
           child: Text('card-2',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Container(
           width: 170.0,
           height: 80.0,
@@ -46,8 +44,7 @@ class TplCardGrid extends StatelessWidget {
           child: Text('card-3',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Container(
           width: 170.0,
           height: 80.0,
@@ -57,8 +54,7 @@ class TplCardGrid extends StatelessWidget {
           child: Text('card-4',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Container(
           width: 170.0,
           height: 80.0,
@@ -68,8 +64,7 @@ class TplCardGrid extends StatelessWidget {
           child: Text('card-5',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Container(
           width: 170.0,
           height: 80.0,
@@ -79,8 +74,7 @@ class TplCardGrid extends StatelessWidget {
           child: Text('card-6',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
       ],
     )
   )

@@ -26,6 +26,7 @@ fn deserialize_theme<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Theme, D:
 }
 
 #[derive(Resource, Clone, Serialize, Deserialize)]
+#[serde(default)] // an autosave from an older build must still load
 pub struct FlexConfig {
     pub root: NodeConfig,
     #[serde(skip)]
@@ -41,6 +42,10 @@ pub struct FlexConfig {
     pub palette: ColorPalette,
     #[serde(skip)]
     needs_rebuild: bool,
+    /// Set when the generative-art textures must be re-rendered from scratch
+    /// (cached textures are otherwise reused across rebuilds).
+    #[serde(skip)]
+    art_dirty: bool,
 }
 
 impl FlexConfig {
@@ -48,10 +53,10 @@ impl FlexConfig {
         &self.selected
     }
 
-    /// Set the selected node path and mark for rebuild.
+    /// Set the selected node path. The selection outline is moved by
+    /// `viz::viz_selection` without rebuilding the tree.
     pub fn select(&mut self, path: Vec<usize>) {
         self.selected = path;
-        self.needs_rebuild = true;
     }
 
     /// Deselect towards root until the path is valid.
@@ -68,6 +73,17 @@ impl FlexConfig {
     /// Returns true (and resets the flag) if a rebuild was requested.
     pub fn take_rebuild(&mut self) -> bool {
         std::mem::replace(&mut self.needs_rebuild, false)
+    }
+
+    /// Request that every art texture is re-rendered on the next rebuild.
+    pub fn request_art_regen(&mut self) {
+        self.art_dirty = true;
+        self.needs_rebuild = true;
+    }
+
+    /// Returns true (and resets the flag) if an art re-render was requested.
+    pub fn take_art_regen(&mut self) -> bool {
+        std::mem::replace(&mut self.art_dirty, false)
     }
 }
 
@@ -92,6 +108,7 @@ impl Default for FlexConfig {
             theme: Theme::Mocha,
             palette: ColorPalette::Pastel1,
             needs_rebuild: true,
+            art_dirty: false,
         }
     }
 }

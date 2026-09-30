@@ -88,7 +88,7 @@
   "text_content": "",
   "children": [
     {
-      "label": "top",
+      "label": "top-1",
       "display_mode": "Flex",
       "flex_direction": "Row",
       "flex_wrap": "Wrap",
@@ -264,7 +264,7 @@
       "children": []
     },
     {
-      "label": "top",
+      "label": "top-2",
       "display_mode": "Flex",
       "flex_direction": "Row",
       "flex_wrap": "Wrap",

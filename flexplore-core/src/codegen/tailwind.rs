@@ -3,7 +3,9 @@ use std::fmt::Write;
 use crate::config::*;
 use anyhow::Result;
 
-use crate::art::palette_color;
+use super::common::{
+    grid_tracks, html_escape, is_auto_or_zero, rgb8, sorted_children, take_leaf_color,
+};
 use crate::config::{ColorPalette, Corners, NodeConfig, Sides, ValueConfig};
 
 fn tailwind_flex_direction(d: FlexDirection) -> &'static str {
@@ -94,6 +96,11 @@ fn tailwind_value(property: &str, v: &ValueConfig) -> String {
     }
 }
 
+/// Tailwind arbitrary values cannot contain spaces: `grid-cols-[1.0fr_200px]`.
+fn tailwind_tracks(tracks: &[GridTrackSize]) -> String {
+    grid_tracks(tracks).replace(' ', "_")
+}
+
 fn push_tailwind_sides(
     classes: &mut Vec<String>,
     uniform_prefix: &str,
@@ -146,6 +153,14 @@ fn push_tailwind_corners(classes: &mut Vec<String>, corners: &Corners) {
     }
 }
 
+/// Push a class unless it is already present (leaf centering classes may
+/// duplicate the node's own justify/align classes).
+fn push_unique(classes: &mut Vec<String>, class: &str) {
+    if !classes.iter().any(|c| c == class) {
+        classes.push(class.into());
+    }
+}
+
 pub fn emit_tailwind(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
     let mut buf = String::new();
     emit_tailwind_node(&mut buf, root, 0, &mut 0, palette)?;
@@ -163,14 +178,9 @@ fn emit_tailwind_node(
     let is_leaf = node.children.is_empty();
 
     let bg = if is_leaf {
-        let (r, g, b) = palette_color(palette, *leaf_idx);
-        *leaf_idx += 1;
-        format!(
-            "bg-[rgb({},{},{})]",
-            (r * 255.0) as u8,
-            (g * 255.0) as u8,
-            (b * 255.0) as u8,
-        )
+        let (r, g, b) = take_leaf_color(palette, leaf_idx);
+        let (r, g, b) = rgb8(r, g, b);
+        format!("bg-[rgb({r},{g},{b})]")
     } else {
         "bg-[rgba(28,28,43,1)]".into()
     };
@@ -183,36 +193,28 @@ fn emit_tailwind_node(
     if is_grid {
         // Grid template — use arbitrary Tailwind values
         if !node.grid_template_columns.is_empty() {
-            let val: Vec<_> = node
-                .grid_template_columns
-                .iter()
-                .map(|t| t.display_short())
-                .collect();
-            classes.push(format!("grid-cols-[{}]", val.join("_")));
+            classes.push(format!(
+                "grid-cols-[{}]",
+                tailwind_tracks(&node.grid_template_columns)
+            ));
         }
         if !node.grid_template_rows.is_empty() {
-            let val: Vec<_> = node
-                .grid_template_rows
-                .iter()
-                .map(|t| t.display_short())
-                .collect();
-            classes.push(format!("grid-rows-[{}]", val.join("_")));
+            classes.push(format!(
+                "grid-rows-[{}]",
+                tailwind_tracks(&node.grid_template_rows)
+            ));
         }
         if !node.grid_auto_columns.is_empty() {
-            let val: Vec<_> = node
-                .grid_auto_columns
-                .iter()
-                .map(|t| t.display_short())
-                .collect();
-            classes.push(format!("auto-cols-[{}]", val.join("_")));
+            classes.push(format!(
+                "auto-cols-[{}]",
+                tailwind_tracks(&node.grid_auto_columns)
+            ));
         }
         if !node.grid_auto_rows.is_empty() {
-            let val: Vec<_> = node
-                .grid_auto_rows
-                .iter()
-                .map(|t| t.display_short())
-                .collect();
-            classes.push(format!("auto-rows-[{}]", val.join("_")));
+            classes.push(format!(
+                "auto-rows-[{}]",
+                tailwind_tracks(&node.grid_auto_rows)
+            ));
         }
         if node.grid_auto_flow != GridAutoFlow::Row {
             classes.push(
@@ -248,14 +250,10 @@ fn emit_tailwind_node(
     ) {
         classes.push(tailwind_align_content(node.align_content).into());
     }
-    if !matches!(node.column_gap, ValueConfig::Auto)
-        && !matches!(node.column_gap, ValueConfig::Px(v) if v == 0.0)
-    {
+    if !is_auto_or_zero(&node.column_gap) {
         classes.push(tailwind_value("gap-x", &node.column_gap));
     }
-    if !matches!(node.row_gap, ValueConfig::Auto)
-        && !matches!(node.row_gap, ValueConfig::Px(v) if v == 0.0)
-    {
+    if !is_auto_or_zero(&node.row_gap) {
         classes.push(tailwind_value("gap-y", &node.row_gap));
     }
     if node.flex_grow != 0.0 {
@@ -272,10 +270,17 @@ fn emit_tailwind_node(
     }
     // Grid item placement
     if node.grid_column != GridPlacement::Auto {
-        classes.push(format!("col-[{}]", node.grid_column.display_short()));
+        // Tailwind arbitrary values cannot contain spaces: `col-[1_/_span_3]`.
+        classes.push(format!(
+            "col-[{}]",
+            node.grid_column.display_short().replace(' ', "_")
+        ));
     }
     if node.grid_row != GridPlacement::Auto {
-        classes.push(format!("row-[{}]", node.grid_row.display_short()));
+        classes.push(format!(
+            "row-[{}]",
+            node.grid_row.display_short().replace(' ', "_")
+        ));
     }
     if !matches!(node.width, ValueConfig::Auto) {
         classes.push(tailwind_value("w", &node.width));
@@ -317,11 +322,9 @@ fn emit_tailwind_node(
     }
 
     if is_leaf {
-        if !is_grid {
-            classes.push("flex".into());
-        }
-        classes.push("items-center".into());
-        classes.push("justify-center".into());
+        // Leaves centre their text. `flex`/`grid` is already the first class.
+        push_unique(&mut classes, "items-center");
+        push_unique(&mut classes, "justify-center");
         classes.push("text-[26px]".into());
         classes.push("text-[rgba(13,13,26,0.85)]".into());
     }
@@ -329,12 +332,14 @@ fn emit_tailwind_node(
     let cls = classes.join(" ");
 
     if is_leaf {
-        writeln!(buf, "{pad}<div class=\"{cls}\">{}</div>", node.label)?;
+        writeln!(
+            buf,
+            "{pad}<div class=\"{cls}\">{}</div>",
+            html_escape(node.display_text())
+        )?;
     } else {
         writeln!(buf, "{pad}<div class=\"{cls}\">")?;
-        let mut sorted: Vec<&NodeConfig> = node.children.iter().collect();
-        sorted.sort_by_key(|c| c.order);
-        for child in sorted {
+        for child in sorted_children(node) {
             emit_tailwind_node(buf, child, depth + 1, leaf_idx, palette)?;
         }
         writeln!(buf, "{pad}</div>")?;
@@ -403,5 +408,35 @@ mod tests {
         let code = emit_tailwind(&test_container(), ColorPalette::Pastel1).unwrap();
         assert!(code.contains(">A</div>"));
         assert!(code.contains(">B</div>"));
+    }
+
+    #[test]
+    fn leaf_classes_not_duplicated() {
+        let code = emit_tailwind(&test_container(), ColorPalette::Pastel1).unwrap();
+        let leaf_line = code.lines().nth(1).unwrap();
+        let classes: Vec<&str> = leaf_line
+            .split("class=\"")
+            .nth(1)
+            .unwrap()
+            .split('"')
+            .next()
+            .unwrap()
+            .split(' ')
+            .collect();
+        for c in ["flex", "items-center", "justify-center"] {
+            assert_eq!(
+                classes.iter().filter(|x| **x == c).count(),
+                1,
+                "{c} duplicated in {leaf_line}"
+            );
+        }
+    }
+
+    #[test]
+    fn escapes_label_html() {
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![NodeConfig::new_leaf("a<b>&c", 80.0, 80.0)];
+        let code = emit_tailwind(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains(">a&lt;b&gt;&amp;c</div>"));
     }
 }

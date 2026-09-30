@@ -1,4 +1,4 @@
-// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview` to regenerate.
+// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview -- --generate-only` to regenerate.
 import 'package:flutter/material.dart';
 
 class FlexBasisPercent extends StatelessWidget {
@@ -33,7 +33,7 @@ class FlexBasisPercent extends StatelessWidget {
             padding: EdgeInsets.all(8.0),
             color: Color.fromRGBO(179, 205, 227, 1.0),
             alignment: Alignment.center,
-            child: Text('25%',
+            child: Text('25%-b',
               style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
             ),
           )
@@ -45,7 +45,7 @@ class FlexBasisPercent extends StatelessWidget {
             padding: EdgeInsets.all(8.0),
             color: Color.fromRGBO(204, 235, 197, 1.0),
             alignment: Alignment.center,
-            child: Text('25%',
+            child: Text('25%-c',
               style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
             ),
           )

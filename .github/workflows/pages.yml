@@ -30,35 +30,20 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - name: Cache cargo registry & build
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+
+      # Trunk downloads the wasm-bindgen CLI matching Cargo.lock and wasm-opt
+      # itself, so the web build is the same command locally and here.
+      - name: Install Trunk
+        uses: jetli/trunk-action@1346cc09eace4beb84e403e199a471346d4684c9 # v0.5.1
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: wasm-${{ hashFiles('Cargo.lock') }}
-          restore-keys: wasm-
+          version: 'v0.21.14'
 
-      - name: Install wasm-bindgen-cli
+      - name: Build web app
+        run: trunk build --release --public-url ./
+
+      - name: Copy golden overview
         run: |
-          wb_version=$(grep -A 2 '^name = "wasm-bindgen"' Cargo.lock | grep version | head -1 | cut -d '"' -f 2)
-          cargo install wasm-bindgen-cli --version "$wb_version"
-
-      - name: Build WASM
-        run: cargo build --release --target wasm32-unknown-unknown
-
-      - name: Generate bindings
-        run: |
-          wasm-bindgen \
-            --out-dir dist \
-            --target web \
-            --no-typescript \
-            target/wasm32-unknown-unknown/release/flexplore.wasm
-
-      - name: Copy web assets
-        run: |
-          cp web/index.html dist/
           mkdir -p dist/testdata
           cp testdata/overview.html dist/testdata/
           for d in testdata/*/; do

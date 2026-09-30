@@ -8,10 +8,18 @@ pub fn auto_save(cfg: &FlexConfig) {
         return;
     };
     let dir = dir.join("flexplore");
-    let _ = std::fs::create_dir_all(&dir);
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        bevy::log::warn!("autosave: cannot create {}: {e}", dir.display());
+        return;
+    }
     let path = dir.join("autosave.json");
-    if let Ok(json) = serde_json::to_string_pretty(cfg) {
-        let _ = std::fs::write(path, json);
+    match serde_json::to_string_pretty(cfg) {
+        Ok(json) => {
+            if let Err(e) = std::fs::write(&path, json) {
+                bevy::log::warn!("autosave: cannot write {}: {e}", path.display());
+            }
+        }
+        Err(e) => bevy::log::warn!("autosave: cannot serialize config: {e}"),
     }
 }
 
@@ -19,8 +27,10 @@ pub fn auto_save(cfg: &FlexConfig) {
 pub fn auto_load() -> Option<FlexConfig> {
     let dir = dirs::config_dir()?.join("flexplore");
     let path = dir.join("autosave.json");
-    let data = std::fs::read_to_string(path).ok()?;
-    serde_json::from_str(&data).ok()
+    let data = std::fs::read_to_string(&path).ok()?;
+    serde_json::from_str(&data)
+        .inspect_err(|e| bevy::log::warn!("autosave: ignoring {}: {e}", path.display()))
+        .ok()
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -40,8 +50,13 @@ pub fn auto_save(cfg: &FlexConfig) {
     let Some(storage) = local_storage() else {
         return;
     };
-    if let Ok(json) = serde_json::to_string(cfg) {
-        let _ = storage.set_item("flexplore_config", &json);
+    match serde_json::to_string(cfg) {
+        Ok(json) => {
+            if storage.set_item("flexplore_config", &json).is_err() {
+                bevy::log::warn!("autosave: localStorage write failed (quota or disabled)");
+            }
+        }
+        Err(e) => bevy::log::warn!("autosave: cannot serialize config: {e}"),
     }
 }
 
@@ -53,7 +68,9 @@ pub fn auto_load() -> Option<FlexConfig> {
     }
     let storage = local_storage()?;
     let json = storage.get_item("flexplore_config").ok()??;
-    serde_json::from_str(&json).ok()
+    serde_json::from_str(&json)
+        .inspect_err(|e| bevy::log::warn!("autosave: ignoring stored config: {e}"))
+        .ok()
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -107,7 +124,10 @@ pub fn trigger_download(json: &str) {
 pub fn make_share_url(cfg: &FlexConfig) -> Option<String> {
     let json = serde_json::to_string(cfg).ok()?;
     let window = web_sys::window()?;
-    let encoded: String = window.btoa(&json).ok()?;
+    // `btoa` only accepts Latin-1; percent-encode first so labels with any
+    // Unicode (emoji, accents) survive the round trip.
+    let ascii: String = js_sys::encode_uri_component(&json).into();
+    let encoded: String = window.btoa(&ascii).ok()?;
     let location = window.location();
     let origin = location.origin().ok()?;
     let pathname = location.pathname().ok()?;
@@ -120,7 +140,12 @@ fn load_from_url_hash() -> Option<FlexConfig> {
     let hash = window.location().hash().ok()?;
     let hash = hash.strip_prefix('#')?;
     let encoded = hash.strip_prefix("layout=")?;
-    let json: String = window.atob(encoded).ok()?;
+    let decoded: String = window.atob(encoded).ok()?;
+    // New links are percent-encoded; older links carry raw JSON, which only
+    // fails to decode when it contains a literal `%` (e.g. a "25%" label).
+    let json: String = js_sys::decode_uri_component(&decoded)
+        .map(String::from)
+        .unwrap_or(decoded);
     // Clear the hash after loading so refreshing doesn't re-apply it
     let _ = window.location().set_hash("");
     serde_json::from_str(&json).ok()

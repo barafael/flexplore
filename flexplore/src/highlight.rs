@@ -20,22 +20,6 @@ pub enum Lang {
     Dart,
 }
 
-pub fn lang_for_framework(idx: usize) -> Lang {
-    match idx {
-        0 => Lang::Rust,  // Bevy
-        1 => Lang::Html,  // HTML/CSS
-        2 => Lang::Html,  // Tailwind
-        3 => Lang::Jsx,   // React
-        4 => Lang::Swift, // SwiftUI
-        5 => Lang::Dart,  // Flutter
-        6 => Lang::Rust,  // Iced
-        7 => Lang::Rust,  // egui
-        8 => Lang::Jsx,   // React Native
-        9 => Lang::Rust,  // Dioxus
-        _ => Lang::Rust,
-    }
-}
-
 // ─── Theme colours ───────────────────────────────────────────────────────────
 
 struct Theme {
@@ -61,6 +45,21 @@ fn dark_theme() -> Theme {
         r#type: Color32::from_rgb(0xE6, 0xDB, 0x74),   // yellow
         punctuation: Color32::from_rgb(0x88, 0x88, 0x88), // dim
         default: Color32::from_rgb(0xF8, 0xF8, 0xF2),  // off-white
+    }
+}
+
+/// Colours for light panel backgrounds (Catppuccin Latte accents).
+fn light_theme() -> Theme {
+    Theme {
+        keyword: Color32::from_rgb(0x88, 0x39, 0xEF),  // mauve
+        string: Color32::from_rgb(0x40, 0xA0, 0x2B),   // green
+        comment: Color32::from_rgb(0x8C, 0x8F, 0xA1),  // overlay1
+        number: Color32::from_rgb(0xFE, 0x64, 0x0B),   // peach
+        tag: Color32::from_rgb(0x1E, 0x66, 0xF5),      // blue
+        property: Color32::from_rgb(0x1E, 0x66, 0xF5), // blue
+        r#type: Color32::from_rgb(0xDF, 0x8E, 0x1D),   // yellow
+        punctuation: Color32::from_rgb(0x6C, 0x6F, 0x85), // subtext0
+        default: Color32::from_rgb(0x4C, 0x4F, 0x69),  // text
     }
 }
 
@@ -208,8 +207,11 @@ const CSS_PROPS: &[&str] = &[
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
-pub fn highlight(code: &str, lang: Lang, font: FontId) -> LayoutJob {
-    let theme = dark_theme();
+/// Tokenise `code` into a coloured `LayoutJob`. `light` selects the colour
+/// set for light panel backgrounds. This walks the whole listing, so callers
+/// should cache the result until the code, language or theme changes.
+pub fn highlight(code: &str, lang: Lang, font: FontId, light: bool) -> LayoutJob {
+    let theme = if light { light_theme() } else { dark_theme() };
     let mut job = LayoutJob::default();
     job.wrap.max_width = f32::INFINITY;
 
@@ -321,10 +323,10 @@ fn highlight_html(src: &str, theme: &Theme, font: &FontId, job: &mut LayoutJob) 
                     break;
                 }
             }
-            // Consume unit suffix (px, %, fr, vw, vh, em, rem)
+            // Consume unit suffix (px, %, fr, vw, vh, rem, em)
             let pos = chars.peek().map_or(src.len(), |&(j, _)| j);
             let rest = &src[pos..];
-            let units = ["px", "fr", "vw", "vh", "%"];
+            let units = ["px", "fr", "vw", "vh", "%", "rem", "em"];
             let mut unit_len = 0;
             for u in units {
                 if rest.starts_with(u) {

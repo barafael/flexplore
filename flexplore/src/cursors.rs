@@ -1,13 +1,15 @@
 //! Remote-peer presence: live mouse cursors + selection highlights.
 //!
-//! Each remote peer's state (identity, normalized screen-space cursor, selected
-//! node path) lives in the [`RemotePeers`] resource, populated by
-//! [`crate::net::apply_ephemeral`] from unreliable `Ephemeral` messages.
+//! Each remote peer's state (identity, cursor, selected node path) lives in
+//! the [`RemotePeers`] resource, populated by [`crate::net::apply_ephemeral`]
+//! from unreliable `Ephemeral` messages.
 //!
-//! Broadcasting is throttled to ~10 Hz on the unreliable channel (latest value
-//! wins; packet loss is harmless). Rendering lerps each cursor toward its
-//! latest known position with exponential smoothing + dead-reckoning between
-//! samples, like the omdurman overlay.
+//! Cursor positions are normalised to the *layout viewport* (the window minus
+//! the side panels), so peers with different window sizes or panel states see
+//! each other pointing at the same part of the layout. Broadcasting is
+//! throttled to ~10 Hz on the unreliable channel (latest value wins; packet
+//! loss is harmless). Rendering interpolates between the last two samples and
+//! smooths toward the result.
 
 use std::collections::{HashMap, hash_map::DefaultHasher};
 use std::hash::{Hash, Hasher};
@@ -16,8 +18,8 @@ use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
 use flexplore_net::{Ephemeral, MatchboxSocket, NetMsg, NetState, PeerId, broadcast_unreliable};
 
-use flexplore::config::FlexConfig;
 use crate::viz::VizNodePath;
+use flexplore::config::{FlexConfig, PANEL_WIDTH, RIGHT_PANEL_WIDTH, RightPanelOpen};
 
 /// Distinct peer cursor colours.
 pub const PEER_COLORS: [[u8; 3]; 8] = [
@@ -30,6 +32,13 @@ pub const PEER_COLORS: [[u8; 3]; 8] = [
     [0xFF, 0x8A, 0x65], // orange
     [0xAE, 0xE6, 0x5A], // lime
 ];
+
+/// A cursor that has not been updated for this long is hidden (the peer's
+/// pointer left the layout, or the peer is idle).
+const CURSOR_STALE_SECS: f64 = 2.0;
+/// Selection is resent at this interval so late joiners and lost packets
+/// still converge.
+const SELECTION_RESEND_SECS: f32 = 1.0;
 
 /// Pick a colour deterministically from a peer id (so the same peer is always
 /// the same colour across all clients).
@@ -50,10 +59,10 @@ pub struct RemotePeer {
     pub id: PeerId,
     pub name: String,
     pub color: [u8; 3],
-    /// Latest normalized `[x,y]` in `[0,1]`.
+    /// Latest normalised `[x,y]` in `[0,1]` within the layout viewport.
     pub cursor: Option<Vec2>,
     pub cursor_prev: Option<Vec2>,
-    /// Smoothed display position (normalized), persisted across frames.
+    /// Smoothed display position (normalised), persisted across frames.
     pub cursor_display: Option<Vec2>,
     pub last_update: f64,
     /// Selected node path (empty = root).
@@ -68,7 +77,7 @@ impl RemotePeers {
         } else {
             self.0.push(RemotePeer {
                 id,
-                name: format!("{:?}", id),
+                name: String::new(),
                 color: color_for_peer(id),
                 cursor: None,
                 cursor_prev: None,
@@ -100,14 +109,27 @@ impl Default for CursorBroadcastTimer {
 #[derive(Component)]
 pub struct RemoteSelHighlight;
 
+/// The layout viewport in egui points: the window minus the side panels. Both
+/// the sender and the receiver normalise against their own viewport.
+fn layout_viewport(ctx: &egui::Context, right_open: bool) -> egui::Rect {
+    let mut rect = ctx.viewport_rect();
+    rect.min.x += PANEL_WIDTH;
+    if right_open {
+        rect.max.x -= RIGHT_PANEL_WIDTH;
+    }
+    rect
+}
+
 // ── Broadcast systems ────────────────────────────────────────────────────────
 
-/// Broadcast the local cursor position (~10 Hz) as normalized screen coords on
-/// the unreliable channel. The latest value wins; packet loss is harmless.
+/// Broadcast the local cursor position (~10 Hz), normalised to the layout
+/// viewport, on the unreliable channel. Nothing is sent while the pointer is
+/// over a panel or outside the window, so the remote cursor fades out.
 pub fn broadcast_cursor(
     mut timer: ResMut<CursorBroadcastTimer>,
     time: Res<Time>,
-    windows: Query<&Window>,
+    mut contexts: EguiContexts,
+    right_open: Res<RightPanelOpen>,
     net: Res<NetState>,
     socket: Option<ResMut<MatchboxSocket>>,
 ) {
@@ -116,36 +138,45 @@ pub fn broadcast_cursor(
         return;
     }
     let Some(mut socket) = socket else { return };
-    let Ok(window) = windows.single() else { return };
-    let Some(pos) = window.cursor_position() else {
+    if net.peers.is_empty() {
+        return;
+    }
+    let Ok(ctx) = contexts.ctx_mut() else { return };
+    let Some(pos) = ctx.input(|i| i.pointer.latest_pos()) else {
         return;
     };
-    let (w, h) = (window.width(), window.height());
-    if w <= 0.0 || h <= 0.0 {
+    let viewport = layout_viewport(ctx, right_open.0);
+    if !viewport.contains(pos) || viewport.width() <= 0.0 || viewport.height() <= 0.0 {
         return;
     }
     broadcast_unreliable(
         &mut socket,
         &net.peers,
         &NetMsg::Ephemeral(Ephemeral::CursorPos {
-            nx: (pos.x / w).clamp(0.0, 1.0),
-            ny: (pos.y / h).clamp(0.0, 1.0),
+            nx: (pos.x - viewport.left()) / viewport.width(),
+            ny: (pos.y - viewport.top()) / viewport.height(),
         }),
     );
 }
 
-/// Broadcast the local selection whenever it changes (unreliable).
+/// Broadcast the local selection whenever it changes, and once a second
+/// regardless (unreliable channel; late joiners need it too).
 pub fn broadcast_selection(
     cfg: Res<FlexConfig>,
     net: Res<NetState>,
+    time: Res<Time>,
     socket: Option<ResMut<MatchboxSocket>>,
     mut last: Local<Vec<usize>>,
+    mut since_send: Local<f32>,
 ) {
+    *since_send += time.delta_secs();
     let current = cfg.selected();
-    if current == last.as_slice() {
+    if current == last.as_slice() && *since_send < SELECTION_RESEND_SECS {
         return;
     }
-    last.clone_from_slice(current);
+    last.clear();
+    last.extend_from_slice(current);
+    *since_send = 0.0;
     let Some(mut socket) = socket else { return };
     broadcast_unreliable(
         &mut socket,
@@ -158,13 +189,12 @@ pub fn broadcast_selection(
 
 // ── Rendering ────────────────────────────────────────────────────────────────
 
-/// Render every remote peer's cursor as an arrow + name label, with exponential
-/// smoothing + dead-reckoning between samples. Coords are normalized; we map
-/// them back to pixels via the egui viewport rect so peers with different
-/// window sizes see a proportional pointer position.
+/// Render every remote peer's cursor as an arrow + name label. Runs inside
+/// egui's pass (painting from `Update` would be cleared by the next pass).
 pub fn cursor_overlay_ui(
     mut contexts: EguiContexts,
     time: Res<Time>,
+    right_open: Res<RightPanelOpen>,
     mut remote: ResMut<RemotePeers>,
 ) {
     if remote.0.is_empty() {
@@ -177,21 +207,27 @@ pub fn cursor_overlay_ui(
     const SMOOTH: f32 = 8.0;
     let alpha = 1.0 - (-SMOOTH * dt).exp();
 
-    let screen = ctx.viewport_rect();
+    let viewport = layout_viewport(ctx, right_open.0);
     let mut visible: Vec<(Vec2, [u8; 3], String)> = Vec::new();
     for peer in remote.0.iter_mut() {
         let Some(pos) = peer.cursor else { continue };
-        // Dead-reckon toward the latest sample between updates.
-        let t = if peer.last_update > 0.0 {
-            (((now - peer.last_update) / 0.1).clamp(0.0, 1.0)) as f32
-        } else {
-            1.0
-        };
+        if now - peer.last_update > CURSOR_STALE_SECS {
+            peer.cursor_display = None;
+            continue;
+        }
+        // Interpolate from the previous sample toward the latest one over the
+        // broadcast interval, then smooth toward that.
+        let t = (((now - peer.last_update) / 0.1).clamp(0.0, 1.0)) as f32;
         let prev = peer.cursor_prev.unwrap_or(pos);
         let target = prev.lerp(pos, t);
         let display = peer.cursor_display.get_or_insert(target);
         *display = display.lerp(target, alpha);
-        visible.push((*display, peer.color, peer.name.clone()));
+        let label = if peer.name.is_empty() {
+            "…".to_string()
+        } else {
+            peer.name.clone()
+        };
+        visible.push((*display, peer.color, label));
     }
 
     if visible.is_empty() {
@@ -204,8 +240,8 @@ pub fn cursor_overlay_ui(
         .show(ctx, |ui| {
             let painter = ui.painter();
             for (norm, color, label) in &visible {
-                let px = screen.left() + norm.x * screen.width();
-                let py = screen.top() + norm.y * screen.height();
+                let px = viewport.left() + norm.x * viewport.width();
+                let py = viewport.top() + norm.y * viewport.height();
                 let tip = egui::pos2(px, py);
                 let col = egui::Color32::from_rgb(color[0], color[1], color[2]);
 
@@ -236,8 +272,8 @@ pub fn cursor_overlay_ui(
 }
 
 /// Render each remote peer's selected node with a coloured border. Rebuilds the
-/// highlight children only when the selection set actually changes (cheap no-op
-/// otherwise); a viz rebuild despawns them and they re-spawn next frame.
+/// highlight children only when the selection set changes, or when a viz
+/// rebuild has despawned them along with the tree.
 pub fn remote_selection_highlight(
     mut commands: Commands,
     remote: Res<RemotePeers>,
@@ -253,7 +289,8 @@ pub fn remote_selection_highlight(
         }
     }
     desired.sort();
-    if desired == *signature {
+    let despawned_by_rebuild = highlights.is_empty() && !desired.is_empty();
+    if desired == *signature && !despawned_by_rebuild {
         return;
     }
     *signature = desired.clone();
@@ -268,7 +305,9 @@ pub fn remote_selection_highlight(
         nodes.iter().map(|(e, p)| (p.0.as_slice(), e)).collect();
 
     for (path, color) in &desired {
-        let Some(&entity) = by_path.get(path.as_slice()) else { continue };
+        let Some(&entity) = by_path.get(path.as_slice()) else {
+            continue;
+        };
         let col = Color::srgb(
             color[0] as f32 / 255.0,
             color[1] as f32 / 255.0,

@@ -3,16 +3,10 @@ use std::fmt::Write;
 use crate::config::*;
 use anyhow::Result;
 
-use crate::art::palette_color;
+use super::common::{
+    dart_string_literal, grid_tracks, rgb8, sorted_children_with_leaf_starts, take_leaf_color,
+};
 use crate::config::{ColorPalette, Corners, NodeConfig, Sides, ValueConfig};
-
-fn count_leaves(node: &NodeConfig) -> usize {
-    if node.children.is_empty() {
-        1
-    } else {
-        node.children.iter().map(count_leaves).sum()
-    }
-}
 
 fn dart_value(v: &ValueConfig) -> Option<String> {
     match v {
@@ -206,6 +200,15 @@ fn dart_align_self(a: AlignSelf, is_row: bool) -> Option<&'static str> {
     }
 }
 
+/// Turn the trailing newline of the last emitted widget into `,\n`, so list
+/// elements read `Container(...),` instead of a `,` on its own line.
+fn append_comma(buf: &mut String) {
+    if buf.ends_with('\n') {
+        buf.pop();
+    }
+    buf.push_str(",\n");
+}
+
 pub fn emit_flutter(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
     let mut buf = String::from("Widget build(BuildContext context) {\n  return ");
     emit_flutter_node(&mut buf, root, 1, &mut 0, palette, true)?;
@@ -222,7 +225,6 @@ fn emit_flutter_node(
     is_root: bool,
 ) -> Result<()> {
     let pad = "  ".repeat(depth);
-    let is_leaf = node.children.is_empty();
 
     if !node.visible {
         writeln!(buf, "{pad}Visibility(")?;
@@ -231,12 +233,12 @@ fn emit_flutter_node(
         writeln!(buf, "{pad}  maintainAnimation: true,")?;
         writeln!(buf, "{pad}  maintainState: true,")?;
         write!(buf, "{pad}  child: ")?;
-        emit_flutter_inner(buf, node, depth + 1, leaf_idx, is_leaf, palette, is_root)?;
+        emit_flutter_inner(buf, node, depth + 1, leaf_idx, palette, is_root)?;
         writeln!(buf, "{pad})")?;
         return Ok(());
     }
 
-    emit_flutter_inner(buf, node, depth, leaf_idx, is_leaf, palette, is_root)
+    emit_flutter_inner(buf, node, depth, leaf_idx, palette, is_root)
 }
 
 fn emit_flutter_inner(
@@ -244,334 +246,345 @@ fn emit_flutter_inner(
     node: &NodeConfig,
     depth: usize,
     leaf_idx: &mut usize,
-    is_leaf: bool,
+    palette: ColorPalette,
+    is_root: bool,
+) -> Result<()> {
+    if node.children.is_empty() {
+        emit_flutter_leaf(buf, node, depth, leaf_idx, palette)
+    } else {
+        emit_flutter_container(buf, node, depth, leaf_idx, palette, is_root)
+    }
+}
+
+fn emit_flutter_leaf(
+    buf: &mut String,
+    node: &NodeConfig,
+    depth: usize,
+    leaf_idx: &mut usize,
+    palette: ColorPalette,
+) -> Result<()> {
+    let pad = "  ".repeat(depth);
+    let (r, g, b) = take_leaf_color(palette, leaf_idx);
+
+    writeln!(buf, "{pad}Container(")?;
+    if let Some(w) = dart_value(&node.width) {
+        writeln!(buf, "{pad}  width: {w},")?;
+    }
+    if let Some(h) = dart_value(&node.height) {
+        writeln!(buf, "{pad}  height: {h},")?;
+    }
+    if let Some(p) = dart_edge_insets(&node.padding) {
+        writeln!(buf, "{pad}  padding: {p},")?;
+    }
+    if let Some(m) = dart_edge_insets(&node.margin) {
+        writeln!(buf, "{pad}  margin: {m},")?;
+    }
+    // Constraints
+    let min_w = dart_value(&node.min_width);
+    let min_h = dart_value(&node.min_height);
+    let max_w = dart_value(&node.max_width);
+    let max_h = dart_value(&node.max_height);
+    if min_w.is_some() || min_h.is_some() || max_w.is_some() || max_h.is_some() {
+        writeln!(buf, "{pad}  constraints: BoxConstraints(")?;
+        if let Some(v) = &min_w {
+            writeln!(buf, "{pad}    minWidth: {v},")?;
+        }
+        if let Some(v) = &min_h {
+            writeln!(buf, "{pad}    minHeight: {v},")?;
+        }
+        if let Some(v) = &max_w {
+            writeln!(buf, "{pad}    maxWidth: {v},")?;
+        }
+        if let Some(v) = &max_h {
+            writeln!(buf, "{pad}    maxHeight: {v},")?;
+        }
+        writeln!(buf, "{pad}  ),")?;
+    }
+    let (r8, g8, b8) = rgb8(r, g, b);
+    let bg_str = format!("Color.fromRGBO({r8}, {g8}, {b8}, 1.0)");
+    let has_border_or_radius = !node.border_width.is_zero() || !node.border_radius.is_zero();
+    if has_border_or_radius {
+        if let Some(deco) =
+            dart_box_decoration(&node.border_width, &node.border_radius, Some(&bg_str))
+        {
+            writeln!(buf, "{pad}  decoration: {deco},")?;
+        }
+    } else {
+        writeln!(buf, "{pad}  color: {bg_str},")?;
+    }
+    writeln!(buf, "{pad}  alignment: Alignment.center,")?;
+    writeln!(
+        buf,
+        "{pad}  child: Text({},",
+        dart_string_literal(node.display_text())
+    )?;
+    writeln!(
+        buf,
+        "{pad}    style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),"
+    )?;
+    writeln!(buf, "{pad}  ),")?;
+    writeln!(buf, "{pad})")?;
+    Ok(())
+}
+
+fn emit_flutter_container(
+    buf: &mut String,
+    node: &NodeConfig,
+    depth: usize,
+    leaf_idx: &mut usize,
     palette: ColorPalette,
     is_root: bool,
 ) -> Result<()> {
     let pad = "  ".repeat(depth);
+    let is_row = matches!(
+        node.flex_direction,
+        FlexDirection::Row | FlexDirection::RowReverse
+    );
+    let is_reversed = matches!(
+        node.flex_direction,
+        FlexDirection::RowReverse | FlexDirection::ColumnReverse
+    );
+    let nowrap = node.flex_wrap == FlexWrap::NoWrap;
 
-    if is_leaf {
-        let (r, g, b) = palette_color(palette, *leaf_idx);
-        *leaf_idx += 1;
+    let w = dart_value(&node.width);
+    // Root with flex_grow fills the viewport height, matching CSS body { height: 100% }
+    let h = if is_root && node.flex_grow > 0.0 {
+        Some("double.infinity".to_string())
+    } else {
+        dart_value(&node.height)
+    };
+    let p = dart_edge_insets(&node.padding);
+    let m = dart_edge_insets(&node.margin);
+    let deco = dart_box_decoration(&node.border_width, &node.border_radius, None);
+    let has_container =
+        w.is_some() || h.is_some() || p.is_some() || m.is_some() || deco.is_some() || is_root;
 
+    if has_container {
         writeln!(buf, "{pad}Container(")?;
-        let w = dart_value(&node.width);
-        let h = dart_value(&node.height);
-        if let Some(w) = &w {
-            writeln!(buf, "{pad}  width: {w},")?;
+        if let Some(v) = &w {
+            writeln!(buf, "{pad}  width: {v},")?;
         }
-        if let Some(h) = &h {
-            writeln!(buf, "{pad}  height: {h},")?;
+        if let Some(v) = &h {
+            writeln!(buf, "{pad}  height: {v},")?;
         }
-        if let Some(p) = dart_edge_insets(&node.padding) {
-            writeln!(buf, "{pad}  padding: {p},")?;
+        if let Some(v) = &p {
+            writeln!(buf, "{pad}  padding: {v},")?;
         }
-        if let Some(m) = dart_edge_insets(&node.margin) {
-            writeln!(buf, "{pad}  margin: {m},")?;
+        if let Some(v) = &m {
+            writeln!(buf, "{pad}  margin: {v},")?;
         }
-        // Constraints
-        let min_w = dart_value(&node.min_width);
-        let min_h = dart_value(&node.min_height);
-        let max_w = dart_value(&node.max_width);
-        let max_h = dart_value(&node.max_height);
-        if min_w.is_some() || min_h.is_some() || max_w.is_some() || max_h.is_some() {
-            writeln!(buf, "{pad}  constraints: BoxConstraints(")?;
-            if let Some(v) = &min_w {
-                writeln!(buf, "{pad}    minWidth: {v},")?;
-            }
-            if let Some(v) = &min_h {
-                writeln!(buf, "{pad}    minHeight: {v},")?;
-            }
-            if let Some(v) = &max_w {
-                writeln!(buf, "{pad}    maxWidth: {v},")?;
-            }
-            if let Some(v) = &max_h {
-                writeln!(buf, "{pad}    maxHeight: {v},")?;
-            }
-            writeln!(buf, "{pad}  ),")?;
+        if let Some(d) = &deco {
+            writeln!(buf, "{pad}  decoration: {d},")?;
         }
-        let bg_str = format!(
-            "Color.fromRGBO({}, {}, {}, 1.0)",
-            (r * 255.0) as u8,
-            (g * 255.0) as u8,
-            (b * 255.0) as u8,
-        );
-        let has_border_or_radius = !node.border_width.is_zero() || !node.border_radius.is_zero();
-        if has_border_or_radius {
-            if let Some(deco) =
-                dart_box_decoration(&node.border_width, &node.border_radius, Some(&bg_str))
-            {
-                writeln!(buf, "{pad}  decoration: {deco},")?;
-            }
-        } else {
-            writeln!(buf, "{pad}  color: {bg_str},")?;
-        }
-        writeln!(buf, "{pad}  alignment: Alignment.center,")?;
-        writeln!(buf, "{pad}  child: Text('{}',", node.label)?;
+        write!(buf, "{pad}  child: ")?;
+    }
+
+    let inner_depth = if has_container { depth + 1 } else { depth };
+    let ipad = "  ".repeat(inner_depth);
+    let is_grid = node.display_mode == DisplayMode::Grid;
+
+    if is_grid {
+        // CSS Grid layout — use GridView.count or a custom grid widget
         writeln!(
             buf,
-            "{pad}    style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),"
+            "{ipad}// CSS Grid layout — use GridView.count or a custom grid widget"
         )?;
-        writeln!(buf, "{pad}  ),")?;
-        writeln!(buf, "{pad})")?;
-    } else {
-        let is_row = matches!(
-            node.flex_direction,
-            FlexDirection::Row | FlexDirection::RowReverse
-        );
-        let is_reversed = matches!(
-            node.flex_direction,
-            FlexDirection::RowReverse | FlexDirection::ColumnReverse
-        );
-
-        let w = dart_value(&node.width);
-        // Root with flex_grow fills the viewport height, matching CSS body { height: 100% }
-        let h = if is_root && node.flex_grow > 0.0 {
-            Some("double.infinity".to_string())
-        } else {
-            dart_value(&node.height)
-        };
-        let p = dart_edge_insets(&node.padding);
-        let m = dart_edge_insets(&node.margin);
-        let deco = dart_box_decoration(&node.border_width, &node.border_radius, None);
-        let has_container =
-            w.is_some() || h.is_some() || p.is_some() || m.is_some() || deco.is_some() || is_root;
-
-        if has_container {
-            writeln!(buf, "{pad}Container(")?;
-            if let Some(v) = &w {
-                writeln!(buf, "{pad}  width: {v},")?;
-            }
-            if let Some(v) = &h {
-                writeln!(buf, "{pad}  height: {v},")?;
-            }
-            if let Some(v) = &p {
-                writeln!(buf, "{pad}  padding: {v},")?;
-            }
-            if let Some(v) = &m {
-                writeln!(buf, "{pad}  margin: {v},")?;
-            }
-            if let Some(d) = &deco {
-                writeln!(buf, "{pad}  decoration: {d},")?;
-            }
-            write!(buf, "{pad}  child: ")?;
-        }
-
-        let inner_depth = if has_container { depth + 1 } else { depth };
-        let ipad = "  ".repeat(inner_depth);
-        let is_grid = node.display_mode == DisplayMode::Grid;
-
-        if is_grid {
-            // CSS Grid layout — use GridView.count or a custom grid widget
+        writeln!(buf, "{ipad}Wrap(")?;
+        writeln!(
+            buf,
+            "{ipad}  // grid-template-columns / rows not directly supported in Flutter"
+        )?;
+        if !node.grid_template_columns.is_empty() {
             writeln!(
                 buf,
-                "{ipad}// CSS Grid layout — use GridView.count or a custom grid widget"
-            )?;
-            writeln!(buf, "{ipad}Wrap(")?;
-            writeln!(
-                buf,
-                "{ipad}  // grid-template-columns / rows not directly supported in Flutter"
-            )?;
-            if !node.grid_template_columns.is_empty() {
-                let val: Vec<_> = node
-                    .grid_template_columns
-                    .iter()
-                    .map(|t| t.display_short())
-                    .collect();
-                writeln!(buf, "{ipad}  // grid-template-columns: {}", val.join(" "))?;
-            }
-            if !node.grid_template_rows.is_empty() {
-                let val: Vec<_> = node
-                    .grid_template_rows
-                    .iter()
-                    .map(|t| t.display_short())
-                    .collect();
-                writeln!(buf, "{ipad}  // grid-template-rows: {}", val.join(" "))?;
-            }
-            if !node.grid_auto_columns.is_empty() {
-                let val: Vec<_> = node
-                    .grid_auto_columns
-                    .iter()
-                    .map(|t| t.display_short())
-                    .collect();
-                writeln!(buf, "{ipad}  // grid-auto-columns: {}", val.join(" "))?;
-            }
-            if !node.grid_auto_rows.is_empty() {
-                let val: Vec<_> = node
-                    .grid_auto_rows
-                    .iter()
-                    .map(|t| t.display_short())
-                    .collect();
-                writeln!(buf, "{ipad}  // grid-auto-rows: {}", val.join(" "))?;
-            }
-            if node.grid_auto_flow != GridAutoFlow::Row {
-                writeln!(
-                    buf,
-                    "{ipad}  // grid-auto-flow: {}",
-                    node.grid_auto_flow.to_css_str()
-                )?;
-            }
-            if let Some(s) = dart_value(&node.column_gap) {
-                writeln!(buf, "{ipad}  spacing: {s},")?;
-            }
-            if let Some(s) = dart_value(&node.row_gap) {
-                writeln!(buf, "{ipad}  runSpacing: {s},")?;
-            }
-        } else if node.flex_wrap != FlexWrap::NoWrap {
-            // For Wrap, textDirection/verticalDirection handles axis reversal
-            // natively, so no effective_justify swap or child reversal needed.
-            writeln!(buf, "{ipad}Wrap(")?;
-            writeln!(
-                buf,
-                "{ipad}  direction: {},",
-                if is_row {
-                    "Axis.horizontal"
-                } else {
-                    "Axis.vertical"
-                }
-            )?;
-            if is_reversed {
-                if is_row {
-                    writeln!(buf, "{ipad}  textDirection: TextDirection.rtl,")?;
-                } else {
-                    writeln!(buf, "{ipad}  verticalDirection: VerticalDirection.up,")?;
-                }
-            }
-            if node.flex_wrap == FlexWrap::WrapReverse {
-                if is_row {
-                    writeln!(buf, "{ipad}  verticalDirection: VerticalDirection.up,")?;
-                } else {
-                    writeln!(buf, "{ipad}  textDirection: TextDirection.rtl,")?;
-                }
-            }
-            if let Some(a) = dart_wrap_alignment(node.justify_content) {
-                writeln!(buf, "{ipad}  alignment: {a},")?;
-            }
-            if let Some(ra) = dart_wrap_run_alignment(node.align_content) {
-                writeln!(buf, "{ipad}  runAlignment: {ra},")?;
-            }
-            if let Some(ca) = dart_wrap_cross_alignment(node.align_items) {
-                writeln!(buf, "{ipad}  crossAxisAlignment: {ca},")?;
-            }
-            if let Some(s) = dart_value(&node.column_gap) {
-                writeln!(buf, "{ipad}  spacing: {s},")?;
-            }
-            if let Some(s) = dart_value(&node.row_gap) {
-                writeln!(buf, "{ipad}  runSpacing: {s},")?;
-            }
-        } else {
-            // For Row/Column (NoWrap), reverse children + swap justify to
-            // approximate reversed direction.
-            let eff_jc = effective_justify(node.justify_content, is_reversed);
-            let widget = if is_row { "Row" } else { "Column" };
-            writeln!(buf, "{ipad}{widget}(")?;
-            writeln!(
-                buf,
-                "{ipad}  mainAxisAlignment: {},",
-                dart_main_axis(eff_jc)
-            )?;
-            writeln!(
-                buf,
-                "{ipad}  crossAxisAlignment: {},",
-                dart_cross_axis(node.align_items)
+                "{ipad}  // grid-template-columns: {}",
+                grid_tracks(&node.grid_template_columns)
             )?;
         }
-
-        writeln!(buf, "{ipad}  children: [")?;
-        let mut children: Vec<&NodeConfig> = node.children.iter().collect();
-        children.sort_by_key(|c| c.order);
-
-        // Pre-compute leaf_idx start for each child in sorted order,
-        // so colors track with their original nodes even when reversed.
-        let mut starts = Vec::with_capacity(children.len());
-        let mut acc = *leaf_idx;
-        for child in &children {
-            starts.push(acc);
-            acc += count_leaves(child);
+        if !node.grid_template_rows.is_empty() {
+            writeln!(
+                buf,
+                "{ipad}  // grid-template-rows: {}",
+                grid_tracks(&node.grid_template_rows)
+            )?;
         }
-        *leaf_idx = acc;
-
+        if !node.grid_auto_columns.is_empty() {
+            writeln!(
+                buf,
+                "{ipad}  // grid-auto-columns: {}",
+                grid_tracks(&node.grid_auto_columns)
+            )?;
+        }
+        if !node.grid_auto_rows.is_empty() {
+            writeln!(
+                buf,
+                "{ipad}  // grid-auto-rows: {}",
+                grid_tracks(&node.grid_auto_rows)
+            )?;
+        }
+        if node.grid_auto_flow != GridAutoFlow::Row {
+            writeln!(
+                buf,
+                "{ipad}  // grid-auto-flow: {}",
+                node.grid_auto_flow.to_css_str()
+            )?;
+        }
+        if let Some(s) = dart_value(&node.column_gap) {
+            writeln!(buf, "{ipad}  spacing: {s},")?;
+        }
+        if let Some(s) = dart_value(&node.row_gap) {
+            writeln!(buf, "{ipad}  runSpacing: {s},")?;
+        }
+    } else if !nowrap {
+        // For Wrap, textDirection/verticalDirection handles axis reversal
+        // natively, so no effective_justify swap or child reversal needed.
+        writeln!(buf, "{ipad}Wrap(")?;
+        writeln!(
+            buf,
+            "{ipad}  direction: {},",
+            if is_row {
+                "Axis.horizontal"
+            } else {
+                "Axis.vertical"
+            }
+        )?;
         if is_reversed {
-            let dir_label = match node.flex_direction {
-                FlexDirection::RowReverse => "RowReverse",
-                FlexDirection::ColumnReverse => "ColumnReverse",
-                _ => unreachable!(),
-            };
-            if node.flex_wrap == FlexWrap::NoWrap {
-                writeln!(
-                    buf,
-                    "{ipad}    // NOTE: flex-direction: {dir_label} — children reversed in source to approximate visual order"
-                )?;
-                children.reverse();
-                starts.reverse();
+            if is_row {
+                writeln!(buf, "{ipad}  textDirection: TextDirection.rtl,")?;
             } else {
-                writeln!(
-                    buf,
-                    "{ipad}    // NOTE: flex-direction: {dir_label} — handled by textDirection/verticalDirection"
-                )?;
+                writeln!(buf, "{ipad}  verticalDirection: VerticalDirection.up,")?;
             }
         }
-        for (child, start) in children.iter().zip(starts.iter()) {
-            let mut idx = *start;
-            let needs_align = dart_align_self(child.align_self, is_row).is_some()
-                && node.flex_wrap == FlexWrap::NoWrap;
-            if child.flex_grow > 0.0 && node.flex_wrap == FlexWrap::NoWrap {
-                writeln!(buf, "{ipad}    Expanded(")?;
-                writeln!(
-                    buf,
-                    "{ipad}      flex: {},",
-                    child.flex_grow.round().max(1.0) as i32
-                )?;
-                write!(buf, "{ipad}      child: ")?;
-                if needs_align {
-                    let align = dart_align_self(child.align_self, is_row).unwrap();
-                    writeln!(buf, "Align(")?;
-                    writeln!(buf, "{ipad}        alignment: {align},")?;
-                    write!(buf, "{ipad}        child: ")?;
-                    emit_flutter_node(buf, child, inner_depth + 4, &mut idx, palette, false)?;
-                    writeln!(buf, "{ipad}      ),")?;
-                } else {
-                    emit_flutter_node(buf, child, inner_depth + 3, &mut idx, palette, false)?;
-                }
-                writeln!(buf, "{ipad}    ),")?;
-            } else if matches!(child.flex_basis, ValueConfig::Percent(n) if n > 0.0)
-                && node.flex_wrap == FlexWrap::NoWrap
-            {
-                let n = match child.flex_basis {
-                    ValueConfig::Percent(n) => n,
-                    _ => unreachable!(),
-                };
-                writeln!(buf, "{ipad}    Expanded(")?;
-                writeln!(buf, "{ipad}      flex: {},", n.round() as i32)?;
-                write!(buf, "{ipad}      child: ")?;
-                emit_flutter_node(buf, child, inner_depth + 3, &mut idx, palette, false)?;
-                writeln!(buf, "{ipad}    ),")?;
-            } else if child.flex_shrink > 0.0 && node.flex_wrap == FlexWrap::NoWrap {
-                writeln!(buf, "{ipad}    Flexible(")?;
-                writeln!(buf, "{ipad}      fit: FlexFit.loose,")?;
-                write!(buf, "{ipad}      child: ")?;
-                if needs_align {
-                    let align = dart_align_self(child.align_self, is_row).unwrap();
-                    writeln!(buf, "Align(")?;
-                    writeln!(buf, "{ipad}        alignment: {align},")?;
-                    write!(buf, "{ipad}        child: ")?;
-                    emit_flutter_node(buf, child, inner_depth + 4, &mut idx, palette, false)?;
-                    writeln!(buf, "{ipad}      ),")?;
-                } else {
-                    emit_flutter_node(buf, child, inner_depth + 3, &mut idx, palette, false)?;
-                }
-                writeln!(buf, "{ipad}    ),")?;
+        if node.flex_wrap == FlexWrap::WrapReverse {
+            if is_row {
+                writeln!(buf, "{ipad}  verticalDirection: VerticalDirection.up,")?;
             } else {
-                emit_flutter_node(buf, child, inner_depth + 2, &mut idx, palette, false)?;
-                writeln!(buf, "{ipad}    ,")?;
+                writeln!(buf, "{ipad}  textDirection: TextDirection.rtl,")?;
             }
         }
-        writeln!(buf, "{ipad}  ],")?;
-        writeln!(buf, "{ipad})")?;
+        if let Some(a) = dart_wrap_alignment(node.justify_content) {
+            writeln!(buf, "{ipad}  alignment: {a},")?;
+        }
+        if let Some(ra) = dart_wrap_run_alignment(node.align_content) {
+            writeln!(buf, "{ipad}  runAlignment: {ra},")?;
+        }
+        if let Some(ca) = dart_wrap_cross_alignment(node.align_items) {
+            writeln!(buf, "{ipad}  crossAxisAlignment: {ca},")?;
+        }
+        if let Some(s) = dart_value(&node.column_gap) {
+            writeln!(buf, "{ipad}  spacing: {s},")?;
+        }
+        if let Some(s) = dart_value(&node.row_gap) {
+            writeln!(buf, "{ipad}  runSpacing: {s},")?;
+        }
+    } else {
+        // For Row/Column (NoWrap), reverse children + swap justify to
+        // approximate reversed direction.
+        let eff_jc = effective_justify(node.justify_content, is_reversed);
+        let widget = if is_row { "Row" } else { "Column" };
+        writeln!(buf, "{ipad}{widget}(")?;
+        writeln!(
+            buf,
+            "{ipad}  mainAxisAlignment: {},",
+            dart_main_axis(eff_jc)
+        )?;
+        writeln!(
+            buf,
+            "{ipad}  crossAxisAlignment: {},",
+            dart_cross_axis(node.align_items)
+        )?;
+    }
 
-        if has_container {
-            writeln!(buf, "{pad})")?;
+    writeln!(buf, "{ipad}  children: [")?;
+    let (mut children, mut starts) = sorted_children_with_leaf_starts(node, leaf_idx);
+
+    if is_reversed {
+        let dir_label = match node.flex_direction {
+            FlexDirection::RowReverse => "RowReverse",
+            FlexDirection::ColumnReverse => "ColumnReverse",
+            _ => unreachable!(),
+        };
+        if nowrap {
+            writeln!(
+                buf,
+                "{ipad}    // NOTE: flex-direction: {dir_label} — children reversed in source to approximate visual order"
+            )?;
+            children.reverse();
+            starts.reverse();
+        } else {
+            writeln!(
+                buf,
+                "{ipad}    // NOTE: flex-direction: {dir_label} — handled by textDirection/verticalDirection"
+            )?;
         }
+    }
+    for (child, start) in children.iter().zip(starts.iter()) {
+        let mut idx = *start;
+        // Row/Column only: Expanded/Flexible/Align wrappers need a Flex parent.
+        let align = if nowrap {
+            dart_align_self(child.align_self, is_row)
+        } else {
+            None
+        };
+        let basis_pct = match child.flex_basis {
+            ValueConfig::Percent(n) if n > 0.0 && nowrap => Some(n),
+            _ => None,
+        };
+        if child.flex_grow > 0.0 && nowrap {
+            writeln!(buf, "{ipad}    Expanded(")?;
+            writeln!(
+                buf,
+                "{ipad}      flex: {},",
+                child.flex_grow.round().max(1.0) as i32
+            )?;
+            write!(buf, "{ipad}      child: ")?;
+            emit_flutter_aligned(buf, child, &ipad, inner_depth, &mut idx, palette, align)?;
+            writeln!(buf, "{ipad}    ),")?;
+        } else if let Some(n) = basis_pct {
+            writeln!(buf, "{ipad}    Expanded(")?;
+            writeln!(buf, "{ipad}      flex: {},", n.round() as i32)?;
+            write!(buf, "{ipad}      child: ")?;
+            emit_flutter_node(buf, child, inner_depth + 3, &mut idx, palette, false)?;
+            writeln!(buf, "{ipad}    ),")?;
+        } else if child.flex_shrink > 0.0 && nowrap {
+            writeln!(buf, "{ipad}    Flexible(")?;
+            writeln!(buf, "{ipad}      fit: FlexFit.loose,")?;
+            write!(buf, "{ipad}      child: ")?;
+            emit_flutter_aligned(buf, child, &ipad, inner_depth, &mut idx, palette, align)?;
+            writeln!(buf, "{ipad}    ),")?;
+        } else {
+            emit_flutter_node(buf, child, inner_depth + 2, &mut idx, palette, false)?;
+            append_comma(buf);
+        }
+    }
+    writeln!(buf, "{ipad}  ],")?;
+    writeln!(buf, "{ipad})")?;
+
+    if has_container {
+        writeln!(buf, "{pad})")?;
+    }
+    Ok(())
+}
+
+/// Emit a child inside an `Expanded`/`Flexible` `child:` slot, wrapping it in
+/// `Align(...)` when it has an align-self override.
+fn emit_flutter_aligned(
+    buf: &mut String,
+    child: &NodeConfig,
+    ipad: &str,
+    inner_depth: usize,
+    idx: &mut usize,
+    palette: ColorPalette,
+    align: Option<&str>,
+) -> Result<()> {
+    if let Some(align) = align {
+        writeln!(buf, "Align(")?;
+        writeln!(buf, "{ipad}        alignment: {align},")?;
+        write!(buf, "{ipad}        child: ")?;
+        emit_flutter_node(buf, child, inner_depth + 4, idx, palette, false)?;
+        writeln!(buf, "{ipad}      ),")?;
+    } else {
+        emit_flutter_node(buf, child, inner_depth + 3, idx, palette, false)?;
     }
     Ok(())
 }
@@ -616,6 +629,26 @@ mod tests {
         let code = emit_flutter(&test_container(), ColorPalette::Pastel1).unwrap();
         assert!(code.contains("Container("));
         assert!(code.contains("Text('A'"));
+    }
+
+    #[test]
+    fn escapes_dart_string() {
+        let mut root = test_container();
+        root.children = vec![NodeConfig::new_leaf("it's $5\\", 80.0, 80.0)];
+        let code = emit_flutter(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains(r"Text('it\'s \$5\\',"), "{code}");
+    }
+
+    #[test]
+    fn wrap_children_get_trailing_commas() {
+        // Children of a Wrap are emitted bare; the comma must sit on the
+        // closing line of the child, never alone on its own line.
+        let code = emit_flutter(&test_container(), ColorPalette::Pastel1).unwrap();
+        assert!(
+            !code.lines().any(|l| l.trim() == ","),
+            "lone comma line in:\n{code}"
+        );
+        assert!(code.contains("        ),\n"), "{code}");
     }
 
     #[test]

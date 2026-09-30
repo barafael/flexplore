@@ -17,8 +17,7 @@ Widget build(BuildContext context) {
           child: Text('card-1',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Container(
           width: 170.0,
           height: 80.0,
@@ -28,8 +27,7 @@ Widget build(BuildContext context) {
           child: Text('card-2',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Container(
           width: 170.0,
           height: 80.0,
@@ -39,8 +37,7 @@ Widget build(BuildContext context) {
           child: Text('card-3',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Container(
           width: 170.0,
           height: 80.0,
@@ -50,8 +47,7 @@ Widget build(BuildContext context) {
           child: Text('card-4',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Container(
           width: 170.0,
           height: 80.0,
@@ -61,8 +57,7 @@ Widget build(BuildContext context) {
           child: Text('card-5',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Container(
           width: 170.0,
           height: 80.0,
@@ -72,8 +67,7 @@ Widget build(BuildContext context) {
           child: Text('card-6',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
       ],
     )
   )

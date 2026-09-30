@@ -30,6 +30,15 @@ impl UndoHistory {
         }
     }
 
+    /// Overwrite the most recent entry instead of adding one (coalesces a
+    /// burst of small changes, e.g. a slider drag, into one undo step).
+    pub fn replace_top(&mut self, state: FlexConfig) {
+        match self.snapshots.get_mut(self.cursor) {
+            Some(top) => *top = state,
+            None => self.push(state),
+        }
+    }
+
     pub fn undo(&mut self) -> Option<&FlexConfig> {
         if self.cursor > 0 {
             self.cursor -= 1;

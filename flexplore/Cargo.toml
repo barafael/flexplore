@@ -12,28 +12,23 @@ multiplayer = [
 [dependencies]
 flexplore-core = { path = "../flexplore-core", features = ["bevy"] }
 flexplore-net = { path = "../flexplore-net", optional = true }
-bevy = { version = "0.18", features = ["serialize"] }
-bevy_egui = "0.39"
-postcard = { version = "1", features = ["alloc"] }
-rand = "0.8"
-getrandom = { version = "0.2", features = ["js"] }
-getrandom_0_3 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
+bevy = { version = "0.19", features = ["serialize"] }
+bevy_egui = "0.42"
+rand = "0.10"
 strum = { version = "0.28.0", features = ["derive"] }
 anyhow = "1.0.102"
 catppuccin = { version = "2", features = ["serde"] }
-colorous = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-dirs = "6"
-rfd = "0.15"
+dirs = "7"
+rfd = "0.17"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = ["Window", "Storage", "Blob", "BlobPropertyBag", "Url", "HtmlAnchorElement", "Document", "Location"] }
 wasm-bindgen = "0.2"
 js-sys = "0.3"
-
-[dev-dependencies]
-test-case = "3"
+# rand needs a JS-backed entropy source on wasm32-unknown-unknown.
+getrandom = { version = "0.4", features = ["wasm_js"] }

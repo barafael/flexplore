@@ -46,7 +46,7 @@ fn spawn_ui(commands: &mut Commands) {
                 TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
             ));
         });
-        // 25%
+        // 25%-b
         parent.spawn((
             Node {
                 flex_wrap: FlexWrap::Wrap,
@@ -72,12 +72,12 @@ fn spawn_ui(commands: &mut Commands) {
                 align_items: AlignItems::Center,
                 ..default()
             }).with_child((
-                Text::new("25%"),
+                Text::new("25%-b"),
                 TextFont { font_size: 26.0, ..default() },
                 TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
             ));
         });
-        // 25%
+        // 25%-c
         parent.spawn((
             Node {
                 flex_wrap: FlexWrap::Wrap,
@@ -103,7 +103,7 @@ fn spawn_ui(commands: &mut Commands) {
                 align_items: AlignItems::Center,
                 ..default()
             }).with_child((
-                Text::new("25%"),
+                Text::new("25%-c"),
                 TextFont { font_size: 26.0, ..default() },
                 TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
             ));

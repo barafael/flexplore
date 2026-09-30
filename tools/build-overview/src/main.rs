@@ -6,9 +6,14 @@ use std::{
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
+use golden_common::chrome;
 use regex::Regex;
 
 /// Regenerate golden files, render every backend, and build the HTML overview.
+///
+/// Backends: bevy, html, tailwind, flutter, swift, iced, egui, dioxus,
+/// react-native. `flutter` and `swift` need their toolchains and are skipped
+/// when those are missing; `swift` additionally requires macOS.
 #[derive(Parser)]
 #[command(name = "build-overview")]
 struct Arguments {
@@ -24,10 +29,35 @@ struct Arguments {
     /// Useful in CI when the expected files are already committed.
     #[arg(long)]
     skip_codegen: bool,
+
+    /// Only regenerate the committed Swift and Flutter sources
+    /// (tools/swift-golden/Sources/SwiftGolden/Cases/*.swift + GoldenTests.swift,
+    /// tools/flutter-golden/lib/cases/*.dart + test/golden_test.dart) from
+    /// testdata/*/expected.{swift,dart}. Needs neither toolchain; renders
+    /// nothing and does not touch the overview.
+    #[arg(long)]
+    generate_only: bool,
+
+    /// Testdata directory to read fixtures from and write screenshots to
+    /// (default: the repository's testdata/).
+    #[arg(long, default_value_os_t = golden_common::default_testdata_dir())]
+    testdata: PathBuf,
 }
 
-const VIEWPORT_W: f64 = 400.0;
-const VIEWPORT_H: f64 = 300.0;
+const BACKENDS: &[&str] = &[
+    "bevy",
+    "html",
+    "tailwind",
+    "flutter",
+    "swift",
+    "iced",
+    "egui",
+    "dioxus",
+    "react-native",
+];
+
+const VIEWPORT_W: f64 = golden_common::VIEWPORT_W as f64;
+const VIEWPORT_H: f64 = golden_common::VIEWPORT_H as f64;
 const INDENT: &str = "  ";
 
 const TAILWIND_HEADER: &str = r#"<!DOCTYPE html>
@@ -40,10 +70,21 @@ const TAILWIND_HEADER: &str = r#"<!DOCTYPE html>
 <body>
 "#;
 
-const TAILWIND_FOOTER: &str = r#"<div id="tw-ready" style="position:fixed;bottom:0;right:0;width:1px;height:1px;pointer-events:none"></div>
-</body>
+const TAILWIND_FOOTER: &str = r#"</body>
 </html>
 "#;
+
+/// The Tailwind Play CDN compiles the utilities at runtime and injects them as
+/// a `<style>` element. The document is ready to screenshot once a stylesheet
+/// containing Tailwind's `--tw-*` custom properties exists.
+const TAILWIND_READY: &str = r#"document.readyState === 'complete' &&
+    Array.from(document.styleSheets).some(sheet => {
+        try {
+            return Array.from(sheet.cssRules).some(rule => rule.cssText.includes('--tw-'));
+        } catch (_) {
+            return false;
+        }
+    })"#;
 
 const OVERVIEW_IMAGES: &[(&str, &str)] = &[
     ("Bevy", "rendered_bevy.png"),
@@ -62,13 +103,25 @@ fn main() -> Result<()> {
     let filter = cli.cases;
     let backends = cli.backends;
 
+    if let Some(unknown) = backends
+        .iter()
+        .find(|b| !BACKENDS.iter().any(|k| k.eq_ignore_ascii_case(b)))
+    {
+        bail!(
+            "unknown backend `{unknown}`; expected one of: {}",
+            BACKENDS.join(", ")
+        );
+    }
     let run_backend =
         |name: &str| backends.is_empty() || backends.iter().any(|b| b.eq_ignore_ascii_case(name));
 
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .canonicalize()?;
-    let testdata = root.join("testdata");
+    let testdata = cli
+        .testdata
+        .canonicalize()
+        .with_context(|| format!("cannot find testdata directory {}", cli.testdata.display()))?;
     let tools = root.join("tools");
 
     check_wsl()?;
@@ -84,13 +137,21 @@ fn main() -> Result<()> {
         )?;
     }
 
+    if cli.generate_only {
+        eprintln!(">>> Regenerating Swift view files");
+        generate_swift_cases(&testdata, &tools.join("swift-golden"))?;
+        eprintln!(">>> Regenerating Flutter widget files");
+        generate_flutter_cases(&testdata, &tools.join("flutter-golden"))?;
+        return Ok(());
+    }
+
     if run_backend("bevy") {
-        run_cmd(
+        render_cargo_tool(
             "Rendering Bevy screenshots",
-            Command::new("cargo")
-                .args(["run", "-p", "bevy-golden", "--"])
-                .args(&filter)
-                .current_dir(&root),
+            "bevy-golden",
+            &testdata,
+            &root,
+            &filter,
         )?;
     }
 
@@ -119,25 +180,52 @@ fn main() -> Result<()> {
     }
 
     if run_backend("iced") {
-        render_iced(&testdata, &root, &filter)?;
+        render_cargo_tool(
+            "Rendering Iced screenshots",
+            "iced-golden",
+            &testdata,
+            &root,
+            &filter,
+        )?;
     }
 
     if run_backend("egui") {
-        render_egui(&testdata, &root, &filter)?;
+        render_cargo_tool(
+            "Rendering egui screenshots",
+            "egui-golden",
+            &testdata,
+            &root,
+            &filter,
+        )?;
     }
 
     if run_backend("dioxus") {
-        render_dioxus(&testdata, &root, &filter)?;
+        render_cargo_tool(
+            "Rendering Dioxus screenshots",
+            "dioxus-golden",
+            &testdata,
+            &root,
+            &filter,
+        )?;
     }
 
     if run_backend("react-native") {
-        render_react_native(&testdata, &root, &filter)?;
+        render_cargo_tool(
+            "Rendering React Native screenshots",
+            "react-native-golden",
+            &testdata,
+            &root,
+            &filter,
+        )?;
     }
 
     build_overview(&testdata)?;
 
     eprintln!();
-    eprintln!("Done! Open testdata/overview.html to view the comparison.");
+    eprintln!(
+        "Done! Open {} to view the comparison.",
+        testdata.join("overview.html").display()
+    );
     Ok(())
 }
 
@@ -187,13 +275,15 @@ fn tool_available(name: &str) -> bool {
         .is_ok_and(|s| s.success())
 }
 
+/// WSL has no native GPU access, which the Bevy renderer needs.
 fn check_wsl() -> Result<()> {
     if let Ok(version) = fs::read_to_string("/proc/version")
         && version.to_lowercase().contains("microsoft")
     {
         bail!(
-            "This tool must run from Git Bash, not WSL.\n\
-                 Bevy rendering requires native GPU access (DX12)."
+            "Running under WSL is not supported: Bevy rendering needs native GPU access.\n\
+             Run build-overview from a native shell on the host instead \
+             (on Windows e.g. PowerShell or Git Bash)."
         );
     }
     Ok(())
@@ -216,63 +306,23 @@ fn list_cases(
     Ok(cases)
 }
 
-fn path_to_file_url(path: &Path) -> Result<String> {
-    let canonical = path.canonicalize()?;
-    let s = canonical.to_string_lossy().replace('\\', "/");
-    // Strip the \\?\ prefix that Windows canonicalize adds
-    let s = s.strip_prefix("//?/").unwrap_or(&s);
-    Ok(format!("file:///{s}"))
-}
-
-use headless_chrome::browser::tab::Tab;
-use headless_chrome::protocol::cdp::Emulation::SetDeviceMetricsOverride;
-use headless_chrome::protocol::cdp::Page::CaptureScreenshotFormatOption;
-
-/// Launch a headless Chromium browser for screenshot capture.
-fn launch_browser() -> Result<headless_chrome::Browser> {
-    let options = headless_chrome::LaunchOptions {
-        window_size: Some((VIEWPORT_W as u32, VIEWPORT_H as u32)),
-        headless: true,
-        ..Default::default()
-    };
-    headless_chrome::Browser::new(options).context("failed to launch Chromium")
-}
-
-/// Set the exact viewport size on a tab (no scrollbars, no window chrome).
-fn set_viewport(tab: &Tab) -> Result<()> {
-    tab.call_method(SetDeviceMetricsOverride {
-        width: VIEWPORT_W as u32,
-        height: VIEWPORT_H as u32,
-        device_scale_factor: 1.0,
-        mobile: false,
-        screen_orientation: None,
-        scale: None,
-        screen_height: None,
-        screen_width: None,
-        position_x: None,
-        position_y: None,
-        dont_set_visible_size: None,
-        viewport: None,
-        display_feature: None,
-        device_posture: None,
-    })?;
-    Ok(())
-}
-
-/// Navigate a tab to a URL, optionally wait for a selector, and save a screenshot.
-fn screenshot_tab(tab: &Tab, url: &str, out: &Path, wait_for: Option<&str>) -> Result<()> {
-    tab.navigate_to(url)?;
-    tab.wait_until_navigated()?;
-    if let Some(selector) = wait_for {
-        tab.wait_for_element_with_custom_timeout(selector, std::time::Duration::from_secs(15))
-            .with_context(|| format!("timed out waiting for {selector}"))?;
-    }
-    let png = tab.capture_screenshot(CaptureScreenshotFormatOption::Png, None, None, true)?;
-    fs::write(out, png).with_context(|| format!("failed to write {}", out.display()))?;
-    Ok(())
-}
-
 // ─── Renderers ────────────────────────────────────────────────────────────────
+
+/// Run one of the cargo-based golden tools (`<pkg> --testdata <dir> [cases…]`).
+fn render_cargo_tool(
+    label: &str,
+    package: &str,
+    testdata: &Path,
+    root: &Path,
+    filter: &[String],
+) -> Result<()> {
+    let mut cmd = Command::new("cargo");
+    cmd.args(["run", "--release", "-p", package, "--", "--testdata"])
+        .arg(testdata)
+        .args(filter)
+        .current_dir(root);
+    run_cmd(label, &mut cmd)
+}
 
 fn render_html(testdata: &Path, filter: &[String]) -> Result<()> {
     let cases = list_cases(testdata, filter, None)?;
@@ -281,9 +331,9 @@ fn render_html(testdata: &Path, filter: &[String]) -> Result<()> {
         return Ok(());
     }
 
-    let browser = launch_browser()?;
+    let browser = chrome::launch_browser()?;
     let tab = browser.new_tab()?;
-    set_viewport(&tab)?;
+    chrome::set_viewport(&tab)?;
 
     for name in &cases {
         let html_file = testdata.join(name).join("expected.html");
@@ -292,8 +342,9 @@ fn render_html(testdata: &Path, filter: &[String]) -> Result<()> {
             continue;
         }
         let out = testdata.join(name).join("rendered_html.png");
-        let url = path_to_file_url(&html_file)?;
-        screenshot_tab(&tab, &url, &out, None)?;
+        let url = chrome::path_to_file_url(&html_file)?;
+        chrome::screenshot_tab(&tab, &url, &out, None)
+            .with_context(|| format!("HTML screenshot of {name} failed"))?;
         eprintln!("  Saved: {name}/rendered_html.png");
     }
     Ok(())
@@ -306,10 +357,9 @@ fn render_tailwind(testdata: &Path, filter: &[String]) -> Result<()> {
         return Ok(());
     }
 
-    let browser = launch_browser()?;
+    let browser = chrome::launch_browser()?;
     let tab = browser.new_tab()?;
-    set_viewport(&tab)?;
-    let mut tmp_files = Vec::new();
+    chrome::set_viewport(&tab)?;
 
     for name in &cases {
         let tw_file = testdata.join(name).join("expected.tailwind.html");
@@ -327,19 +377,14 @@ fn render_tailwind(testdata: &Path, filter: &[String]) -> Result<()> {
         )
         .with_context(|| format!("failed to write {}", tmp_file.display()))?;
 
-        let url = path_to_file_url(&tmp_file)?;
         let out = testdata.join(name).join("rendered_tailwind.png");
-        let result = screenshot_tab(&tab, &url, &out, Some("#tw-ready"));
-        tmp_files.push(tmp_file);
-
-        match result {
-            Ok(()) => eprintln!("  Saved: {name}/rendered_tailwind.png"),
-            Err(e) => eprintln!("  ERROR: {name}: {e:#}"),
-        }
-    }
-
-    for f in &tmp_files {
-        let _ = fs::remove_file(f);
+        let result = chrome::path_to_file_url(&tmp_file)
+            .and_then(|url| chrome::screenshot_tab(&tab, &url, &out, Some(TAILWIND_READY)));
+        let _ = fs::remove_file(&tmp_file);
+        result.with_context(|| {
+            format!("Tailwind screenshot of {name} failed (the Play CDN needs network access)")
+        })?;
+        eprintln!("  Saved: {name}/rendered_tailwind.png");
     }
     Ok(())
 }
@@ -376,13 +421,23 @@ fn render_flutter(testdata: &Path, tools: &Path, filter: &[String]) -> Result<()
     eprintln!(">>> Copying Flutter goldens to testdata");
     let goldens_dir = flutter_dir.join("test/goldens");
     let cases = list_cases(testdata, filter, None)?;
+    let mut copied = 0;
     for name in &cases {
         let src = goldens_dir.join(format!("{name}.png"));
         let dst = testdata.join(name).join("rendered_flutter.png");
         if src.exists() {
             fs::copy(&src, &dst)?;
+            copied += 1;
             eprintln!("  Copied: {name}/rendered_flutter.png");
+        } else {
+            eprintln!("  MISSING: {}", src.display());
         }
+    }
+    if copied == 0 && !cases.is_empty() {
+        bail!(
+            "flutter test produced no goldens in {}",
+            goldens_dir.display()
+        );
     }
     Ok(())
 }
@@ -393,10 +448,19 @@ fn render_swift(testdata: &Path, tools: &Path, filter: &[String]) -> Result<()> 
     eprintln!(">>> Regenerating Swift view files");
     generate_swift_cases(testdata, &swift_dir)?;
 
+    // Build first so a compile error fails loudly instead of being hidden
+    // behind the record-mode test run below.
+    run_cmd(
+        "Building Swift snapshot tests",
+        Command::new("swift")
+            .args(["build", "--build-tests"])
+            .current_dir(&swift_dir),
+    )?;
+
     // Record mode always "fails" tests by design — ignore the exit code.
-    eprintln!(">>> Running Swift snapshot tests");
+    eprintln!(">>> Running Swift snapshot tests (record mode)");
     Command::new("swift")
-        .arg("test")
+        .args(["test", "--skip-build"])
         .current_dir(&swift_dir)
         .env("SWIFT_SNAPSHOT_RECORD", "1")
         .status()
@@ -406,54 +470,24 @@ fn render_swift(testdata: &Path, tools: &Path, filter: &[String]) -> Result<()> 
     eprintln!(">>> Copying Swift snapshots to testdata");
     let snapshots_dir = swift_dir.join("Tests/SwiftGoldenTests/__Snapshots__/GoldenTests");
     let cases = list_cases(testdata, filter, None)?;
+    let mut copied = 0;
     for name in &cases {
         let src = snapshots_dir.join(format!("test_{name}.1.png"));
         let dst = testdata.join(name).join("rendered_swift.png");
         if src.exists() {
             fs::copy(&src, &dst)?;
+            copied += 1;
             eprintln!("  Copied: {name}/rendered_swift.png");
+        } else {
+            eprintln!("  MISSING: {}", src.display());
         }
     }
-    Ok(())
-}
-
-fn render_iced(testdata: &Path, root: &Path, filter: &[String]) -> Result<()> {
-    let mut cmd = Command::new("cargo");
-    cmd.args(["run", "--release", "-p", "iced-golden", "--"])
-        .arg(testdata)
-        .args(filter)
-        .current_dir(root);
-    run_cmd("Rendering Iced screenshots", &mut cmd)?;
-    Ok(())
-}
-
-fn render_react_native(testdata: &Path, root: &Path, filter: &[String]) -> Result<()> {
-    let mut cmd = Command::new("cargo");
-    cmd.args(["run", "--release", "-p", "react-native-golden", "--"])
-        .arg(testdata)
-        .args(filter)
-        .current_dir(root);
-    run_cmd("Rendering React Native screenshots", &mut cmd)?;
-    Ok(())
-}
-
-fn render_dioxus(testdata: &Path, root: &Path, filter: &[String]) -> Result<()> {
-    let mut cmd = Command::new("cargo");
-    cmd.args(["run", "--release", "-p", "dioxus-golden", "--"])
-        .arg(testdata)
-        .args(filter)
-        .current_dir(root);
-    run_cmd("Rendering Dioxus screenshots", &mut cmd)?;
-    Ok(())
-}
-
-fn render_egui(testdata: &Path, root: &Path, filter: &[String]) -> Result<()> {
-    let mut cmd = Command::new("cargo");
-    cmd.args(["run", "--release", "-p", "egui-golden", "--"])
-        .arg(testdata)
-        .args(filter)
-        .current_dir(root);
-    run_cmd("Rendering egui screenshots", &mut cmd)?;
+    if copied == 0 && !cases.is_empty() {
+        bail!(
+            "swift test produced no snapshots in {}",
+            snapshots_dir.display()
+        );
+    }
     Ok(())
 }
 
@@ -551,7 +585,7 @@ fn generate_flutter_cases(testdata: &Path, flutter_dir: &Path) -> Result<()> {
         let dart_src = fs::read_to_string(testdata.join(name).join("expected.dart"))?;
         let class_name = snake_to_camel(name);
         let widget_code = format!(
-            "// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview` to regenerate.\n\
+            "// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview -- --generate-only` to regenerate.\n\
              import 'package:flutter/material.dart';\n\
              \n\
              class {class_name} extends StatelessWidget {{\n\
@@ -614,7 +648,7 @@ fn generate_flutter_cases(testdata: &Path, flutter_dir: &Path) -> Result<()> {
         .join("\n\n");
 
     let test_code = format!(
-        "// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview` to regenerate.\n\
+        "// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview -- --generate-only` to regenerate.\n\
          import 'dart:io';\n\
          import 'dart:ui' as ui;\n\
          \n\
@@ -696,7 +730,7 @@ fn generate_swift_cases(testdata: &Path, swift_dir: &Path) -> Result<()> {
             .into_owned();
 
         let view_code = format!(
-            "// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview` to regenerate.\n\
+            "// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview -- --generate-only` to regenerate.\n\
              import SwiftUI\n\n\
              {adapted}\n"
         );
@@ -713,7 +747,7 @@ fn generate_swift_cases(testdata: &Path, swift_dir: &Path) -> Result<()> {
         });
         if let Some(flow_struct) = flow_src {
             let shared = format!(
-                "// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview` to regenerate.\n\
+                "// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview -- --generate-only` to regenerate.\n\
                  import SwiftUI\n\n\
                  {flow_struct}"
             );
@@ -741,7 +775,7 @@ fn generate_swift_cases(testdata: &Path, swift_dir: &Path) -> Result<()> {
         .join("\n\n");
 
     let test_code = format!(
-        "// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview` to regenerate.\n\
+        "// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview -- --generate-only` to regenerate.\n\
          import XCTest\n\
          import SwiftUI\n\
          import AppKit\n\

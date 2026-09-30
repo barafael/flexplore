@@ -3,16 +3,12 @@ use std::fmt::Write;
 use crate::config::*;
 use anyhow::Result;
 
-use crate::art::palette_color;
+use super::common::{
+    css_align_content, css_align_items, css_align_self, css_flex_direction, css_flex_wrap,
+    css_justify_content, dioxus_string_literal, grid_tracks, is_auto_or_zero, rgb8,
+    sorted_children, take_leaf_color,
+};
 use crate::config::{ColorPalette, Corners, NodeConfig, Sides, ValueConfig};
-
-fn format_num(v: f32) -> String {
-    if (v - v.round()).abs() < 0.005 {
-        format!("{}", v as i32)
-    } else {
-        format!("{v:.1}")
-    }
-}
 
 fn css_value(v: &ValueConfig) -> String {
     match v {
@@ -61,79 +57,6 @@ fn emit_dioxus_corners(buf: &mut String, pad: &str, corners: &Corners) -> std::f
     }
 }
 
-fn css_direction(d: FlexDirection) -> &'static str {
-    match d {
-        FlexDirection::Row => "row",
-        FlexDirection::Column => "column",
-        FlexDirection::RowReverse => "row-reverse",
-        FlexDirection::ColumnReverse => "column-reverse",
-    }
-}
-
-fn css_wrap(w: FlexWrap) -> &'static str {
-    match w {
-        FlexWrap::NoWrap => "nowrap",
-        FlexWrap::Wrap => "wrap",
-        FlexWrap::WrapReverse => "wrap-reverse",
-    }
-}
-
-fn css_justify(j: JustifyContent) -> &'static str {
-    match j {
-        JustifyContent::FlexStart => "flex-start",
-        JustifyContent::FlexEnd => "flex-end",
-        JustifyContent::Center => "center",
-        JustifyContent::SpaceBetween => "space-between",
-        JustifyContent::SpaceAround => "space-around",
-        JustifyContent::SpaceEvenly => "space-evenly",
-        JustifyContent::Stretch => "stretch",
-        JustifyContent::Start => "start",
-        JustifyContent::End => "end",
-        _ => "flex-start",
-    }
-}
-
-fn css_align_items(a: AlignItems) -> &'static str {
-    match a {
-        AlignItems::FlexStart => "flex-start",
-        AlignItems::FlexEnd => "flex-end",
-        AlignItems::Center => "center",
-        AlignItems::Baseline => "baseline",
-        AlignItems::Stretch => "stretch",
-        AlignItems::Start => "start",
-        AlignItems::End => "end",
-        _ => "stretch",
-    }
-}
-
-fn css_align_content(a: AlignContent) -> &'static str {
-    match a {
-        AlignContent::FlexStart => "flex-start",
-        AlignContent::FlexEnd => "flex-end",
-        AlignContent::Center => "center",
-        AlignContent::SpaceBetween => "space-between",
-        AlignContent::SpaceAround => "space-around",
-        AlignContent::SpaceEvenly => "space-evenly",
-        AlignContent::Stretch => "stretch",
-        AlignContent::Start => "start",
-        AlignContent::End => "end",
-        _ => "stretch",
-    }
-}
-
-fn css_align_self(a: AlignSelf) -> &'static str {
-    match a {
-        AlignSelf::Auto => "auto",
-        AlignSelf::FlexStart => "flex-start",
-        AlignSelf::FlexEnd => "flex-end",
-        AlignSelf::Center => "center",
-        AlignSelf::Baseline => "baseline",
-        AlignSelf::Stretch => "stretch",
-        AlignSelf::Start => "start",
-        AlignSelf::End => "end",
-    }
-}
-
 pub fn emit_dioxus(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
     let mut buf =
         String::from("use dioxus::prelude::*;\n\nfn FlexLayout() -> Element {\n    rsx! {\n");
@@ -153,14 +76,9 @@ fn emit_dioxus_node(
     let is_leaf = node.children.is_empty();
 
     let bg = if is_leaf {
-        let (r, g, b) = palette_color(palette, *leaf_idx);
-        *leaf_idx += 1;
-        format!(
-            "rgb({}, {}, {})",
-            (r * 255.0) as u8,
-            (g * 255.0) as u8,
-            (b * 255.0) as u8,
-        )
+        let (r, g, b) = take_leaf_color(palette, leaf_idx);
+        let (r, g, b) = rgb8(r, g, b);
+        format!("rgb({r}, {g}, {b})")
     } else {
         "rgba(28, 28, 43, 1)".into()
     };
@@ -177,40 +95,32 @@ fn emit_dioxus_node(
     }
     if is_grid {
         if !node.grid_template_columns.is_empty() {
-            let val: Vec<_> = node
-                .grid_template_columns
-                .iter()
-                .map(|t| t.display_short())
-                .collect();
             writeln!(
                 buf,
                 "{pad}    grid_template_columns: \"{}\",",
-                val.join(" ")
+                grid_tracks(&node.grid_template_columns)
             )?;
         }
         if !node.grid_template_rows.is_empty() {
-            let val: Vec<_> = node
-                .grid_template_rows
-                .iter()
-                .map(|t| t.display_short())
-                .collect();
-            writeln!(buf, "{pad}    grid_template_rows: \"{}\",", val.join(" "))?;
+            writeln!(
+                buf,
+                "{pad}    grid_template_rows: \"{}\",",
+                grid_tracks(&node.grid_template_rows)
+            )?;
         }
         if !node.grid_auto_columns.is_empty() {
-            let val: Vec<_> = node
-                .grid_auto_columns
-                .iter()
-                .map(|t| t.display_short())
-                .collect();
-            writeln!(buf, "{pad}    grid_auto_columns: \"{}\",", val.join(" "))?;
+            writeln!(
+                buf,
+                "{pad}    grid_auto_columns: \"{}\",",
+                grid_tracks(&node.grid_auto_columns)
+            )?;
         }
         if !node.grid_auto_rows.is_empty() {
-            let val: Vec<_> = node
-                .grid_auto_rows
-                .iter()
-                .map(|t| t.display_short())
-                .collect();
-            writeln!(buf, "{pad}    grid_auto_rows: \"{}\",", val.join(" "))?;
+            writeln!(
+                buf,
+                "{pad}    grid_auto_rows: \"{}\",",
+                grid_tracks(&node.grid_auto_rows)
+            )?;
         }
         if node.grid_auto_flow != GridAutoFlow::Row {
             writeln!(
@@ -224,11 +134,15 @@ fn emit_dioxus_node(
             writeln!(
                 buf,
                 "{pad}    flex_direction: \"{}\",",
-                css_direction(node.flex_direction)
+                css_flex_direction(node.flex_direction)
             )?;
         }
         if node.flex_wrap != FlexWrap::NoWrap {
-            writeln!(buf, "{pad}    flex_wrap: \"{}\",", css_wrap(node.flex_wrap))?;
+            writeln!(
+                buf,
+                "{pad}    flex_wrap: \"{}\",",
+                css_flex_wrap(node.flex_wrap)
+            )?;
         }
     }
     if !matches!(
@@ -238,7 +152,7 @@ fn emit_dioxus_node(
         writeln!(
             buf,
             "{pad}    justify_content: \"{}\",",
-            css_justify(node.justify_content)
+            css_justify_content(node.justify_content)
         )?;
     }
     if !matches!(node.align_items, AlignItems::Default | AlignItems::Stretch) {
@@ -258,14 +172,10 @@ fn emit_dioxus_node(
             css_align_content(node.align_content)
         )?;
     }
-    if !matches!(node.row_gap, ValueConfig::Auto)
-        && !matches!(node.row_gap, ValueConfig::Px(v) if v == 0.0)
-    {
+    if !is_auto_or_zero(&node.row_gap) {
         writeln!(buf, "{pad}    row_gap: \"{}\",", css_value(&node.row_gap))?;
     }
-    if !matches!(node.column_gap, ValueConfig::Auto)
-        && !matches!(node.column_gap, ValueConfig::Px(v) if v == 0.0)
-    {
+    if !is_auto_or_zero(&node.column_gap) {
         writeln!(
             buf,
             "{pad}    column_gap: \"{}\",",
@@ -276,14 +186,14 @@ fn emit_dioxus_node(
         writeln!(
             buf,
             "{pad}    flex_grow: \"{}\",",
-            format_num(node.flex_grow)
+            format_float(node.flex_grow)
         )?;
     }
     if node.flex_shrink != 1.0 {
         writeln!(
             buf,
             "{pad}    flex_shrink: \"{}\",",
-            format_num(node.flex_shrink)
+            format_float(node.flex_shrink)
         )?;
     }
     if !matches!(node.flex_basis, ValueConfig::Auto) {
@@ -366,11 +276,13 @@ fn emit_dioxus_node(
     }
 
     if is_leaf {
-        write!(buf, "{pad}    \"{}\"\n{pad}}}", node.label)?;
+        write!(
+            buf,
+            "{pad}    {}\n{pad}}}",
+            dioxus_string_literal(node.display_text())
+        )?;
     } else {
-        let mut sorted: Vec<&NodeConfig> = node.children.iter().collect();
-        sorted.sort_by_key(|c| c.order);
-        for child in sorted {
+        for child in sorted_children(node) {
             emit_dioxus_node(buf, child, depth + 1, leaf_idx, palette)?;
             writeln!(buf)?;
         }
@@ -437,5 +349,13 @@ mod tests {
         let code = emit_dioxus(&test_container(), ColorPalette::Pastel1).unwrap();
         assert!(code.contains("\"A\""));
         assert!(code.contains("\"B\""));
+    }
+
+    #[test]
+    fn escapes_rsx_format_braces_and_quotes() {
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![NodeConfig::new_leaf("{x} \"q\" \\", 80.0, 80.0)];
+        let code = emit_dioxus(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains(r#""{{x}} \"q\" \\""#), "{code}");
     }
 }

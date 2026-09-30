@@ -398,9 +398,9 @@ pub fn all_fixtures() -> Vec<Fixture> {
                 let mut centered = NodeConfig::new_leaf("centered", 120.0, 60.0);
                 centered.align_self = AlignSelf::Center;
                 r.children = vec![
-                    NodeConfig::new_leaf("top", 100.0, 60.0),
+                    NodeConfig::new_leaf("top-1", 100.0, 60.0),
                     centered,
-                    NodeConfig::new_leaf("top", 100.0, 60.0),
+                    NodeConfig::new_leaf("top-2", 100.0, 60.0),
                 ];
                 r
             },
@@ -415,10 +415,10 @@ pub fn all_fixtures() -> Vec<Fixture> {
                 let mut a = NodeConfig::new_leaf("50%", 80.0, 80.0);
                 a.flex_basis = ValueConfig::Percent(50.0);
                 a.width = ValueConfig::Auto;
-                let mut b = NodeConfig::new_leaf("25%", 80.0, 80.0);
+                let mut b = NodeConfig::new_leaf("25%-b", 80.0, 80.0);
                 b.flex_basis = ValueConfig::Percent(25.0);
                 b.width = ValueConfig::Auto;
-                let mut c = NodeConfig::new_leaf("25%", 80.0, 80.0);
+                let mut c = NodeConfig::new_leaf("25%-c", 80.0, 80.0);
                 c.flex_basis = ValueConfig::Percent(25.0);
                 c.width = ValueConfig::Auto;
                 r.children = vec![a, b, c];

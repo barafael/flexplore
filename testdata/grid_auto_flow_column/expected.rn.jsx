@@ -17,7 +17,7 @@ export default function FlexLayout() {
       padding: 12,
       backgroundColor: 'rgba(28, 28, 43, 1)',
     }}>
-      {/* Grid children — each sized to ~1/2 of container width */}
+      {/* Grid children — RN has no grid tracks; give each child width: '50.0%' (or flexBasis) to approximate 2 columns */}
       <View style={{
         flexDirection: 'row',
         flexWrap: 'wrap',

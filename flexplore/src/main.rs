@@ -34,6 +34,7 @@ fn main() {
     .init_resource::<ArtState>()
     .init_resource::<viz::ArrowNav>()
     .init_resource::<flexplore::config::RightPanelOpen>()
+    .init_resource::<panel::HoverPreview>()
     .insert_resource(UndoHistory::new(FlexConfig::default()))
     .add_systems(Startup, (setup, load_autosave))
     .add_systems(EguiPrimaryContextPass, panel::panel_system)
@@ -45,6 +46,7 @@ fn main() {
             viz::viz_click,
             viz::viz_tooltip,
             viz::rebuild_viz,
+            viz::viz_selection,
             viz::animate_art,
         )
             .chain(),
@@ -65,14 +67,25 @@ fn load_autosave(mut cfg: ResMut<FlexConfig>, mut history: ResMut<UndoHistory>) 
     if let Some(loaded) = persist::auto_load() {
         *cfg = loaded;
         cfg.request_rebuild();
-        history.push(cfg.clone());
+        // Start history at the loaded state, so the first undo does not reset
+        // to the default layout.
+        *history = UndoHistory::new(cfg.clone());
     }
 }
 
-fn auto_save_system(cfg: Res<FlexConfig>, mut timer: Local<Option<Timer>>, time: Res<Time>) {
+fn auto_save_system(
+    cfg: Res<FlexConfig>,
+    mut timer: Local<Option<Timer>>,
+    mut dirty: Local<bool>,
+    time: Res<Time>,
+) {
     let t = timer.get_or_insert_with(|| Timer::from_seconds(2.0, TimerMode::Repeating));
     t.tick(time.delta());
-    if t.just_finished() && cfg.is_changed() {
+    // `is_changed` only covers the frames since this system last ran, so
+    // accumulate it until the next save tick.
+    *dirty |= cfg.is_changed();
+    if t.just_finished() && *dirty {
         persist::auto_save(&cfg);
+        *dirty = false;
     }
 }

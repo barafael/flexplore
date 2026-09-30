@@ -1,4 +1,4 @@
-// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview` to regenerate.
+// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview -- --generate-only` to regenerate.
 import 'package:flutter/material.dart';
 
 class NestedMixed extends StatelessWidget {
@@ -24,8 +24,7 @@ class NestedMixed extends StatelessWidget {
           child: Text('A',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
         Container(
           width: 200.0,
           padding: EdgeInsets.all(12.0),
@@ -43,8 +42,7 @@ class NestedMixed extends StatelessWidget {
                 child: Text('X',
                   style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
                 ),
-              )
-              ,
+              ),
               Container(
                 width: 40.0,
                 height: 40.0,
@@ -54,12 +52,10 @@ class NestedMixed extends StatelessWidget {
                 child: Text('Y',
                   style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
                 ),
-              )
-              ,
+              ),
             ],
           )
-        )
-        ,
+        ),
         Container(
           width: 80.0,
           height: 80.0,
@@ -69,8 +65,7 @@ class NestedMixed extends StatelessWidget {
           child: Text('B',
             style: TextStyle(fontSize: 26, color: Color.fromRGBO(13, 13, 26, 0.85)),
           ),
-        )
-        ,
+        ),
       ],
     )
   )

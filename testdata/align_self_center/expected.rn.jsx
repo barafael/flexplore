@@ -29,7 +29,7 @@ export default function FlexLayout() {
         padding: 8,
         backgroundColor: 'rgb(251, 180, 174)',
       }}>
-        <Text style={{ color: 'rgba(13, 13, 26, 0.85)', fontSize: 26 }}>top</Text>
+        <Text style={{ color: 'rgba(13, 13, 26, 0.85)', fontSize: 26 }}>top-1</Text>
       </View>
       <View style={{
         flexDirection: 'row',
@@ -60,7 +60,7 @@ export default function FlexLayout() {
         padding: 8,
         backgroundColor: 'rgb(204, 235, 197)',
       }}>
-        <Text style={{ color: 'rgba(13, 13, 26, 0.85)', fontSize: 26 }}>top</Text>
+        <Text style={{ color: 'rgba(13, 13, 26, 0.85)', fontSize: 26 }}>top-2</Text>
       </View>
     </View>
   );

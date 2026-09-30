@@ -174,7 +174,7 @@
       "children": []
     },
     {
-      "label": "25%",
+      "label": "25%-b",
       "display_mode": "Flex",
       "flex_direction": "Row",
       "flex_wrap": "Wrap",
@@ -262,7 +262,7 @@
       "children": []
     },
     {
-      "label": "25%",
+      "label": "25%-c",
       "display_mode": "Flex",
       "flex_direction": "Row",
       "flex_wrap": "Wrap",

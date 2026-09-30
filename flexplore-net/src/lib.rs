@@ -1,20 +1,14 @@
 //! P2P WebRTC networking for flexplore, ported from the omdurman/gnils approach.
 //!
-//! Architecture: *host-sequenced event sourcing*. Every peer holds the full
-//! layout state. A non-host submits its edit as [`NetMsg::Game`] to the host
-//! only; the host assigns the next canonical sequence number and rebroadcasts
-//! it as [`NetMsg::Sequenced`] to every peer (including looping it back to
-//! itself). Every peer — originator included — applies an edit only when it
-//! arrives as `Sequenced`, so all peers observe one canonical, ordered stream.
-//!
-//! The host is the lowest-sorted `PeerId` in the room, re-derived on every
-//! peer change, so when the host disconnects the next-lowest `PeerId` is
-//! promoted automatically and resumes sequencing at `last_applied_seq + 1`.
+//! Architecture: *host-sequenced, whole-document edits with client-side
+//! prediction*; see the `flexplore-proto` crate docs for the model. This crate
+//! owns the matchbox socket, the per-peer [`NetState`], and the host key used
+//! to agree on who sequences edits. The app-side systems live in the
+//! `flexplore` crate's `net` module.
 //!
 //! The socket layer uses `matchbox_socket` directly (the bevy-agnostic core of
-//! the matchbox stack), so this crate works with bevy 0.18 even though the
-//! `bevy_matchbox` integration in the fork targets bevy 0.19. The native
-//! message-loop future is spawned on a dedicated tokio runtime (webrtc-rs
+//! the matchbox stack) rather than `bevy_matchbox`, which keeps the bevy
+//! version coupling in this workspace only. The native message-loop future is spawned on a dedicated tokio runtime (webrtc-rs
 //! needs a real runtime, see [`spawn_message_loop`]).
 
 use bevy::prelude::*;
@@ -22,7 +16,10 @@ use matchbox_socket::{MessageLoopFuture, RtcIceServerConfig, WebRtcSocket, WebRt
 use std::ops::{Deref, DerefMut};
 
 // Re-export the wire protocol so consumers can depend on flexplore-net alone.
-pub use flexplore_proto::{Control, Ephemeral, FlexSnapshot, LayoutEdit, NetMsg, decode, enc_msg};
+pub use flexplore_proto::{
+    Control, Ephemeral, FlexSnapshot, LayoutEdit, NetMsg, PROTOCOL_VERSION, PeerBytes, decode,
+    enc_msg,
+};
 
 /// Signaling server URL. Overridable at build time via `MATCHBOX_SERVER`.
 pub const SIGNALING_SERVER: &str = if let Some(s) = option_env!("MATCHBOX_SERVER") {
@@ -40,69 +37,181 @@ pub use matchbox_socket::{ChannelConfig, PeerId, PeerState};
 
 // ── Net state ────────────────────────────────────────────────────────────────
 
-#[derive(Resource, Default)]
+/// How long a peer with no host waits before claiming hosting itself. Long
+/// enough for the WebRTC handshake to an existing room to complete, so a
+/// joiner does not mistake a slow connection for an empty room. Being alone
+/// has no cost: edits are local-only until a peer connects.
+pub const CLAIM_GRACE_SECS: f64 = 5.0;
+/// How long peers wait after the host leaves before the most senior eligible
+/// peer promotes itself (covers a brief reconnect blip of the host).
+pub const PROMOTE_GRACE_SECS: f64 = 1.0;
+
+/// The key peers compare to agree on a host: higher epoch wins, then the
+/// earlier claim, then the lower peer id. Every peer evaluates the same
+/// announced values, so the comparison is consistent everywhere.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct HostKey {
+    pub epoch: u32,
+    pub claimed_at: std::cmp::Reverse<u64>,
+    pub id: std::cmp::Reverse<PeerId>,
+}
+
+impl HostKey {
+    pub fn new(epoch: u32, claimed_at_ms: u64, id: PeerId) -> Self {
+        Self {
+            epoch,
+            claimed_at: std::cmp::Reverse(claimed_at_ms),
+            id: std::cmp::Reverse(id),
+        }
+    }
+
+    pub fn host(&self) -> PeerId {
+        self.id.0
+    }
+
+    pub fn claimed_at_ms(&self) -> u64 {
+        self.claimed_at.0
+    }
+}
+
+/// What we know about a connected peer from its `Hello`.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PeerInfo {
+    pub client: u64,
+    pub has_document: bool,
+    pub protocol_ok: bool,
+}
+
+#[derive(Resource)]
 pub struct NetState {
     /// Connected peers (excluding `my_id`).
     pub peers: Vec<PeerId>,
     pub my_id: Option<PeerId>,
-    pub is_host: bool,
-    /// Peers we've sent a snapshot to and are waiting for an ack from.
-    pub snapshot_pending: Vec<PeerId>,
-    /// True until the first snapshot arrives (guest) / always false for host.
+    /// Random tag identifying this process's edits on the wire.
+    pub client: u64,
+    /// The host we currently follow, if any. `None` while joining, and for
+    /// the grace period after the host leaves.
+    pub host: Option<HostKey>,
+    /// True once we hold the room's document (installed a snapshot, or we
+    /// are/were host). Only such peers are eligible for promotion.
+    pub has_document: bool,
+    /// Per-peer `Hello` data.
+    pub info: Vec<(PeerId, PeerInfo)>,
+    /// Guest: a snapshot request is outstanding; retried until one lands.
     pub needs_snapshot: bool,
     pub snapshot_retry_timer: f64,
-    /// Set after the first snapshot is installed; prevents double-install.
-    pub snapshot_applied: bool,
-    /// Host-only: the next canonical sequence number to assign.
+    /// Host-only: the next sequence number to assign in the current epoch.
     pub next_seq: u32,
-    /// Highest sequence number applied locally; drops duplicate delivery.
+    /// Highest sequence number applied locally in the current epoch.
     pub last_applied_seq: Option<u32>,
-    /// All peers (including `my_id`) in canonical sorted order.
-    sorted_all: Vec<PeerId>,
+    /// Next `local_id` for our own edits.
+    pub next_local_id: u32,
+    /// Our own edits applied locally but not yet echoed back by the host, in
+    /// submission order. Re-applied on top of every foreign edit (rebase) and
+    /// resent when the host changes.
+    pub pending_own: Vec<(u32, LayoutEdit)>,
+    /// `Time::elapsed_secs_f64` at which we last had no host; drives the
+    /// claim/promotion grace periods.
+    pub unhosted_since: Option<f64>,
+    /// Highest epoch seen from anyone, so a promotion always starts a newer one.
+    pub max_epoch_seen: u32,
+}
+
+impl Default for NetState {
+    fn default() -> Self {
+        Self {
+            peers: Vec::new(),
+            my_id: None,
+            client: rand::random::<u64>(),
+            host: None,
+            has_document: false,
+            info: Vec::new(),
+            needs_snapshot: false,
+            snapshot_retry_timer: 0.0,
+            next_seq: 0,
+            last_applied_seq: None,
+            next_local_id: 0,
+            pending_own: Vec::new(),
+            unhosted_since: None,
+            max_epoch_seen: 0,
+        }
+    }
 }
 
 impl NetState {
-    /// Rebuild `sorted_all` from `peers` + `my_id`. Call after any mutation.
-    pub fn refresh_sorted(&mut self) {
-        self.sorted_all.clear();
-        self.sorted_all.extend(self.peers.iter().copied());
-        if let Some(me) = self.my_id {
-            self.sorted_all.push(me);
-        }
-        self.sorted_all.sort();
-    }
-
-    /// Canonical sorted list of all peers including the local player.
-    pub fn sorted_all(&self) -> &[PeerId] {
-        &self.sorted_all
-    }
-
-    /// The canonical host: the lowest-sorted peer id across everyone.
-    /// Re-derived on every peer change, so a guest is promoted automatically
-    /// when the previous host disconnects.
     pub fn host_id(&self) -> Option<PeerId> {
-        self.sorted_all.first().copied()
+        self.host.map(|k| k.host())
+    }
+
+    pub fn is_host(&self) -> bool {
+        self.my_id.is_some() && self.host_id() == self.my_id
+    }
+
+    pub fn peer_info(&self, id: PeerId) -> Option<&PeerInfo> {
+        self.info.iter().find(|(p, _)| *p == id).map(|(_, i)| i)
+    }
+
+    pub fn set_peer_info(&mut self, id: PeerId, info: PeerInfo) {
+        match self.info.iter_mut().find(|(p, _)| *p == id) {
+            Some(slot) => slot.1 = info,
+            None => self.info.push((id, info)),
+        }
+    }
+
+    /// The peer that should claim hosting while there is no host: the lowest
+    /// id among peers holding the document, or among everyone if nobody does.
+    pub fn election_winner(&self) -> Option<PeerId> {
+        let my_id = self.my_id?;
+        let eligible: Vec<PeerId> = self
+            .peers
+            .iter()
+            .copied()
+            .filter(|p| self.peer_info(*p).is_some_and(|i| i.has_document))
+            .chain(self.has_document.then_some(my_id))
+            .collect();
+        if eligible.is_empty() {
+            self.peers.iter().copied().chain(Some(my_id)).min()
+        } else {
+            eligible.into_iter().min()
+        }
+    }
+
+    /// Take the next `local_id` for an own edit.
+    pub fn next_local_id(&mut self) -> u32 {
+        let id = self.next_local_id;
+        self.next_local_id = self.next_local_id.wrapping_add(1);
+        id
     }
 }
 
-#[derive(Resource)]
-pub struct RoomId(pub String);
+/// Convert between matchbox peer ids and the transport-neutral bytes on the wire.
+pub fn peer_to_bytes(id: PeerId) -> flexplore_proto::PeerBytes {
+    *id.0.as_bytes()
+}
 
-impl RoomId {
-    pub fn new(s: String) -> Self {
-        Self(s)
+pub fn peer_from_bytes(bytes: flexplore_proto::PeerBytes) -> PeerId {
+    PeerId(uuid::Uuid::from_bytes(bytes))
+}
+
+/// Milliseconds since the UNIX epoch, used to order host claims across peers.
+pub fn unix_ms() -> u64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        js_sys::Date::now() as u64
     }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0)
     }
 }
 
 // ── Socket resource ──────────────────────────────────────────────────────────
 
-/// A [`WebRtcSocket`] as a Bevy resource. Implemented against
-/// `matchbox_socket` directly so we don't depend on the fork's bevy 0.19
-/// integration (flexplore is on bevy 0.18).
+/// A [`WebRtcSocket`] as a Bevy resource, built on `matchbox_socket` directly
+/// (see the crate docs).
 #[derive(Resource)]
 pub struct MatchboxSocket(WebRtcSocket);
 
@@ -196,11 +305,6 @@ pub fn build_socket(room: &str) -> MatchboxSocket {
     MatchboxSocket::from(builder)
 }
 
-/// Open the socket + register the `RoomId` resource. Runs in `Startup`.
-pub fn open_socket(mut commands: Commands, room: Res<RoomId>) {
-    commands.insert_resource(build_socket(&room.0));
-}
-
 /// Broadcast an ephemeral message to every peer on the unreliable channel.
 /// Send failures are silently dropped — the next sample supersedes.
 pub fn broadcast_unreliable(socket: &mut MatchboxSocket, peers: &[PeerId], msg: &NetMsg) {
@@ -219,6 +323,7 @@ pub fn broadcast_unreliable(socket: &mut MatchboxSocket, peers: &[PeerId], msg: 
 // ── Room-id minting ──────────────────────────────────────────────────────────
 
 /// Adjectives for friendly room names.
+#[rustfmt::skip]
 const PET_ADJECTIVES: &[&str] = &[
     "ancient", "amber", "azure", "bold", "brave", "bright", "brisk", "bronze", "calm", "clever",
     "copper", "coral", "crimson", "crystal", "daring", "dawn", "dusty", "eager", "ember", "fierce",
@@ -231,6 +336,7 @@ const PET_ADJECTIVES: &[&str] = &[
 ];
 
 /// Nouns for friendly room names.
+#[rustfmt::skip]
 const PET_NOUNS: &[&str] = &[
     "albatross", "badger", "bear", "bison", "boar", "buffalo", "camel", "caribou", "cheetah",
     "cobra", "condor", "cougar", "coyote", "crane", "crow", "deer", "dingo", "dolphin", "dove",
@@ -245,11 +351,13 @@ const PET_NOUNS: &[&str] = &[
 ];
 
 fn pick<T: Copy>(slice: &[T]) -> T {
-    slice[rand::random::<usize>() % slice.len()]
+    use rand::seq::IndexedRandom;
+    *slice
+        .choose(&mut rand::rng())
+        .expect("petname word lists are non-empty")
 }
 
 /// Generate a short hyphenated room id like `swift-otter`.
-#[cfg(target_arch = "wasm32")]
 fn new_room_petname() -> String {
     format!("{}-{}", pick(PET_ADJECTIVES), pick(PET_NOUNS))
 }
@@ -269,8 +377,8 @@ pub fn new_player_name() -> String {
 }
 
 /// Resolve the room id: on WASM, read `?room=` from the URL (minting + writing
-/// back a fresh petname if absent); on native, take `argv[1]` (default
-/// `dev-room`).
+/// back a fresh petname if absent); on native, take `argv[1]`, minting a fresh
+/// petname if absent so two unrelated users never share a room by default.
 pub fn room_id() -> String {
     #[cfg(target_arch = "wasm32")]
     {
@@ -301,8 +409,9 @@ pub fn room_id() -> String {
     {
         let room = std::env::args()
             .nth(1)
-            .unwrap_or_else(|| "dev-room".to_string());
-        info!(%room, "using room");
+            .filter(|arg| !arg.is_empty())
+            .unwrap_or_else(new_room_petname);
+        info!(%room, "using room (pass a room name as the first argument to join one)");
         room
     }
 }

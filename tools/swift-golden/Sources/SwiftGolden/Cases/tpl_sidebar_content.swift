@@ -1,49 +1,45 @@
-// AUTO-GENERATED — do not edit. Run tool/generate_cases.py to regenerate.
+// AUTO-GENERATED — do not edit. Run `cargo run -p build-overview -- --generate-only` to regenerate.
 import SwiftUI
 
 public struct TplSidebarContentView: View {
-    var body: some View {
-        HStack(alignment: .center, spacing: 0.0) {
-            VStack(alignment: .center, spacing: 4.0) {
+    public var body: some View {
+        HStack(alignment: .top, spacing: 0.0) {
+            VStack(alignment: .leading, spacing: 4.0) {
                 Text("nav-1")
                     .font(.system(size: 26))
                     .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
                     .frame(width: nil, height: 44.0)
+                    .frame(minWidth: nil, maxWidth: .infinity, minHeight: nil, maxHeight: nil)
                     .padding(8.0)
                     .background(Color(red: 0.98, green: 0.71, blue: 0.68))
-                    .padding(0.0) /* margin */
                 Text("nav-2")
                     .font(.system(size: 26))
                     .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
                     .frame(width: nil, height: 44.0)
+                    .frame(minWidth: nil, maxWidth: .infinity, minHeight: nil, maxHeight: nil)
                     .padding(8.0)
                     .background(Color(red: 0.70, green: 0.80, blue: 0.89))
-                    .padding(0.0) /* margin */
                 Text("nav-3")
                     .font(.system(size: 26))
                     .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
                     .frame(width: nil, height: 44.0)
+                    .frame(minWidth: nil, maxWidth: .infinity, minHeight: nil, maxHeight: nil)
                     .padding(8.0)
                     .background(Color(red: 0.80, green: 0.92, blue: 0.77))
-                    .padding(0.0) /* margin */
             }
-            .frame(width: 250.0, height: nil)
-            .frame(minWidth: nil, minHeight: 0.0, maxWidth: nil, maxHeight: nil)
+            .frame(width: 120.0, height: nil, alignment: .topLeading)
+            .frame(minWidth: nil, maxWidth: nil, minHeight: nil, maxHeight: .infinity, alignment: .topLeading)
             .padding(8.0)
             .background(Color(red: 0.11, green: 0.11, blue: 0.17))
-            .padding(0.0) /* margin */
             Text("content")
                 .font(.system(size: 26))
                 .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
+                .frame(minWidth: nil, maxWidth: .infinity, minHeight: nil, maxHeight: .infinity)
                 .padding(8.0)
                 .background(Color(red: 0.87, green: 0.80, blue: 0.89))
-                .padding(0.0) /* margin */
-                .layoutPriority(1.0) /* flex-grow */
         }
-        .frame(width: 100.0 /* 100.0% — use GeometryReader for relative sizing */, height: 100.0 /* 100.0% — use GeometryReader for relative sizing */)
-        .frame(minWidth: nil, minHeight: 0.0, maxWidth: nil, maxHeight: nil)
-        .padding(0.0)
+        .frame(minWidth: nil, maxWidth: .infinity, minHeight: nil, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(red: 0.11, green: 0.11, blue: 0.17))
-        .padding(0.0) /* margin */
     }
 }
+
