@@ -22,6 +22,16 @@ pub const CONTAINER_LABEL_COLOR: Color = Color::srgba(0.7, 0.7, 0.9, 0.55);
 /// Hidden nodes keep their layout space (see [`node_visibility`]), matching
 /// `visibility: hidden` in every code generator.
 pub fn node_to_bevy(node: &NodeConfig) -> Node {
+    let mut style = node_to_bevy_inner(node);
+    if node.children.is_empty() {
+        // Leaves centre their text, like every generated target does.
+        style.justify_content = JustifyContent::Center;
+        style.align_items = AlignItems::Center;
+    }
+    style
+}
+
+fn node_to_bevy_inner(node: &NodeConfig) -> Node {
     Node {
         display: match node.display_mode {
             DisplayMode::Grid => Display::Grid,
@@ -101,33 +111,36 @@ pub fn container_label_font_size(node: &NodeConfig) -> f32 {
     (10.0_f32 * node.text_scale()).clamp(1.0, 20.0)
 }
 
-/// Spawn the centred text overlay of a leaf node as a child of `entity`.
+/// Spawn the centred text overlay of a leaf node as a child of `entity`,
+/// sized for the app's live preview (text shrinks to fit small nodes).
 pub fn spawn_leaf_text(commands: &mut Commands, entity: Entity, node: &NodeConfig) {
-    let overlay = commands
+    spawn_leaf_text_sized(commands, entity, node, leaf_font_size(node));
+}
+
+/// Spawn the centred text overlay of a leaf node with an explicit font size.
+/// The golden renderer uses the fixed 26 px the generated code uses, so its
+/// screenshots are comparable with the other backends.
+pub fn spawn_leaf_text_sized(
+    commands: &mut Commands,
+    entity: Entity,
+    node: &NodeConfig,
+    font_size: f32,
+) {
+    // In-flow (not an absolute overlay) so an auto-sized leaf grows to fit
+    // its text, exactly like the `display: flex; align-items: center;
+    // justify-content: center` leaf the code generators emit.
+    let text = commands
         .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                top: Val::Px(0.0),
-                left: Val::Px(0.0),
-                right: Val::Px(0.0),
-                bottom: Val::Px(0.0),
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
-                ..default()
-            },
-            Pickable::IGNORE,
-        ))
-        .with_child((
             Text::new(node.display_text()),
             TextFont {
-                font_size: FontSize::Px(leaf_font_size(node)),
+                font_size: FontSize::Px(font_size),
                 ..default()
             },
             TextColor(LEAF_TEXT_COLOR),
             Pickable::IGNORE,
         ))
         .id();
-    commands.entity(entity).add_child(overlay);
+    commands.entity(entity).add_child(text);
 }
 
 /// Spawn the small corner label of a container node as a child of `entity`.

@@ -62,7 +62,17 @@ struct FlowLayout: Layout {
         let maxMain = axis == .horizontal ? bounds.width : bounds.height
         let maxCross = axis == .horizontal ? bounds.height : bounds.width
         var lines = breakLines(sizes: sizes, maxMain: maxMain)
+        // flex-wrap: wrap-reverse flips the cross axis: the first line sits at
+        // the cross end (bottom for a horizontal flow) and later lines stack
+        // towards the cross start, so the line order *and* the start/end
+        // anchoring of lineAlignment are mirrored.
         if reversed { lines.reverse() }
+        let effectiveAlignment: LineAlignment
+        switch (reversed, lineAlignment) {
+        case (true, .start): effectiveAlignment = .end
+        case (true, .end): effectiveAlignment = .start
+        default: effectiveAlignment = lineAlignment
+        }
 
         let totalCross = lines.map(\.crossLength).reduce(0, +)
         let remaining = maxCross - totalCross
@@ -70,7 +80,7 @@ struct FlowLayout: Layout {
         var crossStart: CGFloat = 0
         var gap = lineSpacing
 
-        switch lineAlignment {
+        switch effectiveAlignment {
         case .start: break
         case .center:
             crossStart = (remaining - CGFloat(max(lines.count - 1, 0)) * lineSpacing) / 2

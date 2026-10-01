@@ -52,6 +52,61 @@ fn swift_optional_value(v: &ValueConfig) -> Option<String> {
     }
 }
 
+/// Sum of the `Px` components of two padding sides (other units add 0).
+fn px_sum(a: &ValueConfig, b: &ValueConfig) -> f32 {
+    let px = |v: &ValueConfig| match v {
+        ValueConfig::Px(n) => *n,
+        _ => 0.0,
+    };
+    px(a) + px(b)
+}
+
+/// Append `- pad` to a Swift size expression (no-op for zero padding).
+fn swift_minus_pad(expr: String, pad: f32) -> String {
+    if pad > 0.0 {
+        format!("{expr} - {pad:.1}")
+    } else {
+        expr
+    }
+}
+
+/// Move a fixed main-axis size into the `max` slot so an `HStack`/`VStack`
+/// can shrink the view (see the flex-shrink note in `emit_swiftui_leaf`).
+/// An explicit smaller `max-*` wins, as in CSS; percent sizes stay fixed
+/// because they carry a comment rather than a plain expression.
+fn shrink_main_axis(
+    size: &mut Option<String>,
+    max: &mut Option<String>,
+    size_cfg: &ValueConfig,
+    max_cfg: &ValueConfig,
+) {
+    let plain = matches!(
+        size_cfg,
+        ValueConfig::Px(_) | ValueConfig::Vw(_) | ValueConfig::Vh(_)
+    );
+    let Some(expr) = (plain).then(|| size.take()).flatten() else {
+        return;
+    };
+    let max_smaller = matches!((max_cfg, size_cfg),
+        (ValueConfig::Px(m), ValueConfig::Px(n)) if m < n);
+    if !max_smaller {
+        *max = Some(expr);
+    }
+}
+
+/// Content-box size for a CSS border-box size. SwiftUI applies `.frame`
+/// before `.padding`, so the padding must come off an explicit size for the
+/// painted box to match the other backends (`box-sizing: border-box`).
+/// Percent values carry an explanatory comment and are left untouched.
+fn swift_inner_value(v: &ValueConfig, pad: f32) -> Option<String> {
+    match v {
+        ValueConfig::Auto => None,
+        ValueConfig::Px(n) => Some(format!("{:.1}", (n - pad).max(0.0))),
+        ValueConfig::Vw(_) | ValueConfig::Vh(_) => Some(swift_minus_pad(swift_value(v), pad)),
+        ValueConfig::Percent(_) => Some(swift_value(v)),
+    }
+}
+
 fn emit_swift_padding(
     buf: &mut String,
     prefix: &str,
@@ -218,7 +273,12 @@ fn swift_h_alignment(a: AlignItems) -> &'static str {
 
 pub fn emit_swiftui(root: &NodeConfig, palette: ColorPalette) -> Result<String> {
     let mut buf = String::from("struct ContentView: View {\n    public var body: some View {\n");
-    emit_swiftui_node(&mut buf, root, 2, &mut 0, palette, true, false, true)?;
+    let viewport = Parent {
+        is_row: true,
+        stretch: false,
+        wraps: false,
+    };
+    emit_swiftui_node(&mut buf, root, 2, &mut 0, palette, viewport, true)?;
     buf.push_str("    }\n}\n");
     if needs_wrap(root) {
         buf.push('\n');
@@ -232,23 +292,20 @@ pub fn emit_swiftui(root: &NodeConfig, palette: ColorPalette) -> Result<String> 
 struct Parent {
     is_row: bool,
     stretch: bool,
+    /// Parent is a `FlowLayout` or `Lazy*Grid` (children keep fixed frames)
+    /// rather than an `HStack`/`VStack` (children may shrink like CSS flex items).
+    wraps: bool,
 }
 
-#[allow(clippy::too_many_arguments)] // recursive tree-walker; leaf_idx varies per call site
 fn emit_swiftui_node(
     buf: &mut String,
     node: &NodeConfig,
     depth: usize,
     leaf_idx: &mut usize,
     palette: ColorPalette,
-    parent_is_row: bool,
-    parent_stretch: bool,
+    parent: Parent,
     is_root: bool,
 ) -> Result<()> {
-    let parent = Parent {
-        is_row: parent_is_row,
-        stretch: parent_stretch,
-    };
     if node.children.is_empty() {
         emit_swiftui_leaf(buf, node, depth, leaf_idx, palette, parent)
     } else {
@@ -278,29 +335,50 @@ fn emit_swiftui_leaf(
         "{pad}    .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))"
     )?;
 
+    // All CSS sizes are border-box; `.padding()` is applied after `.frame()`,
+    // so the padding comes off every explicit size.
+    let pad_x = px_sum(&node.padding.left, &node.padding.right);
+    let pad_y = px_sum(&node.padding.top, &node.padding.bottom);
+
     // Apply flex-basis percentage as width/height when no explicit size is set
     let basis_w = if parent.is_row && matches!(node.width, ValueConfig::Auto) {
-        swift_flex_basis_value(&node.flex_basis, true)
+        swift_flex_basis_value(&node.flex_basis, true).map(|v| swift_minus_pad(v, pad_x))
     } else {
         None
     };
     let basis_h = if !parent.is_row && matches!(node.height, ValueConfig::Auto) {
-        swift_flex_basis_value(&node.flex_basis, false)
+        swift_flex_basis_value(&node.flex_basis, false).map(|v| swift_minus_pad(v, pad_y))
     } else {
         None
     };
 
-    let w = basis_w.or_else(|| swift_optional_value(&node.width));
-    let h = basis_h.or_else(|| swift_optional_value(&node.height));
+    let mut w = basis_w.or_else(|| swift_inner_value(&node.width, pad_x));
+    let mut h = basis_h.or_else(|| swift_inner_value(&node.height, pad_y));
+    let min_w = swift_inner_value(&node.min_width, pad_x);
+    let min_h = swift_inner_value(&node.min_height, pad_y);
+    let mut max_w = swift_inner_value(&node.max_width, pad_x);
+    let mut max_h = swift_inner_value(&node.max_height, pad_y);
+
+    // flex-shrink: inside an HStack/VStack a fixed `.frame(width:)` can never
+    // shrink, so an overflowing row is clipped where CSS would squeeze the
+    // items. Turn the main-axis size into an upper bound (`maxWidth`) instead;
+    // the stack hands the view its full size while it fits and less when it
+    // does not, which is what flex-shrink > 0 means. Grow items keep their
+    // `.infinity` bound below. Not applied inside FlowLayout/grids, which
+    // measure children with an unspecified proposal.
+    if !parent.wraps && node.flex_shrink > 0.0 && node.flex_grow <= 0.0 {
+        if parent.is_row {
+            shrink_main_axis(&mut w, &mut max_w, &node.width, &node.max_width);
+        } else {
+            shrink_main_axis(&mut h, &mut max_h, &node.height, &node.max_height);
+        }
+    }
+
     if w.is_some() || h.is_some() {
         let w_str = w.as_deref().unwrap_or("nil");
         let h_str = h.as_deref().unwrap_or("nil");
         writeln!(buf, "{pad}    .frame(width: {w_str}, height: {h_str})")?;
     }
-    let min_w = swift_optional_value(&node.min_width);
-    let min_h = swift_optional_value(&node.min_height);
-    let mut max_w = swift_optional_value(&node.max_width);
-    let mut max_h = swift_optional_value(&node.max_height);
     // Flex-grow: merge into max constraints
     if node.flex_grow > 0.0 {
         if parent.is_row && max_w.is_none() {
@@ -400,19 +478,16 @@ fn emit_swiftui_container(
     }
 
     // Emit one child, colouring from its pre-computed leaf start.
-    let emit_child = |buf: &mut String, child: &NodeConfig, start: usize, child_is_row: bool| {
-        let mut idx = start;
-        emit_swiftui_node(
-            buf,
-            child,
-            depth + 1,
-            &mut idx,
-            palette,
-            child_is_row,
-            child_stretch,
-            false,
-        )
-    };
+    let emit_child =
+        |buf: &mut String, child: &NodeConfig, start: usize, child_is_row: bool, wraps: bool| {
+            let mut idx = start;
+            let ctx = Parent {
+                is_row: child_is_row,
+                stretch: child_stretch,
+                wraps,
+            };
+            emit_swiftui_node(buf, child, depth + 1, &mut idx, palette, ctx, false)
+        };
 
     if is_grid {
         // --- LazyVGrid / LazyHGrid (CSS Grid) ---
@@ -447,13 +522,31 @@ fn emit_swiftui_container(
         };
         writeln!(
             buf,
+            "{pad}// NOTE: CSS Grid approximated with {grid_type} — tracks map to GridItems, items flow in order; grid-column/grid-row spans and explicit placement are not supported"
+        )?;
+        writeln!(
+            buf,
             "{pad}{grid_type}({param_name}: [{}]{spacing_arg}) {{",
             items.join(", ")
         )?;
 
         for (child, start) in children.iter().zip(starts.iter()) {
+            if child.grid_column != GridPlacement::Auto {
+                writeln!(
+                    buf,
+                    "{pad}    // grid-column: {} — not expressible in {grid_type}; item takes one cell",
+                    child.grid_column.display_short()
+                )?;
+            }
+            if child.grid_row != GridPlacement::Auto {
+                writeln!(
+                    buf,
+                    "{pad}    // grid-row: {} — not expressible in {grid_type}; item takes one cell",
+                    child.grid_row.display_short()
+                )?;
+            }
             // grid children flow like rows
-            emit_child(buf, child, *start, true)?;
+            emit_child(buf, child, *start, true, true)?;
         }
     } else if is_wrapping {
         // --- FlowLayout (custom wrapping layout) ---
@@ -490,7 +583,7 @@ fn emit_swiftui_container(
         writeln!(buf, "{pad}FlowLayout({}) {{", args.join(", "))?;
 
         for (child, start) in children.iter().zip(starts.iter()) {
-            emit_child(buf, child, *start, is_row)?;
+            emit_child(buf, child, *start, is_row, true)?;
         }
     } else {
         // --- HStack / VStack (non-wrapping) ---
@@ -545,7 +638,7 @@ fn emit_swiftui_container(
             if (i == 0 && spacer_before) || (i > 0 && spacer_between) {
                 writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
             }
-            emit_child(buf, child, *start, is_row)?;
+            emit_child(buf, child, *start, is_row, false)?;
         }
         if spacer_after {
             writeln!(buf, "{pad}    Spacer(minLength: 0)")?;
@@ -554,13 +647,16 @@ fn emit_swiftui_container(
 
     writeln!(buf, "{pad}}}")?;
 
-    // Container frame: map Percent(100%) to maxWidth/maxHeight: .infinity
+    // Container frame: map Percent(100%) to maxWidth/maxHeight: .infinity.
+    // Sizes are border-box, so the container's own padding comes off them.
+    let pad_x = px_sum(&node.padding.left, &node.padding.right);
+    let pad_y = px_sum(&node.padding.top, &node.padding.bottom);
     let full_w = is_full_percent(&node.width);
     let full_h = is_full_percent(&node.height);
     let w = if full_w {
         None
     } else {
-        swift_optional_value(&node.width)
+        swift_inner_value(&node.width, pad_x)
     };
     // Root with flex_grow fills the viewport height (matching CSS body { height: 100% }),
     // and Percent(100%) maps to .infinity in the min/max frame below — skip both.
@@ -568,7 +664,7 @@ fn emit_swiftui_container(
     let h = if full_h || root_fills_height {
         None
     } else {
-        swift_optional_value(&node.height)
+        swift_inner_value(&node.height, pad_y)
     };
 
     if w.is_some() || h.is_some() {
@@ -586,23 +682,23 @@ fn emit_swiftui_container(
     let min_w = if node.min_width.is_zero_px() {
         None
     } else {
-        swift_optional_value(&node.min_width)
+        swift_inner_value(&node.min_width, pad_x)
     };
     let min_h = if node.min_height.is_zero_px() {
         None
     } else {
-        swift_optional_value(&node.min_height)
+        swift_inner_value(&node.min_height, pad_y)
     };
 
     let mut max_w = if full_w {
         Some(".infinity".to_string())
     } else {
-        swift_optional_value(&node.max_width)
+        swift_inner_value(&node.max_width, pad_x)
     };
     let mut max_h = if full_h || root_fills_height {
         Some(".infinity".to_string())
     } else {
-        swift_optional_value(&node.max_height)
+        swift_inner_value(&node.max_height, pad_y)
     };
 
     // Flex-grow expansion: merge into max constraints
@@ -728,7 +824,17 @@ const FLOW_LAYOUT_STRUCT: &str = r#"struct FlowLayout: Layout {
         let maxMain = axis == .horizontal ? bounds.width : bounds.height
         let maxCross = axis == .horizontal ? bounds.height : bounds.width
         var lines = breakLines(sizes: sizes, maxMain: maxMain)
+        // flex-wrap: wrap-reverse flips the cross axis: the first line sits at
+        // the cross end (bottom for a horizontal flow) and later lines stack
+        // towards the cross start, so the line order *and* the start/end
+        // anchoring of lineAlignment are mirrored.
         if reversed { lines.reverse() }
+        let effectiveAlignment: LineAlignment
+        switch (reversed, lineAlignment) {
+        case (true, .start): effectiveAlignment = .end
+        case (true, .end): effectiveAlignment = .start
+        default: effectiveAlignment = lineAlignment
+        }
 
         let totalCross = lines.map(\.crossLength).reduce(0, +)
         let remaining = maxCross - totalCross
@@ -736,7 +842,7 @@ const FLOW_LAYOUT_STRUCT: &str = r#"struct FlowLayout: Layout {
         var crossStart: CGFloat = 0
         var gap = lineSpacing
 
-        switch lineAlignment {
+        switch effectiveAlignment {
         case .start: break
         case .center:
             crossStart = (remaining - CGFloat(max(lines.count - 1, 0)) * lineSpacing) / 2
@@ -913,6 +1019,96 @@ mod tests {
         assert!(
             !code.contains("FlowLayout"),
             "Non-wrapping should not include FlowLayout"
+        );
+    }
+
+    #[test]
+    fn explicit_sizes_are_border_box() {
+        // 100x60 leaf with 8px padding → inner frame 84x44 so the painted
+        // box (frame + padding) is 100x60 like every other backend.
+        let mut root = test_container();
+        let mut leaf = NodeConfig::new_leaf("A", 100.0, 60.0);
+        leaf.flex_shrink = 0.0; // keep a fixed frame
+        root.children = vec![leaf];
+        let code = emit_swiftui(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains(".frame(width: 84.0, height: 44.0)"), "{code}");
+        assert!(code.contains("            .padding(8.0)\n"), "{code}");
+        // Container: 200px wide with 12px padding → 176 inner.
+        let mut inner = NodeConfig::new_container("inner");
+        inner.flex_wrap = FlexWrap::NoWrap;
+        inner.width = ValueConfig::Px(200.0);
+        inner.children = vec![NodeConfig::new_leaf("X", 40.0, 40.0)];
+        root.children = vec![inner];
+        let code = emit_swiftui(&root, ColorPalette::Pastel1).unwrap();
+        assert!(
+            code.contains(".frame(width: 176.0, height: nil, alignment: .topLeading)"),
+            "{code}"
+        );
+    }
+
+    #[test]
+    fn vw_sizes_subtract_padding_as_expression() {
+        let mut root = test_container();
+        let mut leaf = NodeConfig::new_leaf("A", 100.0, 60.0);
+        leaf.flex_shrink = 0.0;
+        leaf.width = ValueConfig::Vw(50.0);
+        root.children = vec![leaf];
+        let code = emit_swiftui(&root, ColorPalette::Pastel1).unwrap();
+        assert!(
+            code.contains(".frame(width: UIScreen.main.bounds.width * 0.500 - 16.0, height: 44.0)"),
+            "{code}"
+        );
+    }
+
+    #[test]
+    fn shrinkable_leaf_in_stack_uses_max_width() {
+        // Default leaf has flex-shrink 1: in an HStack its width becomes an
+        // upper bound so the stack can squeeze it instead of clipping.
+        let code = emit_swiftui(&test_container(), ColorPalette::Pastel1).unwrap();
+        assert!(code.contains(".frame(width: nil, height: 64.0)"), "{code}");
+        assert!(
+            code.contains(".frame(minWidth: nil, maxWidth: 64.0, minHeight: nil, maxHeight: nil)"),
+            "{code}"
+        );
+        // Inside a FlowLayout the frame stays fixed.
+        let mut root = test_container();
+        root.flex_wrap = FlexWrap::Wrap;
+        let code = emit_swiftui(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains(".frame(width: 64.0, height: 64.0)"), "{code}");
+        assert!(!code.contains("maxWidth: 64.0"), "{code}");
+    }
+
+    #[test]
+    fn grow_leaf_keeps_infinity_bound() {
+        let mut leaf = NodeConfig::new_leaf("A", 80.0, 80.0);
+        leaf.flex_grow = 1.0;
+        let mut root = test_container();
+        root.children = vec![leaf];
+        let code = emit_swiftui(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains(".frame(width: 64.0, height: 64.0)"), "{code}");
+        assert!(code.contains("maxWidth: .infinity"), "{code}");
+    }
+
+    #[test]
+    fn flow_layout_mirrors_line_anchoring_when_reversed() {
+        assert!(FLOW_LAYOUT_STRUCT.contains("case (true, .start): effectiveAlignment = .end"));
+        assert!(FLOW_LAYOUT_STRUCT.contains("switch effectiveAlignment {"));
+    }
+
+    #[test]
+    fn grid_spans_get_a_note() {
+        let mut root = NodeConfig::new_grid("g", vec![GridTrackSize::Fr(1.0); 3]);
+        let mut wide = NodeConfig::new_leaf("wide", 80.0, 60.0);
+        wide.grid_column = GridPlacement::Span(2);
+        root.children = vec![wide, NodeConfig::new_leaf("cell", 80.0, 60.0)];
+        let code = emit_swiftui(&root, ColorPalette::Pastel1).unwrap();
+        assert!(
+            code.contains("// NOTE: CSS Grid approximated with LazyVGrid"),
+            "{code}"
+        );
+        assert!(
+            code.contains("// grid-column: span 2 — not expressible in LazyVGrid"),
+            "{code}"
         );
     }
 

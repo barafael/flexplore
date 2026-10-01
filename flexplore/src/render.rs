@@ -1,5 +1,8 @@
 use std::path::PathBuf;
 
+/// Leaf text size in the generated code of every backend.
+const GOLDEN_LEAF_FONT_PX: f32 = 26.0;
+
 use bevy::{
     prelude::*,
     render::{
@@ -264,9 +267,11 @@ fn spawn_node_entity(
         .id();
 
     if is_leaf {
-        bevy_node::spawn_leaf_text(commands, entity, node);
+        // Same fixed size as the generated code (the app's preview shrinks
+        // text to fit small nodes; the other backends do not).
+        bevy_node::spawn_leaf_text_sized(commands, entity, node, GOLDEN_LEAF_FONT_PX);
     } else {
-        bevy_node::spawn_container_label(commands, entity, node);
+        // No container labels: the generated code has none either.
         let child_entities: Vec<Entity> = bevy_node::sorted_child_indices(node)
             .into_iter()
             .map(|i| spawn_node_entity(commands, &node.children[i], leaf_idx, palette, false))

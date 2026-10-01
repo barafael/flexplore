@@ -1,5 +1,6 @@
 struct ContentView: View {
     public var body: some View {
+        // NOTE: CSS Grid approximated with LazyVGrid — tracks map to GridItems, items flow in order; grid-column/grid-row spans and explicit placement are not supported
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8.0) {
             Text("cell-1")
                 .font(.system(size: 26))

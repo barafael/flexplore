@@ -312,7 +312,7 @@ fn emit_node(
         )?;
         writeln!(
             buf,
-            "{pad}        TextFont {{ font_size: 26.0, ..default() }},"
+            "{pad}        TextFont {{ font_size: FontSize::Px(26.0), ..default() }},"
         )?;
         writeln!(
             buf,

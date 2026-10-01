@@ -3,6 +3,7 @@ import SwiftUI
 
 public struct GridAutoFlowColumnView: View {
     public var body: some View {
+        // NOTE: CSS Grid approximated with LazyHGrid — tracks map to GridItems, items flow in order; grid-column/grid-row spans and explicit placement are not supported
         LazyHGrid(rows: [GridItem(.fixed(80.0)), GridItem(.fixed(80.0))], spacing: 8.0) {
             Text("cell-1")
                 .font(.system(size: 26))

@@ -42,7 +42,7 @@ fn spawn_ui(commands: &mut Commands) {
                 ..default()
             }).with_child((
                 Text::new("header"),
-                TextFont { font_size: 26.0, ..default() },
+                TextFont { font_size: FontSize::Px(26.0), ..default() },
                 TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
             ));
         });
@@ -71,7 +71,7 @@ fn spawn_ui(commands: &mut Commands) {
                 ..default()
             }).with_child((
                 Text::new("sidebar"),
-                TextFont { font_size: 26.0, ..default() },
+                TextFont { font_size: FontSize::Px(26.0), ..default() },
                 TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
             ));
         });
@@ -101,7 +101,7 @@ fn spawn_ui(commands: &mut Commands) {
                 ..default()
             }).with_child((
                 Text::new("main"),
-                TextFont { font_size: 26.0, ..default() },
+                TextFont { font_size: FontSize::Px(26.0), ..default() },
                 TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
             ));
         });
@@ -131,7 +131,7 @@ fn spawn_ui(commands: &mut Commands) {
                 ..default()
             }).with_child((
                 Text::new("footer"),
-                TextFont { font_size: 26.0, ..default() },
+                TextFont { font_size: FontSize::Px(26.0), ..default() },
                 TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
             ));
         });

@@ -14,8 +14,8 @@ use clap::Parser;
 use golden_common::{
     RenderJob, VIEWPORT_H, VIEWPORT_W,
     config::{
-        AlignItems, AlignSelf, ColorPalette, FlexDirection, FlexWrap, JustifyContent, NodeConfig,
-        ValueConfig,
+        AlignItems, AlignSelf, ColorPalette, DisplayMode, FlexDirection, FlexWrap, JustifyContent,
+        NodeConfig, ValueConfig,
     },
     effective_justify, palette_color,
     png::save_rgba_png,
@@ -338,16 +338,21 @@ fn build_container<'a>(
     palette: ColorPalette,
     ctx: Ctx,
 ) -> Element<'a, Message> {
-    let is_row = matches!(
-        node.flex_direction,
-        FlexDirection::Row | FlexDirection::RowReverse
-    );
-    let is_reversed = matches!(
-        node.flex_direction,
-        FlexDirection::RowReverse | FlexDirection::ColumnReverse
-    );
+    // Grid containers mirror `codegen/iced.rs`: a wrapping `row![…]` of the
+    // children in source order (spans, template rows and auto-flow ignored).
+    let is_grid = node.display_mode == DisplayMode::Grid;
+    let is_row = is_grid
+        || matches!(
+            node.flex_direction,
+            FlexDirection::Row | FlexDirection::RowReverse
+        );
+    let is_reversed = !is_grid
+        && matches!(
+            node.flex_direction,
+            FlexDirection::RowReverse | FlexDirection::ColumnReverse
+        );
     let stretch = node.align_items == AlignItems::Stretch;
-    let wraps = matches!(node.flex_wrap, FlexWrap::Wrap | FlexWrap::WrapReverse);
+    let wraps = !is_grid && matches!(node.flex_wrap, FlexWrap::Wrap | FlexWrap::WrapReverse);
     let child_ctx = ctx.child(is_row, stretch);
 
     // Sort children by order and pre-compute leaf_idx starts so palette
@@ -407,7 +412,21 @@ fn build_container<'a>(
 
     // Hidden children keep their space (`visibility: hidden`), so every
     // child takes part in line breaking, shrinking and justification.
-    let layout: Element<'a, Message> = if wraps {
+    let layout: Element<'a, Message> = if is_grid {
+        // --- Grid approximation: `row![children].wrap().spacing(gap)` ---
+        let widgets: Vec<Element<'a, Message>> = children
+            .iter()
+            .zip(&starts)
+            .map(|(child, start)| {
+                let mut idx = *start;
+                let widget = build_widget(child, &mut idx, palette, child_ctx);
+                apply_align_self(widget, child, true)
+            })
+            .collect();
+        let mut r = row(widgets).spacing(main_gap_px);
+        r = apply_row_align(&node.align_items, r);
+        r.wrap().vertical_spacing(cross_gap_px).into()
+    } else if wraps {
         // --- Wrapping layout ---
         // Compute available main-axis space for line breaking
         let parent_main = if is_row { VIEWPORT_W } else { VIEWPORT_H };

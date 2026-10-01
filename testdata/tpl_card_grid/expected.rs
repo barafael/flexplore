@@ -43,7 +43,7 @@ fn spawn_ui(commands: &mut Commands) {
                 ..default()
             }).with_child((
                 Text::new("card-1"),
-                TextFont { font_size: 26.0, ..default() },
+                TextFont { font_size: FontSize::Px(26.0), ..default() },
                 TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
             ));
         });
@@ -74,7 +74,7 @@ fn spawn_ui(commands: &mut Commands) {
                 ..default()
             }).with_child((
                 Text::new("card-2"),
-                TextFont { font_size: 26.0, ..default() },
+                TextFont { font_size: FontSize::Px(26.0), ..default() },
                 TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
             ));
         });
@@ -105,7 +105,7 @@ fn spawn_ui(commands: &mut Commands) {
                 ..default()
             }).with_child((
                 Text::new("card-3"),
-                TextFont { font_size: 26.0, ..default() },
+                TextFont { font_size: FontSize::Px(26.0), ..default() },
                 TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
             ));
         });
@@ -136,7 +136,7 @@ fn spawn_ui(commands: &mut Commands) {
                 ..default()
             }).with_child((
                 Text::new("card-4"),
-                TextFont { font_size: 26.0, ..default() },
+                TextFont { font_size: FontSize::Px(26.0), ..default() },
                 TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
             ));
         });
@@ -167,7 +167,7 @@ fn spawn_ui(commands: &mut Commands) {
                 ..default()
             }).with_child((
                 Text::new("card-5"),
-                TextFont { font_size: 26.0, ..default() },
+                TextFont { font_size: FontSize::Px(26.0), ..default() },
                 TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
             ));
         });
@@ -198,7 +198,7 @@ fn spawn_ui(commands: &mut Commands) {
                 ..default()
             }).with_child((
                 Text::new("card-6"),
-                TextFont { font_size: 26.0, ..default() },
+                TextFont { font_size: FontSize::Px(26.0), ..default() },
                 TextColor(Color::srgba(0.05, 0.05, 0.1, 0.85)),
             ));
         });

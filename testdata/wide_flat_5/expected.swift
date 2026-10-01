@@ -4,31 +4,31 @@ struct ContentView: View {
             Text("item-0")
                 .font(.system(size: 26))
                 .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
-                .frame(width: 60.0, height: 60.0)
+                .frame(width: 44.0, height: 44.0)
                 .padding(8.0)
                 .background(Color(red: 0.98, green: 0.71, blue: 0.68))
             Text("item-1")
                 .font(.system(size: 26))
                 .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
-                .frame(width: 60.0, height: 60.0)
+                .frame(width: 44.0, height: 44.0)
                 .padding(8.0)
                 .background(Color(red: 0.70, green: 0.80, blue: 0.89))
             Text("item-2")
                 .font(.system(size: 26))
                 .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
-                .frame(width: 60.0, height: 60.0)
+                .frame(width: 44.0, height: 44.0)
                 .padding(8.0)
                 .background(Color(red: 0.80, green: 0.92, blue: 0.77))
             Text("item-3")
                 .font(.system(size: 26))
                 .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
-                .frame(width: 60.0, height: 60.0)
+                .frame(width: 44.0, height: 44.0)
                 .padding(8.0)
                 .background(Color(red: 0.87, green: 0.80, blue: 0.89))
             Text("item-4")
                 .font(.system(size: 26))
                 .foregroundColor(Color(red: 0.05, green: 0.05, blue: 0.1).opacity(0.85))
-                .frame(width: 60.0, height: 60.0)
+                .frame(width: 44.0, height: 44.0)
                 .padding(8.0)
                 .background(Color(red: 1.00, green: 0.85, blue: 0.65))
         }
@@ -99,7 +99,17 @@ struct FlowLayout: Layout {
         let maxMain = axis == .horizontal ? bounds.width : bounds.height
         let maxCross = axis == .horizontal ? bounds.height : bounds.width
         var lines = breakLines(sizes: sizes, maxMain: maxMain)
+        // flex-wrap: wrap-reverse flips the cross axis: the first line sits at
+        // the cross end (bottom for a horizontal flow) and later lines stack
+        // towards the cross start, so the line order *and* the start/end
+        // anchoring of lineAlignment are mirrored.
         if reversed { lines.reverse() }
+        let effectiveAlignment: LineAlignment
+        switch (reversed, lineAlignment) {
+        case (true, .start): effectiveAlignment = .end
+        case (true, .end): effectiveAlignment = .start
+        default: effectiveAlignment = lineAlignment
+        }
 
         let totalCross = lines.map(\.crossLength).reduce(0, +)
         let remaining = maxCross - totalCross
@@ -107,7 +117,7 @@ struct FlowLayout: Layout {
         var crossStart: CGFloat = 0
         var gap = lineSpacing
 
-        switch lineAlignment {
+        switch effectiveAlignment {
         case .start: break
         case .center:
             crossStart = (remaining - CGFloat(max(lines.count - 1, 0)) * lineSpacing) / 2

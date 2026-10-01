@@ -17,8 +17,8 @@ use egui::{Align, Color32, Layout, Vec2};
 use golden_common::{
     RenderJob, VIEWPORT_H, VIEWPORT_W,
     config::{
-        AlignItems, AlignSelf, ColorPalette, FlexDirection, FlexWrap, JustifyContent, NodeConfig,
-        ValueConfig,
+        AlignItems, AlignSelf, ColorPalette, DisplayMode, FlexDirection, FlexWrap, JustifyContent,
+        NodeConfig, ValueConfig,
     },
     effective_justify, palette_rgb8,
     png::save_rgba_png,
@@ -220,6 +220,9 @@ struct Ctx {
     main_override: Option<f32>,
     /// This node or an ancestor is `visible: false`: keep its space, paint nothing.
     hidden: bool,
+    /// `auto`-sized leaves fit their label (as an `egui::Frame` without a
+    /// min size does) instead of the 60×40 flex fallback. Used for grid cells.
+    content_sized: bool,
 }
 
 impl Ctx {
@@ -230,6 +233,7 @@ impl Ctx {
             is_root: true,
             main_override: None,
             hidden: false,
+            content_sized: false,
         }
     }
 }
@@ -332,6 +336,16 @@ fn build_leaf(
     let h = resolve_to_px(&node.height, VIEWPORT_H);
     let padding = resolve_to_px(&node.padding.first(), 0.0);
     let margin = resolve_to_px(&node.margin.first(), 0.0);
+    let font = egui::FontId::proportional(26.0);
+    let (auto_w, auto_h) = if ctx.content_sized {
+        let text = ui
+            .painter()
+            .layout_no_wrap(node.display_text().to_owned(), font.clone(), Color32::WHITE)
+            .size();
+        (text.x + padding * 2.0, text.y + padding * 2.0)
+    } else {
+        (60.0, 40.0)
+    };
 
     // Apply max constraints
     let max_w = match node.max_width {
@@ -354,7 +368,7 @@ fn build_leaf(
             } else if w > 0.0 {
                 w
             } else {
-                60.0
+                auto_w
             }
         });
         eff_h = if ctx.parent_stretch && h == 0.0 {
@@ -362,7 +376,7 @@ fn build_leaf(
         } else if h > 0.0 {
             h
         } else {
-            40.0
+            auto_h
         };
     } else {
         eff_w = if ctx.parent_stretch && w == 0.0 {
@@ -370,7 +384,7 @@ fn build_leaf(
         } else if w > 0.0 {
             w
         } else {
-            60.0
+            auto_w
         };
         eff_h = ctx.main_override.unwrap_or_else(|| {
             if node.flex_grow > 0.0 && h == 0.0 {
@@ -378,7 +392,7 @@ fn build_leaf(
             } else if h > 0.0 {
                 h
             } else {
-                40.0
+                auto_h
             }
         });
     }
@@ -404,7 +418,7 @@ fn build_leaf(
         text_rect.center(),
         egui::Align2::CENTER_CENTER,
         node.display_text(),
-        egui::FontId::proportional(26.0),
+        font,
         Color32::from_rgba_premultiplied(13, 13, 26, 217),
     );
 }
@@ -416,10 +430,14 @@ fn build_container(
     palette: ColorPalette,
     ctx: Ctx,
 ) {
-    let is_row = matches!(
-        node.flex_direction,
-        FlexDirection::Row | FlexDirection::RowReverse
-    );
+    // Grid containers become an `egui::Grid` (see `codegen/egui.rs`), whose
+    // children are laid out in rows.
+    let is_grid = node.display_mode == DisplayMode::Grid;
+    let is_row = is_grid
+        || matches!(
+            node.flex_direction,
+            FlexDirection::Row | FlexDirection::RowReverse
+        );
     let stretch = node.align_items == AlignItems::Stretch;
     let wraps = matches!(node.flex_wrap, FlexWrap::Wrap | FlexWrap::WrapReverse);
 
@@ -453,13 +471,6 @@ fn build_container(
             FlexDirection::RowReverse | FlexDirection::ColumnReverse
         ),
     );
-    if matches!(
-        jc,
-        JustifyContent::SpaceBetween | JustifyContent::SpaceEvenly | JustifyContent::SpaceAround
-    ) {
-        layout = layout.with_main_justify(true);
-    }
-
     let main_gap = if is_row {
         resolve_to_px(&node.column_gap, 0.0)
     } else {
@@ -522,16 +533,47 @@ fn build_container(
     );
     child_ui.set_min_size(Vec2::new(inner_w, inner_h));
 
-    // Set gap
-    if is_row {
-        child_ui.spacing_mut().item_spacing = Vec2::new(main_gap, 0.0);
-    } else {
-        child_ui.spacing_mut().item_spacing = Vec2::new(0.0, main_gap);
-    }
-
     // Sort children by order
     let mut children: Vec<&NodeConfig> = node.children.iter().collect();
     children.sort_by_key(|c| c.order);
+
+    if is_grid {
+        // Mirror `codegen/egui.rs`: `egui::Grid::new(label).num_columns(n)`
+        // with `item_spacing = (column_gap, row_gap)` and `end_row()` after
+        // every n children. Spans, template rows and auto-flow are ignored
+        // there, so they are ignored here too.
+        let num_cols = node.grid_template_columns.len().max(1);
+        let spacing = Vec2::new(
+            resolve_to_px(&node.column_gap, 0.0),
+            resolve_to_px(&node.row_gap, 0.0),
+        );
+        child_ui.spacing_mut().item_spacing = spacing;
+        egui::Grid::new((node.label.as_str(), *leaf_idx))
+            .num_columns(num_cols)
+            .spacing(spacing)
+            .show(&mut child_ui, |ui| {
+                for (i, child) in children.iter().enumerate() {
+                    build_widget(
+                        ui,
+                        child,
+                        leaf_idx,
+                        palette,
+                        Ctx {
+                            parent_is_row: true,
+                            parent_stretch: stretch,
+                            is_root: false,
+                            main_override: None,
+                            hidden: ctx.hidden,
+                            content_sized: true,
+                        },
+                    );
+                    if (i + 1) % num_cols == 0 {
+                        ui.end_row();
+                    }
+                }
+            });
+        return;
+    }
 
     // Pre-compute flex-grow distribution: calculate how much main-axis space
     // each flex-grow child gets, so they don't greedily consume everything.
@@ -551,7 +593,35 @@ fn build_container(
     let main_axis_total = if is_row { inner_w } else { inner_h };
     let remaining_for_grow = (main_axis_total - total_fixed - total_gap).max(0.0);
 
+    // justify-content: space-* — distribute the free main-axis space the way
+    // CSS does (as a leading offset plus extra spacing between items).
+    // egui's `Layout::with_main_justify` is not usable for this: it stretches
+    // every item to the full axis and pushes the rest off-screen.
+    let free = if total_grow > 0.0 || wraps {
+        0.0
+    } else {
+        remaining_for_grow
+    };
+    let n = children.len() as f32;
+    let (leading, extra_between) = match jc {
+        JustifyContent::SpaceBetween if n > 1.0 => (0.0, free / (n - 1.0)),
+        JustifyContent::SpaceAround if n > 0.0 => (free / (2.0 * n), free / n),
+        JustifyContent::SpaceEvenly if n > 0.0 => (free / (n + 1.0), free / (n + 1.0)),
+        _ => (0.0, 0.0),
+    };
+
+    // Set gap
+    let spacing = main_gap + extra_between;
+    if is_row {
+        child_ui.spacing_mut().item_spacing = Vec2::new(spacing, 0.0);
+    } else {
+        child_ui.spacing_mut().item_spacing = Vec2::new(0.0, spacing);
+    }
+
     child_ui.with_layout(layout, |ui| {
+        if leading > 0.0 {
+            ui.add_space(leading);
+        }
         for child in &children {
             // Calculate main-axis override for flex-grow children
             let main_override = if total_grow > 0.0 && grows_on_main(child) {
@@ -571,6 +641,7 @@ fn build_container(
                     is_root: false,
                     main_override,
                     hidden: ctx.hidden,
+                    content_sized: false,
                 },
             );
         }
