@@ -278,21 +278,16 @@ pub fn new_player_name() -> String {
     format!("{} {}", cap(pick(PET_ADJECTIVES)), cap(pick(PET_NOUNS)))
 }
 
-/// Resolve the room to join. On the web it is the `?room=` query parameter
-/// (a share link); a bare page gets a fresh room written back into the
-/// address bar so the link stays shareable. Natively it is the first command
-/// line argument. An invalid name degrades to a fresh room rather than an
-/// error, since a bad share link should still land somewhere.
+/// Resolve the room to join. On the web it is `room=` in the URL fragment
+/// (`#room=name`, a share link); a bare page gets a fresh room written back
+/// into the address bar so the link stays shareable. Natively it is the first
+/// command line argument. An invalid name degrades to a fresh room rather
+/// than an error, since a bad share link should still land somewhere.
 pub fn room_id() -> RoomId {
     #[cfg(target_arch = "wasm32")]
     {
-        use wasm_bindgen::JsValue;
-        let win = web_sys::window().expect("window always available on wasm");
-        let href = win.location().href().ok().unwrap_or_default();
-
-        if let Ok(url) = web_sys::Url::new(&href)
-            && let Some(name) = url.search_params().get("room")
-        {
+        let fragment = read_fragment();
+        if let Some(name) = fragment_param(&fragment, "room") {
             match RoomId::parse(&name) {
                 Ok(room) => return room,
                 Err(error) => warn!(%error, "ignoring the room in the URL"),
@@ -300,12 +295,7 @@ pub fn room_id() -> RoomId {
         }
 
         let room = RoomId::fresh();
-        if let Ok(url) = web_sys::Url::new(&href) {
-            url.search_params().set("room", &room.0);
-            if let Ok(history) = win.history() {
-                let _ = history.replace_state_with_url(&JsValue::NULL, "", Some(&url.href()));
-            }
-        }
+        write_fragment(&with_fragment_param(&fragment, "room", Some(&room.0)));
         room
     }
     #[cfg(not(target_arch = "wasm32"))]
@@ -461,5 +451,120 @@ mod room_tests {
         assert!(long.contains(&RoomId::MAX_LEN.to_string()), "{long}");
         let bad = RoomIdError::BadChar('/').to_string();
         assert!(bad.contains('/'), "must name the character: {bad}");
+    }
+}
+
+// ── URL fragment helpers ─────────────────────────────────────────────────────
+//
+// The room travels in the URL *fragment* (`#room=name`), not a query
+// parameter: the browser never sends the fragment to the server, so a room
+// name cannot land in access logs or referrers, changing it does not reload
+// the page, and caches see one URL for the app. The fragment is a `&`-separated
+// list of `key=value` pairs so other state can share it.
+
+/// The value of `key` in a fragment, given with or without its leading `#`.
+#[cfg(any(target_arch = "wasm32", test))]
+pub fn fragment_param(fragment: &str, key: &str) -> Option<String> {
+    let fragment = fragment.strip_prefix('#').unwrap_or(fragment);
+    fragment
+        .split(['&', ';'])
+        .find_map(|pair| pair.strip_prefix(key)?.strip_prefix('='))
+        .map(str::to_string)
+}
+
+/// `fragment` with `key` set to `value` (or removed when `None`), every other
+/// pair kept in place. Returned without the leading `#`.
+#[cfg(any(target_arch = "wasm32", test))]
+pub fn with_fragment_param(fragment: &str, key: &str, value: Option<&str>) -> String {
+    let fragment = fragment.strip_prefix('#').unwrap_or(fragment);
+    let mut pairs: Vec<String> = fragment
+        .split(['&', ';'])
+        .filter(|pair| !pair.is_empty() && pair.split('=').next() != Some(key))
+        .map(str::to_string)
+        .collect();
+    if let Some(value) = value {
+        pairs.push(format!("{key}={value}"));
+    }
+    pairs.join("&")
+}
+
+/// The page's current fragment (with its leading `#`, or empty).
+#[cfg(target_arch = "wasm32")]
+pub fn read_fragment() -> String {
+    web_sys::window()
+        .and_then(|w| w.location().hash().ok())
+        .unwrap_or_default()
+}
+
+/// Replace the page's fragment in place: no navigation, no history entry,
+/// so Back does not lead to a bare page that redirects forward again.
+#[cfg(target_arch = "wasm32")]
+pub fn write_fragment(fragment: &str) {
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let url = format!("#{fragment}");
+    match window.history() {
+        Ok(history) => {
+            let _ = history.replace_state_with_url(
+                &web_sys::wasm_bindgen::JsValue::NULL,
+                "",
+                Some(&url),
+            );
+        }
+        Err(_) => {
+            let _ = window.location().set_hash(fragment);
+        }
+    }
+}
+
+#[cfg(test)]
+mod fragment_tests {
+    use super::*;
+
+    #[test]
+    fn parses_a_share_link_fragment_with_leading_hash() {
+        assert_eq!(fragment_param("#room=abc", "room").as_deref(), Some("abc"));
+    }
+
+    #[test]
+    fn tolerates_a_fragment_without_the_hash() {
+        assert_eq!(fragment_param("room=abc", "room").as_deref(), Some("abc"));
+    }
+
+    #[test]
+    fn finds_the_key_among_extra_params() {
+        assert_eq!(
+            fragment_param("#x=1&room=q-7&y=2", "room").as_deref(),
+            Some("q-7")
+        );
+        assert_eq!(fragment_param("#rooms=1", "room"), None);
+        assert_eq!(fragment_param("", "room"), None);
+    }
+
+    #[test]
+    fn values_keep_their_own_equals_signs() {
+        assert_eq!(
+            fragment_param("#layout=YWJj==&room=r", "layout").as_deref(),
+            Some("YWJj==")
+        );
+    }
+
+    #[test]
+    fn setting_a_param_keeps_the_others() {
+        assert_eq!(
+            with_fragment_param("#layout=abc", "room", Some("r1")),
+            "layout=abc&room=r1"
+        );
+        assert_eq!(
+            with_fragment_param("#room=old&layout=abc", "room", Some("new")),
+            "layout=abc&room=new"
+        );
+        assert_eq!(
+            with_fragment_param("#room=r&layout=abc", "layout", None),
+            "room=r"
+        );
+        assert_eq!(with_fragment_param("", "room", Some("r")), "room=r");
+        assert_eq!(with_fragment_param("#room=r", "room", None), "");
     }
 }

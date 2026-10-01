@@ -131,23 +131,26 @@ pub fn make_share_url(cfg: &FlexConfig) -> Option<String> {
     let location = window.location();
     let origin = location.origin().ok()?;
     let pathname = location.pathname().ok()?;
+    // A layout link is a template to import, not an invite: it names no room.
     Some(format!("{origin}{pathname}#layout={encoded}"))
 }
 
 #[cfg(target_arch = "wasm32")]
 fn load_from_url_hash() -> Option<FlexConfig> {
     let window = web_sys::window()?;
-    let hash = window.location().hash().ok()?;
-    let hash = hash.strip_prefix('#')?;
-    let encoded = hash.strip_prefix("layout=")?;
-    let decoded: String = window.atob(encoded).ok()?;
+    let fragment = flexplore_net::read_fragment();
+    let encoded = flexplore_net::fragment_param(&fragment, "layout")?;
+    let decoded: String = window.atob(&encoded).ok()?;
     // New links are percent-encoded; older links carry raw JSON, which only
     // fails to decode when it contains a literal `%` (e.g. a "25%" label).
     let json: String = js_sys::decode_uri_component(&decoded)
         .map(String::from)
         .unwrap_or(decoded);
-    // Clear the hash after loading so refreshing doesn't re-apply it
-    let _ = window.location().set_hash("");
+    // Drop the layout from the fragment after loading so a refresh doesn't
+    // re-apply it; the room, if any, stays.
+    flexplore_net::write_fragment(&flexplore_net::with_fragment_param(
+        &fragment, "layout", None,
+    ));
     serde_json::from_str(&json).ok()
 }
 
