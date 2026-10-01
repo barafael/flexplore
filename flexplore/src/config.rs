@@ -11,6 +11,12 @@ pub const ART_TEXTURE_SIZE: u32 = 128;
 #[derive(Resource, Default)]
 pub struct RightPanelOpen(pub bool);
 
+/// The document as it was before the current hover preview started, restored
+/// when the pointer leaves the previewed option. A resource (not a `Local`) so
+/// the network layer can fold remote edits into it while a preview is live.
+#[derive(Resource, Default)]
+pub struct HoverPreview(pub Option<FlexConfig>);
+
 // ─── Main resource (Bevy ECS) ────────────────────────────────────────────────
 
 fn deserialize_theme<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Theme, D::Error> {

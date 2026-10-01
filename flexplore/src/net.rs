@@ -1,733 +1,336 @@
-//! Multiplayer systems: socket handling, host election, edit sequencing with
-//! client-side prediction, snapshots and presence routing.
+//! In-session networking: submit local edits, apply sequenced ones.
 //!
-//! See the `flexplore-proto` crate docs for the model. In short: every edit is
-//! applied locally the moment the user makes it, then submitted to the host.
-//! The host orders edits and echoes them to everyone. A peer skips the echo of
-//! its own edits and re-applies its still-pending edits on top of foreign
-//! ones, so every peer converges on the host's order.
+//! The one rule: **an edit is applied only when it arrives sequenced**. Local
+//! edits go into the outbox and come back through the same path as remote
+//! ones, so every peer sees one ordering. Solo editing takes the same path —
+//! the lone peer is its own sequencer — so the networked code is always
+//! exercised.
+//!
+//! The one liberty taken with that rule: the editor's widgets mutate the
+//! document in place as the user drags a slider or types, so a local edit is
+//! visible before its sequenced echo returns. Edits replace whole state, so
+//! the echo finds nothing left to do; and host order still decides when two
+//! peers edit at once, because the later sequenced edit overwrites.
 
 use bevy::prelude::*;
-
 use flexplore_net::{
-    CH_RELIABLE, CH_UNRELIABLE, CLAIM_GRACE_SECS, Control, Ephemeral, FlexSnapshot, HostKey,
-    LayoutEdit, MatchboxSocket, NetMsg, NetState, PROMOTE_GRACE_SECS, PROTOCOL_VERSION, PeerId,
-    PeerInfo, PeerState, build_socket, decode, enc_msg, new_player_name, peer_from_bytes,
-    peer_to_bytes, room_id, unix_ms,
+    CH_RELIABLE, Document, LayoutEdit, MatchboxSocket, NetMsg, NetState, PeerId, PeerState, RoomId,
+    Signaling, broadcast, decode, new_player_name, room_id, send_to,
 };
 
-use crate::cursors::{RemotePeers, color_for_peer};
+use crate::config::{FlexConfig, HoverPreview};
 use crate::history::UndoHistory;
-use crate::panel::HoverPreview;
-use flexplore::config::FlexConfig;
+use crate::presence::RemotePeers;
 
 /// Foreign edits arriving faster than this (a peer dragging a slider) share
 /// one undo entry.
 const FOREIGN_HISTORY_COALESCE_SECS: f64 = 0.5;
-/// Upper bound on unacknowledged own edits we remember. Older ones are
-/// superseded anyway (every edit replaces whole state), so dropping them only
-/// affects echo matching, which treats an unknown old echo as superseded.
-const MAX_PENDING_OWN: usize = 256;
+/// A peer alone in its room for this long owns the document it started with
+/// (its autosave, say). Shorter than that, an empty room may just be a slow
+/// handshake to peers who hold the real document.
+const ALONE_OWNS_DOCUMENT_SECS: f64 = 3.0;
 
-// ── Resources ────────────────────────────────────────────────────────────────
-
-/// Layout edits the UI made this frame (already applied locally). Routed onto
-/// the wire by [`flush_pending`].
+/// The outbox: layout edits the UI made this frame (already applied to the
+/// local document), waiting to be sequenced.
 #[derive(Resource, Default)]
 pub struct PendingEdits(pub Vec<LayoutEdit>);
 
-/// Outgoing reliable messages staged by the systems, drained by
-/// [`flush_pending`].
-#[derive(Resource, Default)]
-pub struct WirePending {
-    pub broadcast: Vec<NetMsg>,
-    pub targeted: Vec<(NetMsg, PeerId)>,
-}
-
-/// Ephemeral messages received this frame, consumed by [`apply_ephemeral`].
-#[derive(Resource, Default)]
-pub struct PendingIncoming {
-    pub ephemeral: Vec<(Ephemeral, PeerId)>,
-}
-
-/// The local player's display identity (announced to peers on connect).
-#[derive(Resource)]
-pub struct LocalPlayer {
-    pub name: String,
-}
-
-impl Default for LocalPlayer {
-    fn default() -> Self {
-        Self {
-            name: new_player_name(),
-        }
-    }
-}
-
-// ── Plugin ───────────────────────────────────────────────────────────────────
-
+/// Joins the room named by the [`RoomId`] resource (or a fresh one) through
+/// the [`Signaling`] server, and runs host election and the message pump
+/// every frame. The presence overlay is the app's; this plugin only keeps
+/// [`RemotePeers`] up to date.
 pub struct NetPlugin;
 
 impl Plugin for NetPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<NetState>()
+        if !app.world().contains_resource::<RoomId>() {
+            app.insert_resource(room_id());
+        }
+        app.init_resource::<Signaling>()
+            .init_resource::<NetState>()
             .init_resource::<PendingEdits>()
-            .init_resource::<WirePending>()
-            .init_resource::<PendingIncoming>()
-            .init_resource::<LocalPlayer>()
-            .init_resource::<crate::cursors::RemotePeers>()
-            .init_resource::<crate::cursors::CursorBroadcastTimer>()
-            .add_systems(Startup, open_socket_for_room)
-            .add_systems(
-                Update,
-                (
-                    handle_socket,
-                    elect_host,
-                    retry_snapshot_request,
-                    apply_ephemeral,
-                    prune_remote_peers,
-                    flush_pending,
-                )
-                    .chain(),
-            )
-            .add_systems(
-                Update,
-                (
-                    crate::cursors::broadcast_cursor,
-                    crate::cursors::broadcast_selection,
-                    crate::cursors::remote_selection_highlight,
-                ),
-            )
-            // Painting must happen inside egui's pass, or the next pass clears it.
-            .add_systems(
-                bevy_egui::EguiPrimaryContextPass,
-                crate::cursors::cursor_overlay_ui.after(crate::panel::panel_system),
-            );
+            .init_resource::<RemotePeers>()
+            .add_systems(Startup, (name_player, flexplore_net::open_socket).chain())
+            .add_systems(Update, (elect_host, pump).chain());
     }
 }
 
-/// Mint a room id and open the matchbox socket.
-fn open_socket_for_room(mut commands: Commands) {
-    let room = room_id();
-    info!(%room, "joining room");
-    commands.insert_resource(build_socket(&room));
+/// Pick a display name once, unless the app already set one.
+fn name_player(mut net: ResMut<NetState>) {
+    if net.name.is_empty() {
+        net.name = new_player_name();
+    }
 }
 
-// ── Socket receive + dispatch ────────────────────────────────────────────────
+/// Fold the socket's peer changes into [`NetState`]: connected peers are
+/// added, disconnected ones dropped. Shared by the pump and the host election
+/// so the two can never disagree on who is present.
+///
+/// Takes the resource rather than a plain `&mut NetState`, and writes only
+/// when a peer actually came or went: this runs every frame, and marking the
+/// state changed every frame would leave change-driven systems nothing to
+/// skip.
+pub fn sync_peers(socket: &mut MatchboxSocket, net: &mut ResMut<NetState>) {
+    for (peer, state) in socket.update_peers() {
+        match state {
+            PeerState::Connected => {
+                if !net.peers.contains(&peer) {
+                    info!(%peer, "peer connected");
+                    net.peers.push(peer);
+                }
+            }
+            PeerState::Disconnected => {
+                if net.peers.contains(&peer) {
+                    info!(%peer, "peer disconnected");
+                    net.peers.retain(|p| *p != peer);
+                }
+            }
+        }
+    }
+}
 
-#[allow(clippy::too_many_arguments)]
-fn handle_socket(
-    mut commands: Commands,
-    socket: Option<ResMut<MatchboxSocket>>,
-    mut net: ResMut<NetState>,
-    mut wire: ResMut<WirePending>,
-    mut incoming: ResMut<PendingIncoming>,
-    mut cfg: ResMut<FlexConfig>,
-    mut history: ResMut<UndoHistory>,
-    mut preview: ResMut<HoverPreview>,
-    local: Res<LocalPlayer>,
-    time: Res<Time>,
-    mut last_foreign_push: Local<f64>,
-) {
+/// The host is the peer with the lexicographically smallest `PeerId`,
+/// recomputed every frame so host loss self-heals. A freshly promoted host
+/// resumes numbering after the last edit it applied, so the sequence numbers
+/// its guests have already seen are never re-issued.
+pub fn elect_host(socket: Option<ResMut<MatchboxSocket>>, mut net: ResMut<NetState>) {
     let Some(mut socket) = socket else {
         return;
     };
-    let now = time.elapsed_secs_f64();
 
-    let peer_updates = match socket.try_update_peers() {
-        Ok(updates) => updates,
-        Err(e) => {
-            // The socket is gone for good; carry on as a local-only session.
-            warn!(error = %e, "socket closed; continuing offline");
-            commands.remove_resource::<MatchboxSocket>();
-            net.peers.clear();
-            net.info.clear();
-            net.host = None;
-            net.pending_own.clear();
-            wire.broadcast.clear();
-            wire.targeted.clear();
-            return;
-        }
-    };
+    sync_peers(&mut socket, &mut net);
 
-    // ── Peer tracking ──────────────────────────────────────────────────────
-    let mut newly_connected: Vec<PeerId> = Vec::new();
-    for (peer, peer_state) in peer_updates {
-        match peer_state {
-            PeerState::Connected if !net.peers.contains(&peer) => {
-                net.peers.push(peer);
-                newly_connected.push(peer);
-                info!(?peer, "peer connected");
-            }
-            PeerState::Disconnected => {
-                net.peers.retain(|&p| p != peer);
-                net.info.retain(|(p, _)| *p != peer);
-                info!(?peer, "peer disconnected");
-                if net.host_id() == Some(peer) {
-                    info!("host left; waiting for a successor");
-                    net.host = None;
-                    net.unhosted_since = Some(now);
-                    net.needs_snapshot = false;
-                }
-            }
-            _ => {}
-        }
-    }
-
-    // Reconcile my_id with the socket's assigned id (None until the signalling
-    // server hands one out; differs after a reconnect that swaps the socket).
-    let socket_id = socket.id();
-    if socket_id.is_some_and(|id| Some(id) != net.my_id) {
-        if net.my_id.is_some() {
-            // New identity: peers see the old id leave. Start over as a joiner
-            // (we keep the document, so we stay eligible for promotion).
-            net.host = None;
-            net.unhosted_since = Some(now);
-        }
-        net.my_id = socket_id;
-    }
-    let Some(my_id) = net.my_id else {
-        // Nothing can be addressed until we have an id; keep messages queued.
-        return;
-    };
-
-    // ── Greet new peers ────────────────────────────────────────────────────
-    for &peer in &newly_connected {
-        wire.targeted.push((hello(&net), peer));
-        wire.targeted.push((
-            NetMsg::Ephemeral(Ephemeral::PlayerInfo {
-                name: local.name.clone(),
-                color: color_for_peer(my_id),
-            }),
-            peer,
-        ));
-        if net.is_host() {
-            info!(?peer, "host: pushing snapshot to new peer");
-            let snapshot = build_snapshot(&cfg, &net);
-            wire.targeted
-                .push((NetMsg::Control(Control::Snapshot(Box::new(snapshot))), peer));
-        }
-    }
-    // A joiner asks its host for the document as soon as the host is
-    // reachable (the host's proactive push covers the usual case).
-    if !net.is_host()
-        && let Some(host) = net.host_id()
-        && newly_connected.contains(&host)
-        && !net.has_document
+    // Read before writing, here and below: this runs every frame, and a write
+    // marks the state changed for every system that redraws on a change.
+    if net.my_id.is_none()
+        && let Some(id) = socket.id()
     {
-        net.needs_snapshot = true;
-        wire.targeted
-            .push((NetMsg::Control(Control::RequestSnapshot), host));
+        net.my_id = Some(id);
     }
-
-    // ── Receive + dispatch ─────────────────────────────────────────────────
-    let reliable: Vec<(PeerId, Box<[u8]>)> = socket.channel_mut(CH_RELIABLE).receive();
-    let unreliable: Vec<(PeerId, Box<[u8]>)> = socket.channel_mut(CH_UNRELIABLE).receive();
-    let decoded = reliable
-        .into_iter()
-        .chain(unreliable)
-        .filter_map(|(peer, raw)| decode(&raw).map(|msg| (peer, msg)));
-
-    for (peer, msg) in decoded {
-        // Ignore peers speaking another protocol version (logged on Hello).
-        if net.peer_info(peer).is_some_and(|i| !i.protocol_ok) {
-            continue;
-        }
-        match msg {
-            NetMsg::Game {
-                client,
-                local_id,
-                edit,
-            } => {
-                if !net.is_host() {
-                    // Sent to us by a peer that still thinks we host. Forward
-                    // to the host we know, if any; otherwise the sender's
-                    // pending list resends it once a host is known.
-                    if let Some(host) = net.host_id() {
-                        wire.targeted.push((
-                            NetMsg::Game {
-                                client,
-                                local_id,
-                                edit,
-                            },
-                            host,
-                        ));
-                    }
-                    continue;
-                }
-                let Some(key) = net.host else { continue };
-                let seq = net.next_seq;
-                net.next_seq = net.next_seq.wrapping_add(1);
-                net.last_applied_seq = Some(seq);
-                wire.broadcast.push(NetMsg::Sequenced {
-                    epoch: key.epoch,
-                    seq,
-                    client,
-                    local_id,
-                    edit: edit.clone(),
-                });
-                // The host applies foreign edits at sequencing time.
-                if client != net.client {
-                    apply_foreign(
-                        &mut cfg,
-                        &mut preview,
-                        &mut history,
-                        &net,
-                        &edit,
-                        now,
-                        &mut last_foreign_push,
-                    );
-                }
-            }
-
-            NetMsg::Sequenced {
-                epoch,
-                seq,
-                client,
-                local_id,
-                edit,
-            } => {
-                // Our own broadcasts never come back; anything sequenced by a
-                // higher epoch than ours means we were superseded as host.
-                let from_current_host = net
-                    .host
-                    .is_some_and(|k| k.host() == peer && k.epoch == epoch);
-                if !from_current_host {
-                    if net.host.is_none_or(|k| epoch > k.epoch) {
-                        // A host we have not heard about yet (its snapshot or
-                        // Hello is still in flight). Follow it provisionally
-                        // with the weakest possible key so its real key wins
-                        // ties, and fetch its document.
-                        adopt_host(&mut net, HostKey::new(epoch, u64::MAX, peer), &mut wire);
-                        net.needs_snapshot = true;
-                        wire.targeted
-                            .push((NetMsg::Control(Control::RequestSnapshot), peer));
-                    } else {
-                        debug!(?peer, epoch, "dropping Sequenced from a stale host");
-                        continue;
-                    }
-                }
-                // Each seq is applied at most once; the channel is ordered, so
-                // anything at or below the watermark is a duplicate.
-                if net.last_applied_seq.is_some_and(|last| seq <= last) {
-                    continue;
-                }
-                if net
-                    .last_applied_seq
-                    .is_some_and(|last| seq > last.wrapping_add(1))
-                {
-                    warn!(seq, "gap in sequenced edits; requesting a snapshot");
-                    net.needs_snapshot = true;
-                }
-                net.last_applied_seq = Some(seq);
-
-                if client == net.client {
-                    // Our own edit coming back. If it is still pending we have
-                    // already applied it (and everything older is now acked).
-                    // If it is older than everything pending, a newer edit of
-                    // ours supersedes it. Only a duplicate sequencing of an
-                    // already-acked edit (a resend after a host change) needs
-                    // applying, to match what every other peer just did.
-                    if let Some(pos) = net.pending_own.iter().position(|(id, _)| *id == local_id) {
-                        net.pending_own.drain(..=pos);
-                        continue;
-                    }
-                    if net
-                        .pending_own
-                        .first()
-                        .is_some_and(|(first, _)| *first > local_id)
-                    {
-                        continue;
-                    }
-                }
-                apply_foreign(
-                    &mut cfg,
-                    &mut preview,
-                    &mut history,
-                    &net,
-                    &edit,
-                    now,
-                    &mut last_foreign_push,
-                );
-            }
-
-            NetMsg::Ephemeral(eph) => {
-                incoming.ephemeral.push((eph, peer));
-            }
-
-            NetMsg::Control(Control::Hello {
-                protocol,
-                client,
-                epoch,
-                claimed_at_ms,
-                epoch_host,
-                has_document,
-            }) => {
-                let protocol_ok = protocol == PROTOCOL_VERSION;
-                if !protocol_ok {
-                    warn!(
-                        ?peer,
-                        theirs = protocol,
-                        ours = PROTOCOL_VERSION,
-                        "peer speaks another protocol version; ignoring it"
-                    );
-                }
-                net.set_peer_info(
-                    peer,
-                    PeerInfo {
-                        client,
-                        has_document,
-                        protocol_ok,
-                    },
-                );
-                if !protocol_ok {
-                    continue;
-                }
-                net.max_epoch_seen = net.max_epoch_seen.max(epoch);
-                if let Some(host) = epoch_host {
-                    let key = HostKey::new(epoch, claimed_at_ms, peer_from_bytes(host));
-                    if net.host.is_none_or(|cur| key > cur) {
-                        adopt_host(&mut net, key, &mut wire);
-                        if !net.is_host() && !net.has_document {
-                            net.needs_snapshot = true;
-                            if net.peers.contains(&key.host()) {
-                                wire.targeted
-                                    .push((NetMsg::Control(Control::RequestSnapshot), key.host()));
-                            }
-                        }
-                    }
-                }
-            }
-
-            NetMsg::Control(Control::RequestSnapshot) => {
-                if !net.is_host() {
-                    continue;
-                }
-                info!(?peer, "host: peer requested snapshot");
-                let snapshot = build_snapshot(&cfg, &net);
-                wire.targeted
-                    .push((NetMsg::Control(Control::Snapshot(Box::new(snapshot))), peer));
-            }
-
-            NetMsg::Control(Control::Snapshot(snapshot)) => {
-                let key = HostKey::new(snapshot.epoch, snapshot.claimed_at_ms, peer);
-                // Accept from the host we follow (a refresh) or from a host
-                // with a stronger claim (a promotion, or a real key replacing
-                // a provisional one).
-                let accept = net
-                    .host
-                    .is_none_or(|cur| key >= cur || (cur.host() == peer && cur.epoch == key.epoch));
-                if !accept {
-                    info!(?peer, "ignoring snapshot from a stale host");
-                    continue;
-                }
-                let was_host = net.is_host();
-                adopt_host(&mut net, key, &mut wire);
-                net.last_applied_seq = snapshot.last_seq;
-                net.needs_snapshot = false;
-                net.snapshot_retry_timer = 0.0;
-                let first_document = !net.has_document;
-                net.has_document = true;
-                info!(
-                    ?peer,
-                    epoch = snapshot.epoch,
-                    last_seq = ?snapshot.last_seq,
-                    was_host,
-                    "installing snapshot"
-                );
-                install_snapshot(&mut cfg, &snapshot);
-                // Whatever we were previewing is gone with the old tree.
-                preview.0 = None;
-                // Keep our unacknowledged edits on top and hand them to this
-                // host; duplicates are harmless (whole-state edits).
-                for (local_id, edit) in &net.pending_own {
-                    apply_edit(&mut cfg, edit);
-                    wire.targeted.push((
-                        NetMsg::Game {
-                            client: net.client,
-                            local_id: *local_id,
-                            edit: edit.clone(),
-                        },
-                        peer,
-                    ));
-                }
-                cfg.sanitize_selection();
-                cfg.request_rebuild();
-                history.push(cfg.clone());
-                if first_document {
-                    // We are now eligible to take over: tell everyone.
-                    let msg = hello(&net);
-                    for &p in &net.peers {
-                        wire.targeted.push((msg.clone(), p));
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Follow `key` as the current host. Resets the per-epoch watermark when the
-/// epoch or host actually changes.
-fn adopt_host(net: &mut NetState, key: HostKey, wire: &mut WirePending) {
-    let changed = net
-        .host
-        .is_none_or(|cur| cur.host() != key.host() || cur.epoch != key.epoch);
-    let was_host = net.is_host();
-    net.host = Some(key);
-    net.max_epoch_seen = net.max_epoch_seen.max(key.epoch);
-    net.unhosted_since = None;
-    if changed {
-        net.last_applied_seq = None;
-        if was_host && !net.is_host() {
-            info!(host = ?key.host(), epoch = key.epoch, "demoted; following the new host");
-            // Our sequencing role ended; from now on our edits are predictions.
-            let msg = hello(net);
-            for &p in &net.peers {
-                wire.targeted.push((msg.clone(), p));
-            }
-        } else if !net.is_host() {
-            info!(host = ?key.host(), epoch = key.epoch, "following host");
-        }
-    }
-}
-
-/// Apply an edit from another peer, then re-apply our own unacknowledged
-/// edits on top (prediction rebase), mirroring both into the hover preview's
-/// saved copy so ending a hover cannot undo a remote change.
-fn apply_foreign(
-    cfg: &mut FlexConfig,
-    preview: &mut HoverPreview,
-    history: &mut UndoHistory,
-    net: &NetState,
-    edit: &LayoutEdit,
-    now: f64,
-    last_history_push: &mut f64,
-) {
-    apply_edit(cfg, edit);
-    for (_, own) in &net.pending_own {
-        apply_edit(cfg, own);
-    }
-    if let Some(saved) = preview.0.as_mut() {
-        apply_edit(saved, edit);
-        for (_, own) in &net.pending_own {
-            apply_edit(saved, own);
-        }
-    }
-    cfg.sanitize_selection();
-    cfg.request_rebuild();
-    if now - *last_history_push >= FOREIGN_HISTORY_COALESCE_SECS {
-        history.push(cfg.clone());
-    } else {
-        history.replace_top(cfg.clone());
-    }
-    *last_history_push = now;
-}
-
-/// Our membership announcement.
-fn hello(net: &NetState) -> NetMsg {
-    NetMsg::Control(Control::Hello {
-        protocol: PROTOCOL_VERSION,
-        client: net.client,
-        epoch: net.host.map_or(0, |k| k.epoch),
-        claimed_at_ms: net.host.map_or(0, |k| k.claimed_at_ms()),
-        epoch_host: net.host.map(|k| peer_to_bytes(k.host())),
-        has_document: net.has_document,
-    })
-}
-
-// ── Host election ────────────────────────────────────────────────────────────
-
-/// While nobody hosts, the most senior eligible peer claims hosting after a
-/// grace period: 5 s when alone (a slow WebRTC handshake to an existing room
-/// must not look like an empty room), 1 s after a host leaves.
-fn elect_host(
-    time: Res<Time>,
-    mut net: ResMut<NetState>,
-    mut wire: ResMut<WirePending>,
-    cfg: Res<FlexConfig>,
-) {
-    let Some(my_id) = net.my_id else { return };
-    if net.host.is_some() {
-        net.unhosted_since = None;
+    let Some(me) = net.my_id else {
         return;
-    }
-    let now = time.elapsed_secs_f64();
-    let since = *net.unhosted_since.get_or_insert(now);
-    let grace = if net.peers.is_empty() {
-        CLAIM_GRACE_SECS
-    } else {
-        PROMOTE_GRACE_SECS
     };
-    if now - since < grace || net.election_winner() != Some(my_id) {
+
+    let is_host = net.peers.iter().all(|p| me.to_string() < p.to_string());
+    if is_host == net.is_host {
         return;
     }
-
-    let epoch = net.max_epoch_seen.wrapping_add(1);
-    let key = HostKey::new(epoch, unix_ms(), my_id);
-    net.host = Some(key);
-    net.max_epoch_seen = epoch;
-    net.has_document = true;
-    net.next_seq = 0;
-    net.last_applied_seq = None;
-    net.needs_snapshot = false;
-    // Everything we did so far is the document now.
-    net.pending_own.clear();
-    net.unhosted_since = None;
-    if net.peers.is_empty() {
-        info!(epoch, "hosting a new room");
+    net.is_host = is_host;
+    if is_host {
+        net.next_seq = net.last_applied_seq.map_or(0, |s| s + 1);
+        info!(name = %net.name, "became host");
     } else {
-        info!(epoch, peers = net.peers.len(), "promoted to host");
-    }
-    let announce = hello(&net);
-    let snapshot = NetMsg::Control(Control::Snapshot(Box::new(build_snapshot(&cfg, &net))));
-    for &peer in &net.peers {
-        wire.targeted.push((announce.clone(), peer));
-        wire.targeted.push((snapshot.clone(), peer));
+        info!("relinquished the host");
     }
 }
 
-/// Re-request the snapshot every 2 s until it arrives (covers a lost push).
-fn retry_snapshot_request(
-    time: Res<Time>,
-    mut net: ResMut<NetState>,
-    mut wire: ResMut<WirePending>,
-) {
-    if !net.needs_snapshot || net.is_host() {
-        return;
-    }
-    let Some(host) = net.host_id() else { return };
-    if !net.peers.contains(&host) {
-        return;
-    }
-    net.snapshot_retry_timer += time.delta_secs_f64();
-    if net.snapshot_retry_timer > 2.0 {
-        net.snapshot_retry_timer = 0.0;
-        info!("retrying snapshot request");
-        wire.targeted
-            .push((NetMsg::Control(Control::RequestSnapshot), host));
-    }
+/// Everything the pump reads and mutates besides the socket: the document and
+/// its undo history, the live hover preview, the outbox and the room's
+/// presence. One parameter so the pump stays under the argument limit.
+#[derive(bevy::ecs::system::SystemParam)]
+pub struct Session<'w> {
+    pub net: ResMut<'w, NetState>,
+    pub cfg: ResMut<'w, FlexConfig>,
+    pub history: ResMut<'w, UndoHistory>,
+    pub preview: ResMut<'w, HoverPreview>,
+    pub outbox: ResMut<'w, PendingEdits>,
+    pub remote: ResMut<'w, RemotePeers>,
+    pub time: Res<'w, Time>,
 }
 
-// ── Presence ─────────────────────────────────────────────────────────────────
-
-/// Move ephemeral messages (cursors, selection, identity) into [`RemotePeers`].
-fn apply_ephemeral(
-    time: Res<Time>,
-    mut incoming: ResMut<PendingIncoming>,
-    mut remote: ResMut<RemotePeers>,
+/// Drain the outbox, then apply whatever arrived.
+pub fn pump(
+    socket: Option<ResMut<MatchboxSocket>>,
+    mut session: Session,
+    mut last_history_push: Local<f64>,
+    mut alone_since: Local<Option<f64>>,
 ) {
-    let now = time.elapsed_secs_f64();
-    for (eph, peer) in incoming.ephemeral.drain(..) {
-        let entry = remote.entry(peer);
-        match eph {
-            Ephemeral::CursorPos { nx, ny } => {
-                let pos = Vec2::new(nx, ny);
-                let prev = entry.cursor.unwrap_or(pos);
-                entry.cursor_prev = Some(prev);
+    let Some(mut socket) = socket else {
+        // No socket at all: the edits are already on screen, and there is
+        // nobody to tell. Only reachable if the socket was closed.
+        session.outbox.0.clear();
+        return;
+    };
+
+    sync_peers(&mut socket, &mut session.net);
+    let peers = session.net.peers.clone();
+    session.remote.prune(&peers);
+
+    // Announce ourselves to peers we have not greeted yet: once when we first
+    // have a name, and afterwards only to peers that join later. The host
+    // answers a greeting with the document, which is how a late joiner
+    // catches up.
+    let unacquainted: Vec<PeerId> = peers
+        .iter()
+        .filter(|p| !session.net.greeted.contains(p))
+        .copied()
+        .collect();
+    if !session.net.name.is_empty() && !unacquainted.is_empty() {
+        let hello = NetMsg::Hello {
+            name: session.net.name.clone(),
+        };
+        broadcast(&mut socket, &unacquainted, &hello);
+        info!(name = %session.net.name, greeted = unacquainted.len(), "greeted the room");
+        session.net.greeted.extend(unacquainted);
+    }
+
+    let host = session.net.host();
+    let now = session.time.elapsed_secs_f64();
+
+    // A peer nobody joined for a while owns what it started with.
+    if peers.is_empty() && session.net.my_id.is_some() {
+        let since = *alone_since.get_or_insert(now);
+        if now - since >= ALONE_OWNS_DOCUMENT_SECS && !session.net.has_document {
+            session.net.has_document = true;
+        }
+    } else {
+        *alone_since = None;
+    }
+
+    // 1. Submit local edits. Editing makes this peer's document the real one. The sequencer handles its own immediately,
+    //    through the same arm that handles guests' — one serialization point.
+    for edit in std::mem::take(&mut session.outbox.0) {
+        session.net.has_document = true;
+        if session.net.sequences() {
+            sequence_and_broadcast(
+                &mut socket,
+                &mut session,
+                &peers,
+                edit,
+                now,
+                &mut last_history_push,
+            );
+        } else if let Some(host) = host {
+            send_to(&mut socket, host, &NetMsg::Edit(edit));
+        } else {
+            warn!("no host to submit to; dropping the edit");
+        }
+    }
+
+    // 2. Apply what arrived.
+    let inbox: Vec<(PeerId, Box<[u8]>)> = socket.channel_mut(CH_RELIABLE).receive();
+    for (from, raw) in inbox {
+        let Some(msg) = decode(&raw) else {
+            continue;
+        };
+        match msg {
+            // A guest's submission: order it and rebroadcast.
+            NetMsg::Edit(edit) if session.net.sequences() => {
+                sequence_and_broadcast(
+                    &mut socket,
+                    &mut session,
+                    &peers,
+                    edit,
+                    now,
+                    &mut last_history_push,
+                );
+            }
+            // A guest cannot sequence.
+            NetMsg::Edit(_) => {}
+            NetMsg::Sequenced { seq, edit } => {
+                apply(&mut session, seq, edit, now, &mut last_history_push);
+            }
+            NetMsg::Hello { name } => {
+                info!(%from, %name, "peer greeted the room");
+                session.remote.entry(from).name = name;
+                // Every peer holding the document answers, not only the
+                // host: the greeter may have drawn the lowest id and become
+                // host while still holding nothing.
+                if session.net.has_document {
+                    let doc = document(&session.cfg, &session.net);
+                    send_to(&mut socket, from, &NetMsg::Document(Box::new(doc)));
+                }
+            }
+            // A peer holding nothing yet takes the first document it is
+            // handed; one holding a document takes only the host's, which is
+            // the only authority.
+            NetMsg::Document(doc) => {
+                let from_host = host == Some(from);
+                if !session.net.has_document || from_host {
+                    install(&mut session, *doc);
+                }
+            }
+            NetMsg::Cursor { pos } => {
+                let entry = session.remote.entry(from);
+                let pos = Vec2::new(pos[0], pos[1]);
+                entry.cursor_prev = Some(entry.cursor.unwrap_or(pos));
                 entry.cursor = Some(pos);
                 entry.last_update = now;
             }
-            Ephemeral::Selection { path } => {
-                entry.selection = path;
-            }
-            Ephemeral::PlayerInfo { name, color } => {
-                entry.name = name;
-                entry.color = color;
+            NetMsg::Selection { path } => {
+                session.remote.entry(from).selection = path;
             }
         }
     }
 }
 
-/// Drop presence entries for peers that have left.
-fn prune_remote_peers(net: Res<NetState>, mut remote: ResMut<RemotePeers>) {
-    remote.prune(&net.peers);
-}
-
-// ── Flush outbound ───────────────────────────────────────────────────────────
-
-/// Route this frame's local edits and staged wire messages onto the socket.
-/// Sends are best effort: the reliable channel only fails once a peer is gone,
-/// and whole-state edits make any later edit a full repair.
-fn flush_pending(
-    mut pending: ResMut<PendingEdits>,
-    mut wire: ResMut<WirePending>,
-    mut net: ResMut<NetState>,
-    mut socket: Option<ResMut<MatchboxSocket>>,
+/// Assign the next sequence number, tell everyone, and apply locally.
+fn sequence_and_broadcast(
+    socket: &mut MatchboxSocket,
+    session: &mut Session,
+    peers: &[PeerId],
+    edit: LayoutEdit,
+    now: f64,
+    last_history_push: &mut f64,
 ) {
-    let local_edits = std::mem::take(&mut pending.0);
-    if !net.peers.is_empty() {
-        for edit in local_edits {
-            let local_id = net.next_local_id();
-            if let Some(key) = net.host.filter(|_| net.is_host()) {
-                let seq = net.next_seq;
-                net.next_seq = net.next_seq.wrapping_add(1);
-                net.last_applied_seq = Some(seq);
-                wire.broadcast.push(NetMsg::Sequenced {
-                    epoch: key.epoch,
-                    seq,
-                    client: net.client,
-                    local_id,
-                    edit,
-                });
-            } else {
-                if let Some(host) = net.host_id() {
-                    wire.targeted.push((
-                        NetMsg::Game {
-                            client: net.client,
-                            local_id,
-                            edit: edit.clone(),
-                        },
-                        host,
-                    ));
-                }
-                // Kept until the host echoes it (or a newer edit of ours is
-                // acked); resent to whichever host sends us a snapshot.
-                net.pending_own.push((local_id, edit));
-                if net.pending_own.len() > MAX_PENDING_OWN {
-                    let excess = net.pending_own.len() - MAX_PENDING_OWN;
-                    net.pending_own.drain(..excess);
-                }
-            }
-        }
-    }
-    // Alone: edits are local only, and nothing is worth queueing.
-
-    let Some(socket) = socket.as_deref_mut() else {
-        wire.targeted.clear();
-        wire.broadcast.clear();
-        return;
-    };
-    let channel = socket.channel_mut(CH_RELIABLE);
-    for (msg, peer) in wire.targeted.drain(..) {
-        if !net.peers.contains(&peer) {
-            continue;
-        }
-        if let Some(encoded) = enc_msg(&msg)
-            && let Err(e) = channel.try_send(encoded, peer)
-        {
-            warn!(?peer, error = %e, "reliable send failed; dropping message");
-        }
-    }
-    for msg in wire.broadcast.drain(..) {
-        let Some(encoded) = enc_msg(&msg) else {
-            continue;
-        };
-        for &peer in &net.peers {
-            if let Err(e) = channel.try_send(encoded.clone(), peer) {
-                warn!(?peer, error = %e, "reliable broadcast failed; dropping message");
-            }
-        }
-    }
+    let seq = session.net.next_seq;
+    session.net.next_seq += 1;
+    broadcast(
+        socket,
+        peers,
+        &NetMsg::Sequenced {
+            seq,
+            edit: edit.clone(),
+        },
+    );
+    apply(session, seq, edit, now, last_history_push);
 }
 
-// ── Edit application ─────────────────────────────────────────────────────────
+/// Apply a sequenced edit, if it is new.
+pub fn apply(
+    session: &mut Session,
+    seq: u32,
+    edit: LayoutEdit,
+    now: f64,
+    last_history_push: &mut f64,
+) {
+    if session.net.is_duplicate(seq) {
+        return;
+    }
+    session.net.last_applied_seq = Some(seq);
+    session.net.has_document = true;
 
-/// Apply a [`LayoutEdit`] to the document in place. Both variants replace
-/// whole state, so applying is idempotent and order alone decides the result.
-pub fn apply_edit(cfg: &mut FlexConfig, edit: &LayoutEdit) {
+    if !apply_edit(&mut session.cfg, &edit) {
+        // Our own edit coming back, or a repeat: nothing left to do.
+        return;
+    }
+    // A hover preview's saved copy must learn the change too, or ending the
+    // hover would undo it.
+    if let Some(saved) = session.preview.0.as_mut() {
+        apply_edit(saved, &edit);
+    }
+    session.cfg.sanitize_selection();
+    session.cfg.request_rebuild();
+    // A burst from a peer dragging a slider becomes one undo step.
+    if now - *last_history_push >= FOREIGN_HISTORY_COALESCE_SECS {
+        session.history.push(session.cfg.clone());
+    } else {
+        session.history.replace_top(session.cfg.clone());
+    }
+    *last_history_push = now;
+    debug!(seq, "edit applied");
+}
+
+/// Apply a [`LayoutEdit`] to the document in place; `true` if anything
+/// changed. Both variants replace whole state, so applying is idempotent.
+pub fn apply_edit(cfg: &mut FlexConfig, edit: &LayoutEdit) -> bool {
     match edit {
         LayoutEdit::ReplaceRoot(node) => {
+            if cfg.root == **node {
+                return false;
+            }
             cfg.root = (**node).clone();
+            true
         }
         LayoutEdit::UpdateSettings {
             bg_mode,
@@ -737,21 +340,26 @@ pub fn apply_edit(cfg: &mut FlexConfig, edit: &LayoutEdit) {
             theme,
             palette,
         } => {
+            let changed = cfg.bg_mode != *bg_mode
+                || cfg.art_style != *art_style
+                || cfg.art_seed != *art_seed
+                || cfg.art_depth != *art_depth
+                || cfg.theme != *theme
+                || cfg.palette != *palette;
             cfg.bg_mode = *bg_mode;
             cfg.art_style = *art_style;
             cfg.art_seed = *art_seed;
             cfg.art_depth = *art_depth;
             cfg.theme = *theme;
             cfg.palette = *palette;
+            changed
         }
     }
 }
 
-// ── Snapshot helpers ─────────────────────────────────────────────────────────
-
-fn build_snapshot(cfg: &FlexConfig, net: &NetState) -> FlexSnapshot {
-    let key = net.host.expect("only the host builds snapshots");
-    FlexSnapshot {
+/// The document as the host hands it to a peer that just greeted.
+pub fn document(cfg: &FlexConfig, net: &NetState) -> Document {
+    Document {
         root: cfg.root.clone(),
         bg_mode: cfg.bg_mode,
         art_style: cfg.art_style,
@@ -759,18 +367,71 @@ fn build_snapshot(cfg: &FlexConfig, net: &NetState) -> FlexSnapshot {
         art_depth: cfg.art_depth,
         theme: cfg.theme,
         palette: cfg.palette,
-        epoch: key.epoch,
-        claimed_at_ms: key.claimed_at_ms(),
         last_seq: net.last_applied_seq,
     }
 }
 
-fn install_snapshot(cfg: &mut FlexConfig, snapshot: &FlexSnapshot) {
-    cfg.root = snapshot.root.clone();
-    cfg.bg_mode = snapshot.bg_mode;
-    cfg.art_style = snapshot.art_style;
-    cfg.art_seed = snapshot.art_seed;
-    cfg.art_depth = snapshot.art_depth;
-    cfg.theme = snapshot.theme;
-    cfg.palette = snapshot.palette;
+/// Take the host's document verbatim and start applying live edits after it.
+fn install(session: &mut Session, doc: Document) {
+    info!(last_seq = ?doc.last_seq, "received the document");
+    let cfg = &mut session.cfg;
+    cfg.root = doc.root;
+    cfg.bg_mode = doc.bg_mode;
+    cfg.art_style = doc.art_style;
+    cfg.art_seed = doc.art_seed;
+    cfg.art_depth = doc.art_depth;
+    cfg.theme = doc.theme;
+    cfg.palette = doc.palette;
+    cfg.sanitize_selection();
+    cfg.request_rebuild();
+    // Whatever was being previewed belonged to the old tree.
+    session.preview.0 = None;
+    session.history.push(cfg.clone());
+    session.net.last_applied_seq = doc.last_seq;
+    session.net.has_document = true;
+    if session.net.is_host {
+        // Elected before the document arrived: number on from where the
+        // peer that held it left off.
+        session.net.next_seq = doc.last_seq.map_or(0, |s| s + 1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use flexplore_core::config::NodeConfig;
+
+    #[test]
+    fn re_applying_an_edit_changes_nothing() {
+        let mut cfg = FlexConfig::default();
+        let edit = LayoutEdit::ReplaceRoot(Box::new(NodeConfig::new_leaf("solo", 10.0, 10.0)));
+        assert!(
+            apply_edit(&mut cfg, &edit),
+            "the first application changes the tree"
+        );
+        assert!(
+            !apply_edit(&mut cfg, &edit),
+            "an echo of it finds nothing to do"
+        );
+    }
+
+    #[test]
+    fn settings_edits_report_whether_anything_changed() {
+        let mut cfg = FlexConfig::default();
+        let settings = |cfg: &FlexConfig| LayoutEdit::UpdateSettings {
+            bg_mode: cfg.bg_mode,
+            art_style: cfg.art_style,
+            art_seed: cfg.art_seed,
+            art_depth: cfg.art_depth,
+            theme: cfg.theme,
+            palette: cfg.palette,
+        };
+        let same = settings(&cfg);
+        assert!(!apply_edit(&mut cfg, &same), "same settings: no change");
+
+        let mut bumped = FlexConfig::default();
+        bumped.art_seed += 1;
+        assert!(apply_edit(&mut cfg, &settings(&bumped)));
+        assert_eq!(cfg.art_seed, bumped.art_seed);
+    }
 }

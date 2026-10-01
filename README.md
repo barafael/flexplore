@@ -28,6 +28,7 @@ cargo run                      # native desktop app (joins a fresh multiplayer r
 cargo run -- my-room           # join a named room
 trunk serve                    # web build at http://127.0.0.1:8080 (install: cargo install trunk)
 cargo test --workspace         # codegen snapshot tests live in flexplore-core
+cargo test -p flexplore --test multiplayer -- --ignored   # live P2P test over an in-process signaling server
 cargo run -p update-snapshots  # regenerate testdata/*/expected.* after changing a generator
 ```
 

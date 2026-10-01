@@ -6,13 +6,13 @@ use egui::text::LayoutJob;
 use strum::IntoEnumIterator;
 
 use crate::highlight::Lang;
-use crate::history::UndoHistory;
 use crate::viz::ArrowNav;
 use flexplore::codegen::{
     emit_bevy_code, emit_dioxus, emit_egui, emit_flutter, emit_html_css, emit_iced, emit_react,
     emit_react_native, emit_swiftui, emit_tailwind,
 };
 use flexplore::config::*;
+use flexplore::history::UndoHistory;
 
 type TemplateFn = fn() -> NodeConfig;
 type CodegenFn = fn(&NodeConfig, ColorPalette) -> anyhow::Result<String>;
@@ -305,11 +305,7 @@ fn draw_tree_ui(
 
 // ─── Hover preview ────────────────────────────────────────────────────────────
 
-/// The document as it was before the current hover preview started, restored
-/// when the pointer leaves the previewed option. A resource (not a `Local`) so
-/// the network layer can fold remote edits into it while a preview is live.
-#[derive(bevy::prelude::Resource, Default)]
-pub struct HoverPreview(pub Option<FlexConfig>);
+pub use flexplore::config::HoverPreview;
 
 /// While the user drags a slider or types, the live document is still sent to
 /// peers this often; the undo entry is only written when the interaction ends.
@@ -660,7 +656,7 @@ pub fn panel_system(
     mut codegen: Local<CodegenState>,
     mut drag: Local<DragState>,
     mut show_help: Local<bool>,
-    #[cfg(feature = "multiplayer")] mut pending_edits: Option<ResMut<crate::net::PendingEdits>>,
+    #[cfg(feature = "multiplayer")] mut pending_edits: Option<ResMut<flexplore::net::PendingEdits>>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
     // egui 0.34+ shows top-level panels inside a root `Ui` rather than on the

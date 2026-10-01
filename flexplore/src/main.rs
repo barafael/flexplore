@@ -1,10 +1,8 @@
-//! Flexplore — interactive Bevy 0.18 flexbox explorer.
+//! Flexplore — interactive Bevy flexbox explorer.
 
+#[cfg(feature = "multiplayer")]
 mod cursors;
 mod highlight;
-mod history;
-#[cfg(feature = "multiplayer")]
-mod net;
 mod panel;
 mod persist;
 mod viz;
@@ -14,7 +12,7 @@ use bevy_egui::{EguiPlugin, EguiPrimaryContextPass};
 
 use flexplore::art::ArtState;
 use flexplore::config::FlexConfig;
-use history::UndoHistory;
+use flexplore::history::UndoHistory;
 
 fn main() {
     let mut app = App::new();
@@ -34,7 +32,7 @@ fn main() {
     .init_resource::<ArtState>()
     .init_resource::<viz::ArrowNav>()
     .init_resource::<flexplore::config::RightPanelOpen>()
-    .init_resource::<panel::HoverPreview>()
+    .init_resource::<flexplore::config::HoverPreview>()
     .insert_resource(UndoHistory::new(FlexConfig::default()))
     .add_systems(Startup, (setup, load_autosave))
     .add_systems(EguiPrimaryContextPass, panel::panel_system)
@@ -54,7 +52,20 @@ fn main() {
 
     // ── Multiplayer (WebRTC P2P via matchbox) ───────────────────────────────
     #[cfg(feature = "multiplayer")]
-    app.add_plugins(net::NetPlugin);
+    app.add_plugins(flexplore::net::NetPlugin)
+        .add_systems(
+            Update,
+            (
+                cursors::broadcast_cursor,
+                cursors::broadcast_selection,
+                cursors::remote_selection_highlight,
+            ),
+        )
+        // Painting must happen inside egui's pass, or the next pass clears it.
+        .add_systems(
+            EguiPrimaryContextPass,
+            cursors::cursor_overlay_ui.after(panel::panel_system),
+        );
 
     app.run();
 }
