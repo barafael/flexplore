@@ -974,10 +974,10 @@ mod bevy_bridge {
     impl Corners {
         pub fn to_bevy_border_radius(&self) -> bevy::prelude::BorderRadius {
             bevy::prelude::BorderRadius {
-                top_left: bevy::prelude::Val::Px(self.top_left),
-                top_right: bevy::prelude::Val::Px(self.top_right),
-                bottom_right: bevy::prelude::Val::Px(self.bottom_right),
-                bottom_left: bevy::prelude::Val::Px(self.bottom_left),
+                top_left: bevy::prelude::Val::Px(self.top_left).into(),
+                top_right: bevy::prelude::Val::Px(self.top_right).into(),
+                bottom_right: bevy::prelude::Val::Px(self.bottom_right).into(),
+                bottom_left: bevy::prelude::Val::Px(self.bottom_left).into(),
             }
         }
     }

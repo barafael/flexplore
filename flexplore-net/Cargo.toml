@@ -5,10 +5,10 @@ edition = "2024"
 description = "Host-relay sequencing and the matchbox socket for networked flexplore"
 
 [dependencies]
-bevy = { version = "0.19", default-features = false, features = ["bevy_log"] }
+bevy = { version = "0.20", default-features = false, features = ["bevy_log"] }
 # Pinned to the fork branch under review upstream: the crates.io release does
-# not yet support Bevy 0.19.
-bevy_matchbox = { git = "https://github.com/barafael/matchbox.git", branch = "bevy-0.19-socket-hardening" }
+# not yet support Bevy 0.20.
+bevy_matchbox = { git = "https://github.com/barafael/matchbox.git", branch = "main" }
 flexplore-proto = { path = "../flexplore-proto" }
 flexplore-core = { path = "../flexplore-core" }
 rand = "0.10"

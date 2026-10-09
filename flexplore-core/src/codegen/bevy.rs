@@ -37,7 +37,7 @@ fn emit_bevy_corners(corners: &Corners) -> String {
         format!("BorderRadius::all(Val::Px({:.1}))", corners.top_left)
     } else {
         format!(
-            "BorderRadius {{ top_left: Val::Px({:.1}), top_right: Val::Px({:.1}), bottom_right: Val::Px({:.1}), bottom_left: Val::Px({:.1}) }}",
+            "BorderRadius {{ top_left: Val::Px({:.1}).into(), top_right: Val::Px({:.1}).into(), bottom_right: Val::Px({:.1}).into(), bottom_left: Val::Px({:.1}).into() }}",
             corners.top_left, corners.top_right, corners.bottom_right, corners.bottom_left,
         )
     }
