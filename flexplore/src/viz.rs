@@ -246,9 +246,9 @@ pub fn viz_tooltip(
     let egui_owns_pointer = contexts
         .ctx_mut()
         .is_ok_and(|ctx| ctx.is_pointer_over_egui());
-    // Picking reports the topmost node under the cursor (pass-through text and
-    // labels are `Pickable::IGNORE` and carry no `VizNodePath`); picking the
-    // deepest path stays robust should several viz nodes ever share the stack.
+    // Picking hovers the topmost node under the cursor (text, labels and
+    // outlines are `Pickable::IGNORE`); prefer the deepest path should several
+    // viz nodes ever be hovered at once.
     let mut hovered: Option<(&str, usize)> = None;
     if !egui_owns_pointer {
         for (interaction, info, path) in &nodes {
@@ -288,6 +288,7 @@ pub fn viz_tooltip(
                             ..default()
                         },
                         TextColor(Color::srgba(0.9, 0.9, 0.9, 1.0)),
+                        Pickable::IGNORE,
                     ))
                     .id();
                 let entity = commands
@@ -297,6 +298,9 @@ pub fn viz_tooltip(
                         GlobalZIndex(100),
                         BackgroundColor(Color::srgba(0.12, 0.12, 0.18, 0.95)),
                         BorderColor::all(Color::srgba(1.0, 1.0, 1.0, 0.2)),
+                        // The tooltip trails the cursor; it must not steal
+                        // the hover from the node it describes.
+                        Pickable::IGNORE,
                     ))
                     .id();
                 commands.entity(entity).add_child(text_id);
@@ -395,24 +399,29 @@ pub fn viz_arrow_nav(
 // ─── Click-to-select ──────────────────────────────────────────────────────────
 
 pub fn viz_click(
-    nodes: Query<(&PickingInteraction, &VizNodePath), Changed<PickingInteraction>>,
+    mut presses: MessageReader<PointerPress>,
+    nodes: Query<&VizNodePath>,
     mut contexts: EguiContexts,
     mut cfg: ResMut<FlexConfig>,
 ) {
-    // Bevy UI's picking does not know about egui windows, popups or the
-    // side panels drawn on top of the viz; ignore clicks that land on egui.
+    // egui windows, popups and the side panels are drawn on top of the viz;
+    // ignore presses that land on egui.
     if contexts
         .ctx_mut()
         .is_ok_and(|ctx| ctx.is_pointer_over_egui())
     {
+        presses.clear();
         return;
     }
-    // Pick the deepest node whose interaction just turned `Pressed` — the
-    // press lands on the topmost node under the cursor (text and labels are
-    // `Pickable::IGNORE` pass-throughs without a `VizNodePath`).
+    // A press targets the topmost node under the cursor (text, labels and
+    // outlines are `Pickable::IGNORE`); keep the deepest should one frame
+    // carry several presses.
     let mut best: Option<&Vec<usize>> = None;
-    for (interaction, path) in &nodes {
-        if *interaction == PickingInteraction::Pressed
+    for press in presses.read() {
+        if press.button != PointerButton::Primary {
+            continue;
+        }
+        if let Ok(path) = nodes.get(press.entity)
             && best.is_none_or(|b| path.0.len() > b.len())
         {
             best = Some(&path.0);

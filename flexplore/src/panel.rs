@@ -2339,13 +2339,13 @@ fn val_row(
 fn value_slider(ui: &mut egui::Ui, val: &mut ValueConfig, changed: &mut bool) {
     if let Some(n) = val.num() {
         let mut n = n;
-        let (lo, hi) = if val.kind() == ValueKind::Px {
-            (0.0_f32, 800.0_f32)
-        } else {
-            (0.0_f32, 100.0_f32)
+        let (lo, hi, decimals) = match val.kind() {
+            ValueKind::Px => (0.0_f32, 800.0_f32, 0),
+            ValueKind::Em | ValueKind::Rem => (0.0, 40.0, 1),
+            _ => (0.0, 100.0, 0),
         };
         if ui
-            .add(egui::Slider::new(&mut n, lo..=hi).max_decimals(0))
+            .add(egui::Slider::new(&mut n, lo..=hi).max_decimals(decimals))
             .changed()
         {
             val.set_num(n);

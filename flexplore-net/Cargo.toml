@@ -6,8 +6,8 @@ description = "Host-relay sequencing and the matchbox socket for networked flexp
 
 [dependencies]
 bevy = { version = "0.20", default-features = false, features = ["bevy_log"] }
-# Pinned to the fork branch under review upstream: the crates.io release does
-# not yet support Bevy 0.20.
+# From the fork's main, which carries Bevy 0.20 support and the socket
+# hardening: the crates.io release does not yet support Bevy 0.20.
 bevy_matchbox = { git = "https://github.com/barafael/matchbox.git", branch = "main" }
 flexplore-proto = { path = "../flexplore-proto" }
 flexplore-core = { path = "../flexplore-core" }
