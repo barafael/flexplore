@@ -112,8 +112,9 @@ pub fn palette_rgb8(palette: ColorPalette, idx: usize) -> (u8, u8, u8) {
 }
 
 /// Resolve a length to pixels. Percentages are relative to `parent_px`,
-/// viewport units to the golden viewport, and `auto` resolves to 0 so callers
-/// can treat "0" as "unspecified".
+/// viewport units to the golden viewport, font-relative units to a 16 px
+/// reference font, and `auto` resolves to 0 so callers can treat "0" as
+/// "unspecified".
 pub fn resolve_to_px(v: &ValueConfig, parent_px: f32) -> f32 {
     match v {
         ValueConfig::Auto => 0.0,
@@ -121,6 +122,7 @@ pub fn resolve_to_px(v: &ValueConfig, parent_px: f32) -> f32 {
         ValueConfig::Percent(n) => n / 100.0 * parent_px,
         ValueConfig::Vw(n) => n / 100.0 * VIEWPORT_W,
         ValueConfig::Vh(n) => n / 100.0 * VIEWPORT_H,
+        ValueConfig::Em(n) | ValueConfig::Rem(n) => n * 16.0,
     }
 }
 

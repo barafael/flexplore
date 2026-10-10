@@ -13,6 +13,8 @@ fn emit_bevy_value(v: &ValueConfig) -> String {
         ValueConfig::Auto => "Val::Auto".into(),
         ValueConfig::Px(n) => format!("Val::Px({n:.1})"),
         ValueConfig::Percent(n) => format!("Val::Percent({n:.1})"),
+        ValueConfig::Em(n) => format!("Val::Em({n:.1})"),
+        ValueConfig::Rem(n) => format!("Val::Rem({n:.1})"),
         ValueConfig::Vw(n) => format!("Val::Vw({n:.1})"),
         ValueConfig::Vh(n) => format!("Val::Vh({n:.1})"),
     }
@@ -37,7 +39,7 @@ fn emit_bevy_corners(corners: &Corners) -> String {
         format!("BorderRadius::all(Val::Px({:.1}))", corners.top_left)
     } else {
         format!(
-            "BorderRadius {{ top_left: Val::Px({:.1}).into(), top_right: Val::Px({:.1}).into(), bottom_right: Val::Px({:.1}).into(), bottom_left: Val::Px({:.1}).into() }}",
+            "BorderRadius::px({:.1}, {:.1}, {:.1}, {:.1})",
             corners.top_left, corners.top_right, corners.bottom_right, corners.bottom_left,
         )
     }
@@ -404,6 +406,27 @@ mod tests {
         root.children = vec![leaf];
         let code = emit_bevy_code(&root, ColorPalette::Pastel1).unwrap();
         assert!(code.contains("Val::Percent(50.0)"));
+    }
+
+    #[test]
+    fn emits_uniform_and_per_corner_border_radius() {
+        let mut round = NodeConfig::new_leaf("round", 80.0, 80.0);
+        round.border_radius = Corners::uniform(8.0);
+        let mut lopsided = NodeConfig::new_leaf("lopsided", 80.0, 80.0);
+        lopsided.border_radius = Corners {
+            top_left: 4.0,
+            top_right: 8.0,
+            bottom_right: 12.0,
+            bottom_left: 2.0,
+        };
+        let mut root = NodeConfig::new_container("root");
+        root.children = vec![round, lopsided];
+        let code = emit_bevy_code(&root, ColorPalette::Pastel1).unwrap();
+        assert!(code.contains("BorderRadius::all(Val::Px(8.0))"), "{code}");
+        assert!(
+            code.contains("BorderRadius::px(4.0, 8.0, 12.0, 2.0)"),
+            "{code}"
+        );
     }
 
     #[test]

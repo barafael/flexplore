@@ -15,6 +15,8 @@ fn css_value(v: &ValueConfig) -> String {
         ValueConfig::Auto => "auto".into(),
         ValueConfig::Px(n) => format!("{n:.1}px"),
         ValueConfig::Percent(n) => format!("{n:.1}%"),
+        ValueConfig::Em(n) => format!("{n:.1}em"),
+        ValueConfig::Rem(n) => format!("{n:.1}rem"),
         ValueConfig::Vw(n) => format!("{n:.1}vw"),
         ValueConfig::Vh(n) => format!("{n:.1}vh"),
     }

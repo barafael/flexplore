@@ -18,6 +18,18 @@ fn iced_length(v: &ValueConfig) -> String {
             // FillPortion(0) is meaningless; anything under 1% still gets a share.
             format!("Length::FillPortion({}) /* {n:.0}% */", (*n as u16).max(1))
         }
+        ValueConfig::Em(n) => {
+            format!(
+                "Length::Fixed({:.1}) /* {n:.1}em — no font-relative units in Iced */",
+                n * 16.0
+            )
+        }
+        ValueConfig::Rem(n) => {
+            format!(
+                "Length::Fixed({:.1}) /* {n:.1}rem — no font-relative units in Iced */",
+                n * 16.0
+            )
+        }
         ValueConfig::Vw(n) => {
             format!("Length::Fixed({n:.1}) /* {n:.0}vw — no viewport units in Iced */")
         }
@@ -44,6 +56,12 @@ fn iced_spacing(v: &ValueConfig) -> Option<String> {
         ValueConfig::Percent(n) => Some(format!(
             "{n:.1} /* {n:.0}% — no percentage spacing in Iced */"
         )),
+        ValueConfig::Em(n) => Some(format!(
+            "{n:.1} /* {n:.1}em — no font-relative units in Iced */"
+        )),
+        ValueConfig::Rem(n) => Some(format!(
+            "{n:.1} /* {n:.1}rem — no font-relative units in Iced */"
+        )),
         ValueConfig::Vw(n) => Some(format!("{n:.1} /* {n:.0}vw — no viewport units in Iced */")),
         ValueConfig::Vh(n) => Some(format!("{n:.1} /* {n:.0}vh — no viewport units in Iced */")),
     }
@@ -56,6 +74,12 @@ fn iced_padding_value(v: &ValueConfig) -> Option<String> {
         ValueConfig::Px(n) => Some(format!("{n:.1}")),
         ValueConfig::Percent(n) => Some(format!(
             "{n:.1} /* {n:.0}% — no percentage padding in Iced */"
+        )),
+        ValueConfig::Em(n) => Some(format!(
+            "{n:.1} /* {n:.1}em — no font-relative units in Iced */"
+        )),
+        ValueConfig::Rem(n) => Some(format!(
+            "{n:.1} /* {n:.1}rem — no font-relative units in Iced */"
         )),
         ValueConfig::Vw(n) => Some(format!("{n:.1} /* {n:.0}vw — no viewport units in Iced */")),
         ValueConfig::Vh(n) => Some(format!("{n:.1} /* {n:.0}vh — no viewport units in Iced */")),

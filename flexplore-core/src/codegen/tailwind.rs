@@ -91,6 +91,8 @@ fn tailwind_value(property: &str, v: &ValueConfig) -> String {
         },
         ValueConfig::Px(n) => format!("{property}-[{n:.1}px]"),
         ValueConfig::Percent(n) => format!("{property}-[{n:.1}%]"),
+        ValueConfig::Em(n) => format!("{property}-[{n:.1}em]"),
+        ValueConfig::Rem(n) => format!("{property}-[{n:.1}rem]"),
         ValueConfig::Vw(n) => format!("{property}-[{n:.1}vw]"),
         ValueConfig::Vh(n) => format!("{property}-[{n:.1}vh]"),
     }

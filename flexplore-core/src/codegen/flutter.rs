@@ -14,6 +14,14 @@ fn dart_value(v: &ValueConfig) -> Option<String> {
         ValueConfig::Px(n) => Some(format!("{n:.1}")),
         ValueConfig::Percent(n) if (*n - 100.0).abs() < 0.01 => Some("double.infinity".to_string()),
         ValueConfig::Percent(n) => Some(format!("{n:.1} /* {n:.0}% — use FractionallySizedBox */")),
+        ValueConfig::Em(n) => Some(format!(
+            "{:.1} /* {n:.1}em — scale by the text theme (14 bodyMedium) */",
+            n * 14.0
+        )),
+        ValueConfig::Rem(n) => Some(format!(
+            "{:.1} /* {n:.1}rem — scale by the text theme (14 bodyMedium) */",
+            n * 14.0
+        )),
         ValueConfig::Vw(n) => Some(format!(
             "MediaQuery.of(context).size.width * {:.3}",
             n / 100.0

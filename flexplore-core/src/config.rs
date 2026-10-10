@@ -213,10 +213,15 @@ pub enum ValueKind {
     Auto,
     Px,
     Percent,
+    Em,
+    Rem,
     Vw,
     Vh,
 }
 
+/// New variants must be appended: `postcard` (the multiplayer wire format)
+/// encodes variants by index, so inserting one in the middle would silently
+/// remap values spoken by older peers.
 #[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub enum ValueConfig {
     Auto,
@@ -224,6 +229,8 @@ pub enum ValueConfig {
     Percent(f32),
     Vw(f32),
     Vh(f32),
+    Em(f32),
+    Rem(f32),
 }
 
 impl ValueConfig {
@@ -232,6 +239,8 @@ impl ValueConfig {
             ValueConfig::Auto => ValueKind::Auto,
             ValueConfig::Px(_) => ValueKind::Px,
             ValueConfig::Percent(_) => ValueKind::Percent,
+            ValueConfig::Em(_) => ValueKind::Em,
+            ValueConfig::Rem(_) => ValueKind::Rem,
             ValueConfig::Vw(_) => ValueKind::Vw,
             ValueConfig::Vh(_) => ValueKind::Vh,
         }
@@ -241,6 +250,8 @@ impl ValueConfig {
             ValueConfig::Auto => None,
             ValueConfig::Px(v)
             | ValueConfig::Percent(v)
+            | ValueConfig::Em(v)
+            | ValueConfig::Rem(v)
             | ValueConfig::Vw(v)
             | ValueConfig::Vh(v) => Some(*v),
         }
@@ -249,6 +260,8 @@ impl ValueConfig {
         match self {
             ValueConfig::Px(v)
             | ValueConfig::Percent(v)
+            | ValueConfig::Em(v)
+            | ValueConfig::Rem(v)
             | ValueConfig::Vw(v)
             | ValueConfig::Vh(v) => *v = n,
             _ => {}
@@ -259,6 +272,8 @@ impl ValueConfig {
         match kind {
             ValueKind::Px => ValueConfig::Px(n),
             ValueKind::Percent => ValueConfig::Percent(n),
+            ValueKind::Em => ValueConfig::Em(n),
+            ValueKind::Rem => ValueConfig::Rem(n),
             ValueKind::Vw => ValueConfig::Vw(n),
             ValueKind::Vh => ValueConfig::Vh(n),
             ValueKind::Auto => ValueConfig::Auto,
@@ -269,6 +284,8 @@ impl ValueConfig {
             ValueConfig::Auto => "auto".into(),
             ValueConfig::Px(n) => format!("{n:.0}px"),
             ValueConfig::Percent(n) => format!("{n:.0}%"),
+            ValueConfig::Em(n) => format!("{n:.0}em"),
+            ValueConfig::Rem(n) => format!("{n:.0}rem"),
             ValueConfig::Vw(n) => format!("{n:.0}vw"),
             ValueConfig::Vh(n) => format!("{n:.0}vh"),
         }
@@ -718,6 +735,7 @@ impl NodeConfig {
                 ValueConfig::Px(n) => Some(*n),
                 ValueConfig::Percent(n) => Some(n / 100.0 * 600.0),
                 ValueConfig::Vw(n) | ValueConfig::Vh(n) => Some(n / 100.0 * 800.0),
+                ValueConfig::Em(n) | ValueConfig::Rem(n) => Some(n * 16.0),
                 ValueConfig::Auto => None,
             }
         }
@@ -908,6 +926,8 @@ mod bevy_bridge {
                 ValueConfig::Auto => bevy::prelude::Val::Auto,
                 ValueConfig::Px(n) => bevy::prelude::Val::Px(n),
                 ValueConfig::Percent(n) => bevy::prelude::Val::Percent(n),
+                ValueConfig::Em(n) => bevy::prelude::Val::Em(n),
+                ValueConfig::Rem(n) => bevy::prelude::Val::Rem(n),
                 ValueConfig::Vw(n) => bevy::prelude::Val::Vw(n),
                 ValueConfig::Vh(n) => bevy::prelude::Val::Vh(n),
             }
@@ -973,12 +993,12 @@ mod bevy_bridge {
 
     impl Corners {
         pub fn to_bevy_border_radius(&self) -> bevy::prelude::BorderRadius {
-            bevy::prelude::BorderRadius {
-                top_left: bevy::prelude::Val::Px(self.top_left).into(),
-                top_right: bevy::prelude::Val::Px(self.top_right).into(),
-                bottom_right: bevy::prelude::Val::Px(self.bottom_right).into(),
-                bottom_left: bevy::prelude::Val::Px(self.bottom_left).into(),
-            }
+            bevy::prelude::BorderRadius::new(
+                bevy::prelude::Val::Px(self.top_left),
+                bevy::prelude::Val::Px(self.top_right),
+                bevy::prelude::Val::Px(self.bottom_right),
+                bevy::prelude::Val::Px(self.bottom_left),
+            )
         }
     }
 }

@@ -484,6 +484,7 @@ fn align_content_codegen(ac: AlignContent) {
 
 #[test_case(ValueConfig::Px(100.0), ValueConfig::Px(50.0) ; "px_px")]
 #[test_case(ValueConfig::Percent(50.0), ValueConfig::Percent(25.0) ; "percent_percent")]
+#[test_case(ValueConfig::Em(10.0), ValueConfig::Rem(1.5) ; "em_rem")]
 #[test_case(ValueConfig::Vw(80.0), ValueConfig::Vh(60.0) ; "vw_vh")]
 #[test_case(ValueConfig::Auto, ValueConfig::Px(100.0) ; "auto_px")]
 #[test_case(ValueConfig::Px(0.0), ValueConfig::Auto ; "zero_auto")]
@@ -506,6 +507,23 @@ fn value_types_codegen(w: ValueConfig, h: ValueConfig) {
             assert!(
                 bevy.contains(&format!("Val::Percent({n:.1})")),
                 "Bevy missing Val::Percent"
+            );
+        }
+        ValueConfig::Em(n) => {
+            assert!(html.contains(&format!("{n:.1}em")), "HTML missing em width");
+            assert!(
+                bevy.contains(&format!("Val::Em({n:.1})")),
+                "Bevy missing Val::Em"
+            );
+        }
+        ValueConfig::Rem(n) => {
+            assert!(
+                html.contains(&format!("{n:.1}rem")),
+                "HTML missing rem width"
+            );
+            assert!(
+                bevy.contains(&format!("Val::Rem({n:.1})")),
+                "Bevy missing Val::Rem"
             );
         }
         ValueConfig::Vw(n) => {

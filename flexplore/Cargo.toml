@@ -13,7 +13,7 @@ multiplayer = [
 flexplore-core = { path = "../flexplore-core", features = ["bevy"] }
 flexplore-net = { path = "../flexplore-net", optional = true }
 bevy = { version = "0.20", features = ["serialize"] }
-bevy_egui = "0.43.0-rc.1"
+bevy_egui = "0.43"
 rand = "0.10"
 strum = { version = "0.28.0", features = ["derive"] }
 anyhow = "1.0.102"
