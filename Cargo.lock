@@ -5204,7 +5204,6 @@ dependencies = [
  "clap",
  "golden-common",
  "iced",
- "naga 27.0.3",
 ]
 
 [[package]]

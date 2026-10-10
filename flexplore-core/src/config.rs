@@ -284,8 +284,8 @@ impl ValueConfig {
             ValueConfig::Auto => "auto".into(),
             ValueConfig::Px(n) => format!("{n:.0}px"),
             ValueConfig::Percent(n) => format!("{n:.0}%"),
-            ValueConfig::Em(n) => format!("{n:.0}em"),
-            ValueConfig::Rem(n) => format!("{n:.0}rem"),
+            ValueConfig::Em(n) => format!("{}em", format_float(*n)),
+            ValueConfig::Rem(n) => format!("{}rem", format_float(*n)),
             ValueConfig::Vw(n) => format!("{n:.0}vw"),
             ValueConfig::Vh(n) => format!("{n:.0}vh"),
         }
@@ -993,11 +993,11 @@ mod bevy_bridge {
 
     impl Corners {
         pub fn to_bevy_border_radius(&self) -> bevy::prelude::BorderRadius {
-            bevy::prelude::BorderRadius::new(
-                bevy::prelude::Val::Px(self.top_left),
-                bevy::prelude::Val::Px(self.top_right),
-                bevy::prelude::Val::Px(self.bottom_right),
-                bevy::prelude::Val::Px(self.bottom_left),
+            bevy::prelude::BorderRadius::px(
+                self.top_left,
+                self.top_right,
+                self.bottom_right,
+                self.bottom_left,
             )
         }
     }

@@ -8,9 +8,4 @@ publish = false
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 iced = { version = "0.14", features = ["image", "tokio"] }
-# iced 0.14 pulls naga 27 with `codespan-reporting` default-features off. In this
-# workspace bevy's naga_oil enables codespan-reporting's `termcolor` feature, and
-# naga 27's no-termcolor diagnostic path then fails to compile (its features are
-# not additive). Enabling naga's own `termcolor` feature keeps both happy.
-naga = { version = "27", features = ["termcolor"] }
 golden-common = { path = "../golden-common", features = ["png"] }
