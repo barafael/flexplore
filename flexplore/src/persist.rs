@@ -107,12 +107,12 @@ pub fn trigger_download(json: &str) {
         Err(_) => return,
     };
 
-    if let Ok(el) = document.create_element("a") {
-        if let Some(anchor) = el.dyn_ref::<web_sys::HtmlAnchorElement>() {
-            anchor.set_href(&url);
-            anchor.set_download("flexplore-layout.json");
-            anchor.click();
-        }
+    if let Ok(el) = document.create_element("a")
+        && let Some(anchor) = el.dyn_ref::<web_sys::HtmlAnchorElement>()
+    {
+        anchor.set_href(&url);
+        anchor.set_download("flexplore-layout.json");
+        anchor.click();
     }
 
     let _ = web_sys::Url::revoke_object_url(&url);
