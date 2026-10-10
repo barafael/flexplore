@@ -13,6 +13,14 @@ fn rn_value(v: &ValueConfig) -> String {
         ValueConfig::Auto => "'auto'".into(),
         ValueConfig::Px(n) => format_float(*n),
         ValueConfig::Percent(n) => format!("'{n:.1}%'"),
+        ValueConfig::Em(n) => format!(
+            "{:.2} /* {n:.1}em — no font-relative units in RN */",
+            n * 16.0
+        ),
+        ValueConfig::Rem(n) => format!(
+            "{:.2} /* {n:.1}rem — no font-relative units in RN */",
+            n * 16.0
+        ),
         ValueConfig::Vw(n) => format!("Dimensions.get('window').width * {:.2}", n / 100.0),
         ValueConfig::Vh(n) => format!("Dimensions.get('window').height * {:.2}", n / 100.0),
     }

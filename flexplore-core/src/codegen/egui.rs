@@ -25,6 +25,8 @@ fn egui_size(v: &ValueConfig, axis: &str) -> String {
             "{:.1} /* {n:.0}% — compute from parent size */",
             n / 100.0 * if axis == "width" { 400.0 } else { 300.0 }
         ),
+        ValueConfig::Em(n) => format!("{:.1} /* {n:.1}em at 16px font */", n * 16.0),
+        ValueConfig::Rem(n) => format!("{:.1} /* {n:.1}rem at 16px font */", n * 16.0),
         ValueConfig::Vw(n) => format!("{:.1} /* {n:.0}vw */", n / 100.0 * 400.0),
         ValueConfig::Vh(n) => format!("{:.1} /* {n:.0}vh */", n / 100.0 * 300.0),
     }
@@ -38,6 +40,8 @@ fn egui_margin_value(v: &ValueConfig) -> Option<String> {
         ValueConfig::Percent(n) => Some(format!(
             "{n:.1} /* {n:.0}% — no percentage margin in egui */"
         )),
+        ValueConfig::Em(n) => Some(format!("{n:.1} /* {n:.1}em */")),
+        ValueConfig::Rem(n) => Some(format!("{n:.1} /* {n:.1}rem */")),
         ValueConfig::Vw(n) => Some(format!("{n:.1} /* {n:.0}vw */")),
         ValueConfig::Vh(n) => Some(format!("{n:.1} /* {n:.0}vh */")),
     }
@@ -88,6 +92,8 @@ fn egui_gap(v: &ValueConfig) -> Option<String> {
         ValueConfig::Percent(n) => Some(format!(
             "{n:.1} /* {n:.0}% — no percentage spacing in egui */"
         )),
+        ValueConfig::Em(n) => Some(format!("{n:.1} /* {n:.1}em */")),
+        ValueConfig::Rem(n) => Some(format!("{n:.1} /* {n:.1}rem */")),
         ValueConfig::Vw(n) => Some(format!("{n:.1} /* {n:.0}vw */")),
         ValueConfig::Vh(n) => Some(format!("{n:.1} /* {n:.0}vh */")),
     }

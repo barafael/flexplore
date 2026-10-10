@@ -1,6 +1,5 @@
-use bevy::picking::hover::Hovered;
+use bevy::picking::hover::PickingInteraction;
 use bevy::prelude::*;
-use bevy::ui::Pressed;
 use bevy_egui::EguiContexts;
 
 use flexplore::art::{ArtState, palette_bevy_color};
@@ -239,7 +238,7 @@ pub fn viz_tooltip(
     mut commands: Commands,
     windows: Query<&Window>,
     mut contexts: EguiContexts,
-    nodes: Query<(&Hovered, &VizNodeInfo, &VizNodePath)>,
+    nodes: Query<(&PickingInteraction, &VizNodeInfo, &VizNodePath)>,
     mut tooltip_nodes: Query<&mut Node, With<VizTooltip>>,
     mut tooltip_texts: Query<&mut Text, With<VizTooltipText>>,
     mut state: Local<TooltipState>,
@@ -247,11 +246,13 @@ pub fn viz_tooltip(
     let egui_owns_pointer = contexts
         .ctx_mut()
         .is_ok_and(|ctx| ctx.is_pointer_over_egui());
-    // Hover bubbles to every ancestor, so pick the deepest hovered node.
+    // Picking reports the topmost node under the cursor (pass-through text and
+    // labels are `Pickable::IGNORE` and carry no `VizNodePath`); picking the
+    // deepest path stays robust should several viz nodes ever share the stack.
     let mut hovered: Option<(&str, usize)> = None;
     if !egui_owns_pointer {
-        for (hover, info, path) in &nodes {
-            if hover.get()
+        for (interaction, info, path) in &nodes {
+            if *interaction == PickingInteraction::Hovered
                 && !path.0.is_empty()
                 && hovered.is_none_or(|(_, depth)| path.0.len() > depth)
             {
@@ -394,7 +395,7 @@ pub fn viz_arrow_nav(
 // ─── Click-to-select ──────────────────────────────────────────────────────────
 
 pub fn viz_click(
-    nodes: Query<(&Pressed, &VizNodePath), Added<Pressed>>,
+    nodes: Query<(&PickingInteraction, &VizNodePath), Changed<PickingInteraction>>,
     mut contexts: EguiContexts,
     mut cfg: ResMut<FlexConfig>,
 ) {
@@ -406,11 +407,14 @@ pub fn viz_click(
     {
         return;
     }
-    // Pick the deepest pressed node — clicks bubble up to ancestors,
-    // so multiple nodes report Pressed simultaneously.
+    // Pick the deepest node whose interaction just turned `Pressed` — the
+    // press lands on the topmost node under the cursor (text and labels are
+    // `Pickable::IGNORE` pass-throughs without a `VizNodePath`).
     let mut best: Option<&Vec<usize>> = None;
-    for (_pressed, path) in &nodes {
-        if best.is_none_or(|b| path.0.len() > b.len()) {
+    for (interaction, path) in &nodes {
+        if *interaction == PickingInteraction::Pressed
+            && best.is_none_or(|b| path.0.len() > b.len())
+        {
             best = Some(&path.0);
         }
     }

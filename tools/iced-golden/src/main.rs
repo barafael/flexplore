@@ -768,7 +768,9 @@ fn to_length(v: &ValueConfig) -> Length {
         ValueConfig::Px(n) => Length::Fixed(*n),
         ValueConfig::Percent(n) if *n >= 100.0 => Length::Fill,
         ValueConfig::Percent(n) => portion(*n),
-        ValueConfig::Vw(_) | ValueConfig::Vh(_) => Length::Fixed(resolve_to_px(v, 0.0)),
+        ValueConfig::Vw(_) | ValueConfig::Vh(_) | ValueConfig::Em(_) | ValueConfig::Rem(_) => {
+            Length::Fixed(resolve_to_px(v, 0.0))
+        }
     }
 }
 
@@ -778,7 +780,9 @@ fn to_padding(v: &ValueConfig) -> Option<Padding> {
         ValueConfig::Px(n) if *n == 0.0 => None,
         ValueConfig::Px(n) => Some(Padding::from(*n)),
         ValueConfig::Percent(n) => Some(Padding::from(*n)),
-        ValueConfig::Vw(_) | ValueConfig::Vh(_) => Some(Padding::from(resolve_to_px(v, 0.0))),
+        ValueConfig::Vw(_) | ValueConfig::Vh(_) | ValueConfig::Em(_) | ValueConfig::Rem(_) => {
+            Some(Padding::from(resolve_to_px(v, 0.0)))
+        }
     }
 }
 

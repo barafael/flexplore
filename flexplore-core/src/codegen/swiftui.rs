@@ -40,6 +40,14 @@ fn swift_value(v: &ValueConfig) -> String {
         ValueConfig::Percent(n) => {
             format!("{n:.1} /* {n:.1}% — use GeometryReader for relative sizing */")
         }
+        ValueConfig::Em(n) => format!(
+            "{:.1} /* {n:.1}em — scale by font size (17pt body) */",
+            n * 17.0
+        ),
+        ValueConfig::Rem(n) => format!(
+            "{:.1} /* {n:.1}rem — scale by font size (17pt body) */",
+            n * 17.0
+        ),
         ValueConfig::Vw(n) => format!("UIScreen.main.bounds.width * {:.3}", n / 100.0),
         ValueConfig::Vh(n) => format!("UIScreen.main.bounds.height * {:.3}", n / 100.0),
     }
@@ -103,7 +111,7 @@ fn swift_inner_value(v: &ValueConfig, pad: f32) -> Option<String> {
         ValueConfig::Auto => None,
         ValueConfig::Px(n) => Some(format!("{:.1}", (n - pad).max(0.0))),
         ValueConfig::Vw(_) | ValueConfig::Vh(_) => Some(swift_minus_pad(swift_value(v), pad)),
-        ValueConfig::Percent(_) => Some(swift_value(v)),
+        ValueConfig::Percent(_) | ValueConfig::Em(_) | ValueConfig::Rem(_) => Some(swift_value(v)),
     }
 }
 
@@ -203,6 +211,14 @@ fn swift_spacing_value(v: &ValueConfig) -> Option<String> {
         ValueConfig::Px(n) => Some(format!("{n:.1}")),
         ValueConfig::Vw(n) => Some(format!("UIScreen.main.bounds.width * {:.3}", n / 100.0)),
         ValueConfig::Vh(n) => Some(format!("UIScreen.main.bounds.height * {:.3}", n / 100.0)),
+        ValueConfig::Em(n) => Some(format!(
+            "{:.1} /* {n:.1}em — scale by font size (17pt body) */",
+            n * 17.0
+        )),
+        ValueConfig::Rem(n) => Some(format!(
+            "{:.1} /* {n:.1}rem — scale by font size (17pt body) */",
+            n * 17.0
+        )),
         ValueConfig::Percent(n) => Some(format!(
             "{n:.1} /* {n:.1}% — no direct SwiftUI equivalent for percentage spacing */"
         )),
