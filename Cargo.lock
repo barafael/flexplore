@@ -4239,7 +4239,6 @@ dependencies = [
  "flexplore-proto",
  "getrandom 0.4.3",
  "rand 0.10.3",
- "wasm-bindgen",
  "web-sys",
 ]
 

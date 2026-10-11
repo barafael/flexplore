@@ -16,7 +16,6 @@ rand = "0.10"
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.4", features = ["wasm_js"] }
 web-sys = { version = "0.3", features = ["Window", "Location", "History"] }
-wasm-bindgen = "0.2"
 
 [package.metadata.cargo-shear]
 ignored = ["getrandom"]
