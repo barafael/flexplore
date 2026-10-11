@@ -7,7 +7,7 @@ edition = "2024"
 bevy = ["dep:bevy"]
 
 [dependencies]
-anyhow = "1.0.102"
+anyhow = "1.0.104"
 colorous = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
